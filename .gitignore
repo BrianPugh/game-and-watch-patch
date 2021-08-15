@@ -1,0 +1,5 @@
+*.pyc
+*.bin
+*.DS_Store
+Drivers/
+build/

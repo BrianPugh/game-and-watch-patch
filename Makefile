@@ -89,6 +89,8 @@ endif
 HEX = $(CP) -O ihex
 BIN = $(CP) -O binary -S
 ECHO  = echo
+OPENOCD ?= openocd
+FLASHAPP ?= scripts/flashloader.sh
  
 #######################################
 # CFLAGS
@@ -187,8 +189,31 @@ $(BUILD_DIR):
 
 
 
-OPENOCD ?= openocd
+# TODO cleanup
+ADAPTER ?= stlink
 OCDIFACE ?= interface/stlink.cfg
+
+reset:
+	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; reset; exit"
+.PHONY: reset
+
+flash_stock_int:
+	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
+		-c "init; halt;" \
+		-c "program internal_flash_backup.bin 0x08000000 verify;" \
+		-c "exit;"
+.PHONY: flash_stock_int
+
+.EXPORT_ALL_VARIABLES:
+flash_stock_ext:
+	$(FLASHAPP) $(ADAPTER) flash_backup.bin
+.PHONY: flash_stock_ext
+
+flash_stock: flash_stock_int flash_stock_ext reset
+
+.PHONY: flash_stock
+
+
 
 flash: $(BUILD_DIR)/$(TARGET).bin
 	dd if=$(BUILD_DIR)/$(TARGET).bin of=$(BUILD_DIR)/$(TARGET)_flash.bin bs=1024 count=128

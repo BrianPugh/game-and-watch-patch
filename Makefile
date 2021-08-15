@@ -193,32 +193,45 @@ $(BUILD_DIR):
 ADAPTER ?= stlink
 OCDIFACE ?= interface/stlink.cfg
 
+.EXPORT_ALL_VARIABLES:
+
 reset:
 	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; reset; exit"
 .PHONY: reset
+
+erase_int:
+	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt; flash erase_address 0x08000000 131072; resume; exit"
+.PHONY: erase_int
 
 flash_stock_int:
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
 		-c "init; halt;" \
 		-c "program internal_flash_backup.bin 0x08000000 verify;" \
-		-c "exit;"
+		-c "reset; exit;"
 .PHONY: flash_stock_int
 
-.EXPORT_ALL_VARIABLES:
 flash_stock_ext:
 	$(FLASHAPP) $(ADAPTER) flash_backup.bin
 .PHONY: flash_stock_ext
 
 flash_stock: flash_stock_int flash_stock_ext reset
+.PHONY: flash_stock
 
+build/internal_flash_patched.bin:
+	python patcher.py
+
+flash_patched_int: build/internal_flash_patched.bin
+	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
+		-c "init; halt;" \
+		-c "program build/internal_flash_patched.bin 0x08000000 verify;" \
+		-c "reset; exit;"
+.PHONY: flash_patched_int
+
+flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock
 
 
-
-flash: $(BUILD_DIR)/$(TARGET).bin
-	dd if=$(BUILD_DIR)/$(TARGET).bin of=$(BUILD_DIR)/$(TARGET)_flash.bin bs=1024 count=128
-	$(OPENOCD) -f $(OCDIFACE) -c "transport select hla_swd" -f "target/stm32h7x.cfg" -c "reset_config none; program $(BUILD_DIR)/$(TARGET)_flash.bin 0x08000000 verify reset exit"
-
+flash: flash_patched_int flash_stock_ext reset
 .PHONY: flash
 
 GDB ?= $(PREFIX)gdb

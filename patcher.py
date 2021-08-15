@@ -20,7 +20,7 @@ def parse_args():
                         help="")
     parser.add_argument('--elf', type=Path, default="build/gw_patch.elf",
                         help="")
-    parser.add_argument('--output', '-o', type=Path, default="build/internal_flash_patched.elf",
+    parser.add_argument('--output', '-o', type=Path, default="build/internal_flash_patched.bin",
                         help="")
 
     return parser.parse_args()

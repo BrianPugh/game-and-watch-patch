@@ -38,31 +38,32 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 Core/Src/main.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_cortex.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_ltdc.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_ltdc_ex.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc_ex.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_flash.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_flash_ex.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_gpio.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hsem.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dma.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dma_ex.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mdma.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c_ex.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_exti.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim_ex.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi_ex.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_ospi.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sai.c \
-Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sai_ex.c
+
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_cortex.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_ltdc.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_ltdc_ex.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc_ex.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_flash.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_flash_ex.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_gpio.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hsem.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dma.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dma_ex.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mdma.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c_ex.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_exti.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim_ex.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi_ex.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_ospi.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sai.c \
+#Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sai_ex.c
 
 # ASM sources
 ASM_SOURCES =  \
@@ -152,7 +153,9 @@ LDSCRIPT = STM32H7B0VBTx_FLASH.ld
 # libraries
 LIBS = -lc -lm -lnosys 
 LIBDIR = 
-LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref -Wl,--gc-sections
+LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref \
+		  -Wl,--gc-sections \
+		  -Wl,--undefined=foo \
 
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin
@@ -217,8 +220,11 @@ flash_stock_ext:
 flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock
 
-build/internal_flash_patched.bin:
+$(BUILD_DIR)/internal_flash_patched.bin: $(BUILD_DIR)/$(TARGET).bin
 	python patch.py
+
+patch: $(BUILD_DIR)/internal_flash_patched.bin
+.PHONY: patch
 
 flash_patched_int: build/internal_flash_patched.bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \

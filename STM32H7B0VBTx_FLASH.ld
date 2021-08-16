@@ -86,6 +86,14 @@ SECTIONS
     _extflash = .;       /* define a global symbols to point at the external flash */
   } >EXTFLASH
 
+  /* The startup code goes first into FLASH */
+  .isr_vector :
+  {
+    . = ALIGN(4);
+    KEEP(*(.isr_vector)) /* Startup code */
+    . = ALIGN(4);
+  } >FLASH
+
   /* The program code and other data goes into FLASH */
   .text :
   {
@@ -156,7 +164,13 @@ SECTIONS
     _edata = .;        /* define a global symbol at data end */
   } >DTCMRAM AT> FLASH
 
-  
+   .fill :
+  {
+    FILL(0xFF);
+    . = ORIGIN(FLASH) + LENGTH(FLASH) - 1;
+    BYTE(0xFF)
+  } >FLASH
+ 
   /* Uninitialized data section */
   . = ALIGN(4);
   .bss :
@@ -183,8 +197,6 @@ SECTIONS
     . = . + _Min_Stack_Size;
     . = ALIGN(8);
   } >DTCMRAM
-
-  
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

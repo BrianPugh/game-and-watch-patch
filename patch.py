@@ -55,11 +55,16 @@ def main():
         def address(name):
             return symtab.get_symbol_by_name(name)[0]['st_value']
 
-        address("foo")
-        print(f"main is at 0x{address('main'):08x}")
+        def print_sym(name):
+            print(f"{name} is at 0x{address(name):08x}")
+
+        print_sym("foo")
+        print_sym("main")
+        print_sym("Reset_Handler")
 
     # Save patched firmware
     args.output.write_bytes(firmware)
+
 
 if __name__ == "__main__":
     main()

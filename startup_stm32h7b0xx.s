@@ -62,7 +62,8 @@ Reset_Handler:
   ldr   sp, =_estack      /* set stack pointer */
 
 /* Call the clock system intitialization function.*/
-  bl  SystemInit
+/* Commenting this out because the stock rom will already set all this */ 
+/*  bl  SystemInit */
 
 /* Copy the data segment initializers from flash to SRAM */
   movs  r1, #0
@@ -95,7 +96,7 @@ LoopFillZerobss:
 /* Call static constructors */
     bl __libc_init_array
 /* Call the application's entry point.*/
-  bl  main
+  bl  stock_main
   bx  lr
 .size  Reset_Handler, .-Reset_Handler
 

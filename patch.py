@@ -59,7 +59,7 @@ def main():
             print(f"{name} is at 0x{address(name):08x}")
 
         print_sym("foo")
-        print_sym("main")
+        #print_sym("main")
         print_sym("Reset_Handler")
 
     # Save patched firmware

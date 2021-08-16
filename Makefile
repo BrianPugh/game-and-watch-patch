@@ -218,7 +218,7 @@ flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock
 
 build/internal_flash_patched.bin:
-	python patcher.py
+	python patch.py
 
 flash_patched_int: build/internal_flash_patched.bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \

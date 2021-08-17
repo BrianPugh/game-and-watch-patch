@@ -59,7 +59,7 @@ class Firmware(bytearray):
             if size:
                 raise ValueError("Don't specify size when providing a symbol name.")
             data = self.address(data)
-            self[offset:offset+size] = data.to_bytes(4, 'little')
+            self[offset:offset+4] = data.to_bytes(4, 'little')
         elif isinstance(data, int):
             # must be 1, 2, or 4 bytes
             if size is None:
@@ -120,6 +120,7 @@ def main():
         print(f"{name} is at 0x{firmware.address(name):08x}")
 
     print_sym("foo")
+    print_sym("bootloader")
     #print_sym("main")
     print_sym("Reset_Handler")
 

@@ -92,6 +92,7 @@ BIN = $(CP) -O binary -S
 ECHO  = echo
 OPENOCD ?= openocd
 FLASHAPP ?= scripts/flashloader.sh
+GDB ?= $(PREFIX)gdb
  
 #######################################
 # CFLAGS
@@ -156,6 +157,7 @@ LIBDIR =
 LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref \
 		  -Wl,--gc-sections \
 		  -Wl,--undefined=foo \
+		  -Wl,--undefined=bootloader \
 
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/internal_flash_patched.bin
@@ -220,7 +222,7 @@ flash_stock_ext:
 flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock
 
-$(BUILD_DIR)/internal_flash_patched.bin: $(BUILD_DIR)/$(TARGET).bin patch.py
+$(BUILD_DIR)/internal_flash_patched.bin: $(BUILD_DIR)/$(TARGET).bin patch.py patches
 	python patch.py
 
 patch: $(BUILD_DIR)/internal_flash_patched.bin
@@ -240,11 +242,15 @@ flash_stock: flash_stock_int flash_stock_ext reset
 flash: flash_patched_int flash_stock_ext reset
 .PHONY: flash
 
-GDB ?= $(PREFIX)gdb
 
-debug: $(BUILD_DIR)/$(TARGET).elf
+# Starts openocd and attaches to the target. To be used with 'flash_intflash_nc' and 'gdb'
+openocd:
+	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt"
+.PHONY: openocd
+
+gdb: $(BUILD_DIR)/$(TARGET).elf
 	$(GDB) $< -ex "target extended-remote :3333"
-.PHONY: debug
+.PHONY: gdb
 
 include Makefile.sdk
 

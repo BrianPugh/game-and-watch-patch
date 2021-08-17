@@ -6,10 +6,13 @@ class Patch:
         self.size = size
         self.message = message
 
+class Patches(list):
+    def append(self, *args, **kwargs):
+        super().append(Patch(*args, **kwargs))
 
 def parse_patches(arg):
-    patches = []
+    patches = Patches()
 
-    # TODO: add patches here.
+    patches.append(0x4, "bootloader", message="Invoke custom bootloader prior to calling stock Reset_Handler")
 
     return patches

@@ -252,6 +252,18 @@ gdb: $(BUILD_DIR)/$(TARGET).elf
 	$(GDB) $< -ex "target extended-remote :3333"
 .PHONY: gdb
 
+start_bank_2:
+	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg \
+		-c 'init; reset halt' \
+		-c 'set MSP 0x[string range [mdw 0x08100000] 12 19]' \
+		-c 'set PC 0x[string range [mdw 0x08100004] 12 19]' \
+		-c 'echo "Setting MSP -> $$MSP"' \
+		-c 'echo "Setting PC -> $$PC"' \
+		-c 'reg msp $$MSP' \
+		-c 'reg pc $$PC' \
+		-c 'resume;exit'
+.PHONY: start_bank_2
+
 include Makefile.sdk
 
 #######################################

@@ -86,14 +86,6 @@ SECTIONS
     _extflash = .;       /* define a global symbols to point at the external flash */
   } >EXTFLASH
 
-  /* The startup code goes first into FLASH */
-  .isr_vector :
-  {
-    . = ALIGN(4);
-    KEEP(*(.isr_vector)) /* Startup code */
-    . = ALIGN(4);
-  } >FLASH
-
   /* The program code and other data goes into FLASH */
   .text :
   {

@@ -24,6 +24,14 @@ static void  __attribute__((naked)) start_app(uint32_t pc, uint32_t sp) {
           bx r0       /* branch to the address at r0 */\n\
     ");
 }
+
+/**
+ * Executed on boot; will jump to a non-default program if:
+ *     1. the value at `BOOTLOADER_MAGIC_ADDRESS` is `BOOTLOADER_MAGIC`
+ *     2. the value at `BOOTLOADER_JUMP_ADDRESS` is the beginning of
+ *        the firmware to execute.
+ * So to run that app, set those values and execute a reset.
+ */
 void bootloader(){
     /* Copy init values from text to data */
     uint32_t *init_values_ptr = &_sidata;

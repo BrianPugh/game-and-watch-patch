@@ -60,6 +60,42 @@ class Patch:
 
         return n_bytes_patched
 
+    def bl(self, firmware):
+        if not isinstance(self.data, str):
+            raise ValueError(f"Data must be str, got {type(self.data)}")
+
+        dst_address = firmware.address(self.data)
+
+        pc = firmware.FLASH_BASE + self.offset + 4
+
+        jump = dst_address - pc
+
+        if jump <= 0:
+            raise NotImplementedError("negative jump")
+
+        offset_stage_1 = jump >> 12
+        if offset_stage_1 >> 11:
+            raise ValueError(f"bl jump 0x{jump:08X} too large!")
+
+        stage_1_byte_0 = 0b11110000 | ((offset_stage_1 >> 8) & 0x7)
+        stage_1_byte_1 = offset_stage_1 & 0xFF
+
+        offset_stage_2 = (jump - (offset_stage_1 << 12)) >> 1
+        if offset_stage_2 >> 11:
+            raise ValueError(f"bl jump 0x{jump:08X} too large!")
+
+        stage_2_byte_0 = 0b11111000 | ((offset_stage_2 >> 8) & 0x7)
+        stage_2_byte_1 = offset_stage_2 & 0xFF
+
+        # Store the instructions in little endian order
+        firmware[self.offset + 0] = stage_1_byte_1
+        firmware[self.offset + 1] = stage_1_byte_0
+
+        firmware[self.offset + 2] = stage_2_byte_1
+        firmware[self.offset + 3] = stage_2_byte_0
+
+        return 4
+
 
 class Patches(list):
     def append(self, *args, **kwargs):
@@ -70,7 +106,7 @@ def parse_patches(args):
 
     patches.append("replace", 0x4, "bootloader",
                    message="Invoke custom bootloader prior to calling stock Reset_Handler")
-    #patches.append(0x6b52, "read_buttons",
-    #               message="Intercept button presses for macros")
+    patches.append("bl", 0x6b52, "read_buttons",
+                   message="Intercept button presses for macros")
 
     return patches

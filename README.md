@@ -18,6 +18,7 @@ Other potentially useful make targets:
 
 ```
 make clean
+make patch  # Generates the patched bin at build/internal_flash_patched.bin, but doesn't flash
 make flash_stock_int
 make flash_stock_ext
 make flash_patch_int

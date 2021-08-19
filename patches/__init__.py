@@ -1,1 +1,2 @@
-from .patches import Patch, parse_patches
+from .patch import Patch, Patches
+from .patches import parse_patches

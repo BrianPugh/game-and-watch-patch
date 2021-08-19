@@ -1,5 +1,9 @@
 Custom firmware for the Game and Watch: Super Mario Bros. console.
 
+# What is this?
+This repo contains custom code as well as a patching utility to add additional
+functionality to the stock Game and Watch firmware.
+
 # Features
 * Works correctly with (retro-go)[https://github.com/kbeckmann/game-and-watch-retro-go] in internal flash bank 2.
 * Press button combination (`LEFT` + `A` + `GAME`) to launch retro-go from internal flash bank 2.

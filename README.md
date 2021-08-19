@@ -5,12 +5,12 @@ This repo contains custom code as well as a patching utility to add additional
 functionality to the stock Game and Watch firmware.
 
 # Features
-* Works correctly with (retro-go)[https://github.com/kbeckmann/game-and-watch-retro-go] in internal flash bank 2.
+* Works correctly with [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) in internal flash bank 2.
 * Press button combination (`LEFT` + `A` + `GAME`) to launch retro-go from internal flash bank 2.
 
 # Usage
 Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this
-repo. To extract these from your console, see the (game and watch backup repo)[https://github.com/ghidraninja/game-and-watch-backup]
+repo. To extract these from your console, see the [game and watch backup repo](https://github.com/ghidraninja/game-and-watch-backup)
 
 Install python dependencies via:
 ```

@@ -27,7 +27,6 @@ make patch  # Generates the patched bin at build/internal_flash_patched.bin, but
 make flash_stock_int
 make flash_stock_ext
 make flash_patch_int
-make flash_patch_ext
 ```
 
 # TODO

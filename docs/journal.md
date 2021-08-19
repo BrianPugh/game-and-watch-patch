@@ -172,6 +172,21 @@ gamepad_t (* const stock_read_buttons)(void) = 0x08010d49;  // Works! Thumb
 
 
 
+Now that I have the button inputs exposed, I can launch retro-go using something like:
+
+```c
+gamepad_t read_buttons() {
+    gamepad_t gamepad = 0;
+    gamepad = stock_read_buttons();
+    if((gamepad & GAMEPAD_LEFT) && (gamepad & GAMEPAD_A) && (gamepad & GAMEPAD_GAME)){
+        start_bank_2();
+    }
+    return gamepad;
+}
+```
+
+
+
 # Misc Assembly Notes
 
 ## Instructions ending in "S"

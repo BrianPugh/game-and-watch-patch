@@ -48,5 +48,7 @@ def parse_patches(args):
             patches.append("replace", 0xA41E, 0x1814, size=2, message="Winbond 16MB")
         elif args.winbond == 32:
             patches.append("replace", 0xA41E, 0x1914, size=2, message="Winbond 32MB")
+        else:
+            raise ValueError(f"Cannot handle Winbond flash size {args.winbond}MB")
 
     return patches

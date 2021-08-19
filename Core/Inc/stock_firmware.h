@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#define THUMB 0x00000001
+
 /**
  *
  */
@@ -51,7 +53,7 @@ void (* const stock_Reset_Handler)(void) = 0x08017a45;
  *   31
  */
 typedef uint32_t gamepad_t;
-gamepad_t (* const stock_read_buttons)(void) = 0x08010d48;
+gamepad_t (* const stock_read_buttons)(void) = 0x08010d48 | THUMB;
 
 
 #define GAMEPAD_RIGHT ( 1 << 0 )

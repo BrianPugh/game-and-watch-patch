@@ -32,5 +32,12 @@ make flash_patch_ext
 * Maybe slim external flash ROM (remove easter eggs, ROMs, etc) to make room
   for more homebrew.
 
+# Development
+Main stages to developing a feature:
+1. Find a place to take control in the stock rom (usually function calls).
+2. Add the stock function to `Core/Inc/stock_firmware.h`.
+3. Implement your own function, possibly in `Core/Src/main.c`. There's a good chance your custom function will call the function in (2).
+4. Add a patch definition to `patches/patches.py`.
+
 # Journal
 This is my first time ever developing patches for a closed source binary. [I documented my journey in hopes that it helps other people](docs/journal.md). If you have any recommendations, tips, tricks, or anything like that, please leave a github issue and I'll update the documentation!

@@ -67,7 +67,8 @@ Core/Src/main.c \
 
 # ASM sources
 ASM_SOURCES =  \
-startup_stm32h7b0xx.s
+
+#startup_stm32h7b0xx.s
 
 
 #######################################
@@ -156,8 +157,8 @@ LIBS = -lc -lm -lnosys
 LIBDIR = 
 LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref \
 		  -Wl,--gc-sections \
-		  -Wl,--undefined=foo \
 		  -Wl,--undefined=bootloader \
+		  -Wl,--undefined=read_buttons \
 
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/internal_flash_patched.bin
@@ -222,7 +223,7 @@ flash_stock_ext:
 flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock
 
-$(BUILD_DIR)/internal_flash_patched.bin: $(BUILD_DIR)/$(TARGET).bin patch.py patches
+$(BUILD_DIR)/internal_flash_patched.bin: $(BUILD_DIR)/$(TARGET).bin patch.py patches/patches.py
 	python patch.py
 
 patch: $(BUILD_DIR)/internal_flash_patched.bin

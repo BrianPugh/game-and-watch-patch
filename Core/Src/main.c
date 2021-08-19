@@ -5,15 +5,6 @@
 #include <assert.h>
 #include "gw_linker.h"
 
-int foo(){
-    return 200;
-}
-
-int main(){
-    //static int a=7;
-    return 100;
-}
-
 
 #define BOOTLOADER_MAGIC 0x544F4F42  // "BOOT"
 #define BOOTLOADER_MAGIC_ADDRESS ((uint32_t *)0x2001FFF8)
@@ -58,6 +49,10 @@ void bootloader(){
 
     start_app(stock_Reset_Handler, 0x20011330);
     while(1);
+}
+
+gamepad_t read_buttons() {
+    return stock_read_buttons();
 }
 
 

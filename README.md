@@ -8,6 +8,11 @@ Custom firmware for the Game and Watch: Super Mario Bros. console.
 Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this
 repo. To extract these from your console, see the (game and watch backup repo)[https://github.com/ghidraninja/game-and-watch-backup]
 
+Install python dependencies via:
+```
+pip install -r requirements.txt
+```
+
 To just build and flash, run:
 ```
 make flash

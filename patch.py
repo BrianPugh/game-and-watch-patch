@@ -62,7 +62,10 @@ def parse_args():
     parser.add_argument('--elf', type=Path, default="build/gw_patch.elf",
                         help="")
     parser.add_argument('--output', '-o', type=Path, default="build/internal_flash_patched.bin",
-                        help="")
+                        help="Path to write the patched internal flash binary to.")
+    parser.add_argument('--winbond', type=int, default=None,
+                        choices=[1, 2, 4, 8, 16, 32],
+                        help="Patch for winbond flash chips. Set to the size in megabytes (MB).")
 
     return parser.parse_args()
 

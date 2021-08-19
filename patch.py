@@ -17,6 +17,12 @@ class Firmware(bytearray):
     STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
     STOCK_ROM_END = 0x00019300
 
+    FLASH_BASE = 0x08000000
+    FLASH_LEN  = 0x00020000
+
+    RAM_BASE = 0x02000000
+    RAM_LEN  = 0x00020000
+
     def __init__(self, firmware, elf):
         with open(firmware, 'rb') as f:
             firmware_data = f.read()
@@ -32,7 +38,10 @@ class Firmware(bytearray):
         if not symbols:
             raise MissingSymbolError(f"Cannot find symbol \"{symbol_name}\"")
         address = symbols[0]['st_value']
-        if not address or not ((0x20000000 <= address <= 0x2002000) or (0x08000000 <= address <= 0x08100000)):
+        if not address or not (
+                (self.RAM_BASE <= address <= self.RAM_BASE + self.RAM_LEN) or
+                (self.FLASH_BASE <= address <= self.FLASH_BASE + self.FLASH_LEN)
+        ):
             raise MissingSymbolError(f"Symbol \"{symbol_name}\" has invalid address 0x{address:08X}")
         print(f"found {symbol_name} at 0x{address:08X}")
         return address

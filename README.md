@@ -30,3 +30,6 @@ make flash_patch_ext
 * Maybe slim external flash ROM (remove easter eggs, ROMs, etc) to make room
   for more homebrew.
 * Add macros to launch Retro-Go
+
+# Journal
+This is my first time ever developing patches for a closed source binary. [I documented my journey in hopes that it helps other people](docs/journal.md). If you have any recommendations, tips, tricks, or anything like that, please leave a github issue and I'll update the documentation!

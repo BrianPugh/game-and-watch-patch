@@ -2,6 +2,7 @@ Custom firmware for the Game and Watch: Super Mario Bros. console.
 
 # Features
 * Works correctly with (retro-go)[https://github.com/kbeckmann/game-and-watch-retro-go] in internal flash bank 2.
+* Press button combination (`LEFT` + `A` + `GAME`) to launch retro-go from internal flash bank 2.
 
 # Usage
 Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this
@@ -29,7 +30,6 @@ make flash_patch_ext
   no global/static variables.
 * Maybe slim external flash ROM (remove easter eggs, ROMs, etc) to make room
   for more homebrew.
-* Add macros to launch Retro-Go
 
 # Journal
 This is my first time ever developing patches for a closed source binary. [I documented my journey in hopes that it helps other people](docs/journal.md). If you have any recommendations, tips, tricks, or anything like that, please leave a github issue and I'll update the documentation!

@@ -12,6 +12,9 @@ from patches import parse_patches
 STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
 STOCK_ROM_END = 0x00019300
 
+class MissingSymbolError(Exception):
+    """"""
+
 class Firmware(bytearray):
     def __init__(self, firmware, elf):
         with open(firmware, 'rb') as f:
@@ -24,7 +27,14 @@ class Firmware(bytearray):
         self.symtab = self.elf.get_section_by_name('.symtab')
 
     def address(self, symbol_name):
-        return self.symtab.get_symbol_by_name(symbol_name)[0]['st_value']
+        symbols = self.symtab.get_symbol_by_name(symbol_name)
+        if not symbols:
+            raise MissingSymbolError(f"Cannot find symbol \"{symbol_name}\"")
+        address = symbols[0]['st_value']
+        if not address or not ((0x20000000 <= address <= 0x2002000) or (0x08000000 <= address <= 0x08100000)):
+            raise MissingSymbolError(f"Symbol \"{symbol_name}\" has invalid address 0x{address:08X}")
+        print(f"found {symbol_name} at 0x{address:08X}")
+        return address
 
     def patch(self, offset, data, size=None):
         """
@@ -115,14 +125,6 @@ def main():
         if p.message:
             print(f"Applying patch:  \"{p.message}\"")
         firmware.patch(p.offset, p.data, size=p.size)
-
-    def print_sym(name):
-        print(f"{name} is at 0x{firmware.address(name):08x}")
-
-    print_sym("foo")
-    print_sym("bootloader")
-    #print_sym("main")
-    print_sym("Reset_Handler")
 
     # Save patched firmware
     args.output.write_bytes(firmware)

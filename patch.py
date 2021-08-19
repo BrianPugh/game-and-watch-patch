@@ -9,13 +9,14 @@ from elftools.elf.elffile import ELFFile
 
 from patches import parse_patches
 
-STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
-STOCK_ROM_END = 0x00019300
 
 class MissingSymbolError(Exception):
     """"""
 
 class Firmware(bytearray):
+    STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
+    STOCK_ROM_END = 0x00019300
+
     def __init__(self, firmware, elf):
         with open(firmware, 'rb') as f:
             firmware_data = f.read()
@@ -35,52 +36,6 @@ class Firmware(bytearray):
             raise MissingSymbolError(f"Symbol \"{symbol_name}\" has invalid address 0x{address:08X}")
         print(f"found {symbol_name} at 0x{address:08X}")
         return address
-
-    def patch(self, offset, data, size=None):
-        """
-        Parameters
-        ----------
-        size :
-        Returns
-        -------
-        int
-            Number of bytes patched
-        """
-
-        if not isinstance(offset, int):
-            raise ValueError(f"offset must be an int; got {type(offset)}")
-
-        if offset >= len(self):
-            raise IndexError(f"Patch offset {offset} exceeds firmware length {len(self)}")
-
-        if offset >= STOCK_ROM_END:
-            raise IndexError(f"Patch offset {offset} exceeds stock firmware region {STOCK_ROM_END}")
-
-        n_bytes_patched = 0
-
-        if isinstance(data, bytes):
-            # Write the bytes at that address as is.
-            self[offset:offset + len(data)] = data
-            n_bytes_patched = len(data)
-        elif isinstance(data, list) or isinstance(data, tuple):
-            for elem in data:
-                n_bytes_patched += self.patch(offset + n_bytes_patched, elem)
-        elif isinstance(data, str):
-            if size:
-                raise ValueError("Don't specify size when providing a symbol name.")
-            data = self.address(data)
-            self[offset:offset+4] = data.to_bytes(4, 'little')
-        elif isinstance(data, int):
-            # must be 1, 2, or 4 bytes
-            if size is None:
-                raise ValueError("Must specify \"size\" when providing int data")
-            if size not in (1,2,4):
-                raise ValueError(f"Size must be one of {1, 2, 4}; got {size}")
-            self[offset:offset+size] = data.to_bytes(size, 'little')
-        else:
-            raise ValueError(f"Don't know how to parse data type \"{data}\"")
-
-        return n_bytes_patched
 
 
 class InvalidStockRomError(Exception):
@@ -104,7 +59,7 @@ def parse_args():
 
 def verify_stock_firmware(data):
     h = hashlib.sha1(data).hexdigest()
-    if h != STOCK_ROM_SHA1_HASH:
+    if h != Firmware.STOCK_ROM_SHA1_HASH:
         raise InvalidStockRomError
 
 def main():
@@ -117,14 +72,14 @@ def main():
     patch = args.patch.read_bytes()
     if len(firmware) != len(patch):
         raise InvalidPatchError(f"Expected patch length {len(firmware)}, got {len(patch)}")
-    firmware[STOCK_ROM_END:] = patch[STOCK_ROM_END:]
+    firmware[Firmware.STOCK_ROM_END:] = patch[Firmware.STOCK_ROM_END:]
 
     # Perform all replacements in stock code.
     patches = parse_patches(args)
     for p in patches:
         if p.message:
             print(f"Applying patch:  \"{p.message}\"")
-        firmware.patch(p.offset, p.data, size=p.size)
+        p(firmware)
 
     # Save patched firmware
     args.output.write_bytes(firmware)

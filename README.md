@@ -43,8 +43,8 @@ make flash_patch_int
 # Development
 Main stages to developing a feature:
 1. Find a place to take control in the stock rom (usually function calls).
-2. Add the stock function to `Core/Inc/stock_firmware.h`.
-3. Implement your own function, possibly in `Core/Src/main.c`. There's a good chance your custom function will call the function in (2).
+2. Add the stock function and its address to `Core/Inc/stock_firmware.h`.
+3. Implement your own function, possibly in `Core/Src/main.c`. There's a good chance your custom function will call the function in (2). You will also probably have to add `-Wl,--undefined=my_custom_function` to `LDFLAGS` in the Makefile so that it doesn't get optimized out as unreachable code.
 4. Add a patch definition to `patches/patches.py`.
 
 # Journal

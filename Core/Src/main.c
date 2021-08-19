@@ -58,7 +58,7 @@ void bootloader(){
     while(1);
 }
 
-static void start_bank_2() {
+static inline void start_bank_2() {
     set_bootloader(BANK_2_ADDRESS);
     NVIC_SystemReset();
 }

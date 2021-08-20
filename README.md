@@ -1,5 +1,8 @@
 Custom firmware for the Game and Watch: Super Mario Bros. console.
 
+
+[![Click to play demo](https://thumbs.gfycat.com/UntriedMajesticAfricancivet-mobile.jpg)](https://gfycat.com/untriedmajesticafricancivet)
+
 # What is this?
 This repo contains custom code as well as a patching utility to add additional
 functionality to the stock Game and Watch firmware.

@@ -17,7 +17,12 @@ repo. To extract these from your console, see the [game and watch backup repo](h
 
 Install python dependencies via:
 ```
-pip install -r requirements.txt
+pip3 install -r requirements.txt
+```
+
+Download STM32 Driver files:
+```
+make download_sdk
 ```
 
 To just build and flash, run:

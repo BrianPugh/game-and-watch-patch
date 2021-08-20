@@ -1,6 +1,7 @@
-"""
-Responsibilities of this script:
-"""
+import sys
+if sys.version_info[0] < 3 or sys.version_info[1] < 6:
+    raise Exception("Must be using at least Python 3.6")
+
 
 from pathlib import Path
 import argparse
@@ -50,8 +51,10 @@ class Firmware(bytearray):
 class InvalidStockRomError(Exception):
     """The provided stock ROM did not contain the expected data."""
 
+
 class InvalidPatchError(Exception):
     """"""
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Game and Watch Firmware Patcher.")

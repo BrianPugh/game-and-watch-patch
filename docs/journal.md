@@ -187,6 +187,10 @@ gamepad_t read_buttons() {
 
 
 
+# Misc Ghidra Notes
+
+1. As I'm looking through the disassembled C code, I constantly finding myself wanting to directly refactor/simplify the code. However, the C code is simply representing precisely what the assembly is instructing. However, Ghidra is pretty smart and just needs a little bit of help. Changing the datatypes from `undefined` to things like automatic structs`astruct` helps a ton. Immediately a lot of pointer arithmatic becomes nice fields that you can rename and make sense of. Also, the pointer to the location in memory (the address in your BIN pointing at `0x2XXXXXXX` defaults to type `addr` when you should make it a `astruct` )
+
 # Misc Assembly Notes
 
 ## Instructions ending in "S"

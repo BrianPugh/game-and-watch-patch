@@ -108,7 +108,7 @@ class Patch:
             raise ValueError(f"Data must be str, got {type(self.data)}")
         encoding, _ = ks.asm(self.data)
 
-        print(f"        \"{self.data}\" -> {encoding}")
+        print(f"    \"{self.data}\" -> {[hex(x) for x in encoding]}")
 
         assert len(encoding) == self.size
 

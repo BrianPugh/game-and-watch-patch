@@ -8,7 +8,11 @@ import argparse
 import hashlib
 from elftools.elf.elffile import ELFFile
 
-from patches import parse_patches
+from patches import parse_patches, add_patch_args, patch_args_validation
+
+import colorama
+from colorama import Fore, Back, Style
+colorama.init()
 
 
 class MissingSymbolError(Exception):
@@ -44,7 +48,7 @@ class Firmware(bytearray):
                 (self.FLASH_BASE <= address <= self.FLASH_BASE + self.FLASH_LEN)
         ):
             raise MissingSymbolError(f"Symbol \"{symbol_name}\" has invalid address 0x{address:08X}")
-        print(f"found {symbol_name} at 0x{address:08X}")
+        print(f"    found {symbol_name} at 0x{address:08X}")
         return address
 
 
@@ -75,18 +79,12 @@ def parse_args():
     # Patch configurations #
     ########################
     patches = parser.add_argument_group('patches')
-    patches.add_argument("--sleep-timeout", type=int, default=None,
-                        help="Go to sleep after this many seconds of inactivity.. "
-                         "Valid range: [0, 4000]"
-                        )
-    patches.add_argument("--hard-reset-timeout", type=float, default=None,
-                         help="Hold power button for this many seconds to perform hard reset."
-                         )
+    add_patch_args(patches)
 
+    # Final Validation
     args = parser.parse_args()
 
-    if args.sleep_timeout and (args.sleep_timeout <= 0 or args.sleep_timeout > 4000):
-        parser.error("--sleep-timeout must be in range [0, 4000]")
+    patch_args_validation(args)
 
     return args
 
@@ -109,13 +107,21 @@ def main():
 
     # Perform all replacements in stock code.
     patches = parse_patches(args)
+
+    print(Fore.BLUE)
+    print("#########################")
+    print("# BEGINING BINARY PATCH #")
+    print("#########################" + Style.RESET_ALL)
+
     for p in patches:
         if p.message:
-            print(f"Applying patch:  \"{p.message}\"")
+            print(f"{Fore.MAGENTA}Applying patch:{Style.RESET_ALL}  \"{p.message}\"")
         p(firmware)
 
     # Save patched firmware
     args.output.write_bytes(firmware)
+
+    print(Fore.GREEN + "Binary Patching Complete!\n" + Style.RESET_ALL)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,9 @@ functionality to the stock Game and Watch firmware.
 # Features
 * Works correctly with [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) in internal flash bank 2.
 * Press button combination (`LEFT` + `A` + `GAME`) to launch retro-go from internal flash bank 2.
+* Configurable sleep timeout.
+* Configurable hard-reset timeout.
+
 
 # Usage
 Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this

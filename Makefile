@@ -12,6 +12,7 @@ DEBUG = 1
 # optimization
 OPT = -Og
 
+PATCH_PARAMS ?=
 
 #######################################
 # paths
@@ -189,7 +190,7 @@ flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock
 
 $(BUILD_DIR)/internal_flash_patched.bin: $(BUILD_DIR)/$(TARGET).bin patch.py patches/patches.py
-	$(PYTHON) patch.py
+	$(PYTHON) patch.py $(PATCH_PARAMS)
 
 patch: $(BUILD_DIR)/internal_flash_patched.bin
 .PHONY: patch

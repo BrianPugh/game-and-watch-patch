@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define THUMB 0x00000001
 
@@ -48,3 +49,13 @@ gamepad_t (* const stock_read_buttons)(void) = 0x08010d48 | THUMB;
 #define GAMEPAD_TIME  ((gamepad_t) ( 1 <<  8 ))
 #define GAMEPAD_PAUSE ((gamepad_t) ( 1 <<  9 ))
 #define GAMEPAD_GAME  ((gamepad_t) ( 1 << 10 ))
+
+/**
+ * Returns `true` if USB power is connected, `false` otherwise.
+ */
+bool (* const is_usb_connected)(void) = 0x08010dc2 | THUMB;
+
+/**
+ * Put system to sleep.
+ */
+void (* const sleep)(void) = 0x080063a0 | THUMB;

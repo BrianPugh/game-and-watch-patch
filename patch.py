@@ -58,6 +58,10 @@ class InvalidPatchError(Exception):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Game and Watch Firmware Patcher.")
+
+    #########################
+    # Global configurations #
+    #########################
     parser.add_argument('--firmware', type=Path, default="internal_flash_backup.bin",
                         help="Input stock firmware.")
     parser.add_argument('--patch', type=Path, default="build/gw_patch.bin",
@@ -67,7 +71,24 @@ def parse_args():
     parser.add_argument('--output', '-o', type=Path, default="build/internal_flash_patched.bin",
                         help="")
 
-    return parser.parse_args()
+    ########################
+    # Patch configurations #
+    ########################
+    patches = parser.add_argument_group('patches')
+    patches.add_argument("--sleep-timeout", type=int, default=None,
+                        help="Go to sleep after this many seconds of inactivity.. "
+                         "Valid range: [0, 4000]"
+                        )
+    patches.add_argument("--hard-reset-timeout", type=float, default=None,
+                         help="Hold power button for this many seconds to perform hard reset."
+                         )
+
+    args = parser.parse_args()
+
+    if args.sleep_timeout and (args.sleep_timeout <= 0 or args.sleep_timeout > 4000):
+        parser.error("--sleep-timeout must be in range [0, 4000]")
+
+    return args
 
 def verify_stock_firmware(data):
     h = hashlib.sha1(data).hexdigest()

@@ -1,5 +1,19 @@
 from .patch import Patches
 
+def add_patch_args(parser):
+    parser.add_argument("--sleep-timeout", type=int, default=None,
+                        help="Go to sleep after this many seconds of inactivity.. "
+                         "Valid range: [0, 4000]"
+                        )
+    parser.add_argument("--hard-reset-timeout", type=float, default=None,
+                         help="Hold power button for this many seconds to perform hard reset."
+                         )
+
+
+def patch_args_validation(args):
+    pass
+
+
 def parse_patches(args):
     patches = Patches()
 

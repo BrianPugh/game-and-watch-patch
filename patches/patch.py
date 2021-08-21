@@ -1,8 +1,15 @@
+from keystone import *
+
 COMMAND_DESCRIPTIONS = {
     "replace": "simple byte substitution",
     "bl": "replace bl",
+    "ks_arm": "compile a snippet of assembly into ARM",
+    "ks_thumb": "compile a snippet of assembly into Thumb",
 }
 VALID_COMMANDS = set(list(COMMAND_DESCRIPTIONS.keys()))
+
+ks_arm = Ks(KS_ARCH_ARM, KS_MODE_ARM)
+ks_thumb = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
 
 class Patch:
     def __init__(self, command, offset, data, size=None, message=None):
@@ -95,6 +102,26 @@ class Patch:
         firmware[self.offset + 3] = stage_2_byte_0
 
         return 4
+
+    def _ks(self, ks, firmware):
+        if not isinstance(self.data, str):
+            raise ValueError(f"Data must be str, got {type(self.data)}")
+        encoding, _ = ks.asm(self.data)
+
+        print(f"        \"{self.data}\" -> {encoding}")
+
+        assert len(encoding) == self.size
+
+        for i, val in enumerate(encoding):
+            firmware[self.offset + i] = val
+
+        return len(encoding)
+
+    def ks_arm(self, firmware):
+        return self._ks(ks_arm, firmware)
+
+    def ks_thumb(self, firmware):
+        return self._ks(ks_thumb, firmware)
 
 
 class Patches(list):

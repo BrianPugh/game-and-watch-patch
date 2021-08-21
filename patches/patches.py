@@ -1,9 +1,9 @@
 from .patch import Patches
 
 def add_patch_args(parser):
-    parser.add_argument("--sleep-timeout", type=int, default=None,
+    parser.add_argument("--sleep-timeout", type=float, default=None,
                         help="Go to sleep after this many seconds of inactivity.. "
-                         "Valid range: [0, 4000]"
+                         "Valid range: [1, 1092]"
                         )
     parser.add_argument("--hard-reset-timeout", type=float, default=None,
                          help="Hold power button for this many seconds to perform hard reset."
@@ -11,7 +11,8 @@ def add_patch_args(parser):
 
 
 def patch_args_validation(args):
-    pass
+    if args.sleep_timeout and (args.sleep_timeout < 1 or args.sleep_timeout > 1092):
+        parser.error("--sleep-timeout must be in range [1, 1092]")
 
 
 def parse_patches(args):
@@ -29,5 +30,8 @@ def parse_patches(args):
                                 "milliseconds to perform hard reset.")
 
     if args.sleep_timeout:
-        raise NotImplementedError
+        sleep_timeout_frames = 60 * args.sleep_timeout  # 60 frames-per-second
+        patches.append("ks_thumb", 0x6c3c, f"movw r2, #{sleep_timeout_frames}", size=4,
+                       message=f"Setting sleep timeout to {args.sleep_timeout} seconds.")
+
     return patches

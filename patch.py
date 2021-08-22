@@ -84,7 +84,7 @@ def parse_args():
     # Final Validation
     args = parser.parse_args()
 
-    patch_args_validation(args)
+    patch_args_validation(parser, args)
 
     return args
 

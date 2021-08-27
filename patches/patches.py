@@ -24,7 +24,7 @@ def patch_args_validation(parser, args):
         parser.error("--mario_song-time must be in range [1, 1092]")
 
 
-def parse_patches(args):
+def parse_int_patches(args):
     patches = Patches()
 
     patches.append("replace", 0x4, "bootloader",
@@ -48,4 +48,8 @@ def parse_patches(args):
         patches.append("ks_thumb", 0x6fc4, f"cmp.w r0, #{mario_song_frames}", size=4,
                        message=f"Setting Mario Song time to {args.mario_song_time} seconds.")
 
+    return patches
+
+def parse_ext_patches(args):
+    patches = Patches()
     return patches

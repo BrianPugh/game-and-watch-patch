@@ -175,32 +175,39 @@ erase_int:
 	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt; flash erase_address 0x08000000 131072; resume; exit"
 .PHONY: erase_int
 
-flash_stock_int:
+flash_stock_int: internal_flash_backup.bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
 		-c "init; halt;" \
-		-c "program internal_flash_backup.bin 0x08000000 verify;" \
+		-c "program $< 0x08000000 verify;" \
 		-c "reset; exit;"
 .PHONY: flash_stock_int
 
-flash_stock_ext:
-	$(FLASHAPP) $(ADAPTER) flash_backup.bin
+flash_stock_ext: flash_backup.bin
+	$(FLASHAPP) $(ADAPTER) $<
+	mask reset
 .PHONY: flash_stock_ext
 
 flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock
 
-$(BUILD_DIR)/internal_flash_patched.bin: $(BUILD_DIR)/$(TARGET).bin patch.py patches/patches.py
+$(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin &: $(BUILD_DIR)/$(TARGET).bin patch.py patches/patches.py
 	$(PYTHON) patch.py $(PATCH_PARAMS)
 
-patch: $(BUILD_DIR)/internal_flash_patched.bin
+patch: $(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin
 .PHONY: patch
 
 flash_patched_int: build/internal_flash_patched.bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
 		-c "init; halt;" \
-		-c "program build/internal_flash_patched.bin 0x08000000 verify;" \
+		-c "program $< 0x08000000 verify;" \
 		-c "reset; exit;"
 .PHONY: flash_patched_int
+
+flash_patched_ext: build/external_flash_patched.bin
+	$(FLASHAPP) $(ADAPTER) $<
+	make reset
+
+.PHONY: flash_patched_ext
 
 flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock

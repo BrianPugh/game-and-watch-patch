@@ -52,4 +52,8 @@ def parse_int_patches(args):
 
 def parse_ext_patches(args):
     patches = Patches()
+
+    patches.append("replace", 0x2FA64, b"\xFF" * 0x5A120,
+                   message="Erasing Mario Song Audio")
+
     return patches

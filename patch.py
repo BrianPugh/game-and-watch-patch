@@ -8,7 +8,7 @@ import argparse
 import hashlib
 from elftools.elf.elffile import ELFFile
 
-from patches import parse_patches, add_patch_args, patch_args_validation
+from patches import parse_int_patches, parse_ext_patches, add_patch_args, patch_args_validation
 
 import colorama
 from colorama import Fore, Back, Style
@@ -19,11 +19,6 @@ class MissingSymbolError(Exception):
     """"""
 
 class Firmware(bytearray):
-    STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
-    STOCK_ROM_END = 0x00019300
-
-    FLASH_BASE = 0x08000000
-    FLASH_LEN  = 0x00020000
 
     RAM_BASE = 0x02000000
     RAM_LEN  = 0x00020000
@@ -35,12 +30,20 @@ class Firmware(bytearray):
         super().__init__(firmware_data)
         self._verify()
 
-        if elf is None:
-            self.symtab = None
-        else:
-            self._elf_f = open(elf, 'rb')
-            self.elf = ELFFile(self._elf_f)
-            self.symtab = self.elf.get_section_by_name('.symtab')
+
+class IntFirmware(Firmware):
+    STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
+
+    FLASH_BASE = 0x08000000
+    FLASH_LEN  = 0x00020000
+
+    STOCK_ROM_END = 0x00019300
+
+    def __init__(self, firmware, elf):
+        super().__init__(firmware)
+        self._elf_f = open(elf, 'rb')
+        self.elf = ELFFile(self._elf_f)
+        self.symtab = self.elf.get_section_by_name('.symtab')
 
     def _verify(self):
         h = hashlib.sha1(self).hexdigest()
@@ -48,9 +51,6 @@ class Firmware(bytearray):
             raise InvalidStockRomError
 
     def address(self, symbol_name):
-        if self.symtab is None:
-            raise MissingElfError("ELF file must be provided to use this functionality.")
-
         symbols = self.symtab.get_symbol_by_name(symbol_name)
         if not symbols:
             raise MissingSymbolError(f"Cannot find symbol \"{symbol_name}\"")
@@ -64,8 +64,18 @@ class Firmware(bytearray):
         return address
 
 
-class MissingElfError(Exception):
-    """"""
+class ExtFirmware(Firmware):
+    STOCK_ROM_SHA1_HASH = "eea70bb171afece163fb4b293c5364ddb90637ae"
+
+    FLASH_BASE = 0x90000000
+    FLASH_LEN  = 0x01000000
+    STOCK_ROM_END  = 0x01000000
+
+    def _verify(self):
+        h = hashlib.sha1(self[:-8192]).hexdigest()
+        if h != self.STOCK_ROM_SHA1_HASH:
+            raise InvalidStockRomError
+
 
 class InvalidStockRomError(Exception):
     """The provided stock ROM did not contain the expected data."""
@@ -81,14 +91,18 @@ def parse_args():
     #########################
     # Global configurations #
     #########################
-    parser.add_argument('--firmware', type=Path, default="internal_flash_backup.bin",
-                        help="Input stock firmware.")
+    parser.add_argument('--int-firmware', type=Path, default="internal_flash_backup.bin",
+                        help="Input stock internal firmware.")
+    parser.add_argument('--ext-firmware', type=Path, default="flash_backup.bin",
+                        help="Input stock external firmware.")
     parser.add_argument('--patch', type=Path, default="build/gw_patch.bin",
-                        help="")
+                        help="Compiled custom code to insert at the end of the internal firmware")
     parser.add_argument('--elf', type=Path, default="build/gw_patch.elf",
-                        help="")
-    parser.add_argument('--output', '-o', type=Path, default="build/internal_flash_patched.bin",
-                        help="")
+                        help="ELF file corresponding to the bin provided by --patch")
+    parser.add_argument('--int-output', type=Path, default="build/internal_flash_patched.bin",
+                        help="Patched internal firmware.")
+    parser.add_argument('--ext-output', type=Path, default="build/external_flash_patched.bin",
+                        help="Patched external firmware.")
 
     ########################
     # Patch configurations #
@@ -107,29 +121,37 @@ def parse_args():
 def main():
     args = parse_args()
 
-    firmware = Firmware(args.firmware, args.elf)
+    int_firmware = IntFirmware(args.int_firmware, args.elf)
+    ext_firmware = ExtFirmware(args.ext_firmware)
 
     # Copy over novel code
     patch = args.patch.read_bytes()
-    if len(firmware) != len(patch):
-        raise InvalidPatchError(f"Expected patch length {len(firmware)}, got {len(patch)}")
-    firmware[Firmware.STOCK_ROM_END:] = patch[Firmware.STOCK_ROM_END:]
+    if len(int_firmware) != len(patch):
+        raise InvalidPatchError(f"Expected patch length {len(int_firmware)}, got {len(patch)}")
+    int_firmware[int_firmware.STOCK_ROM_END:] = patch[int_firmware.STOCK_ROM_END:]
 
     # Perform all replacements in stock code.
-    patches = parse_patches(args)
+    int_patches = parse_int_patches(args)
+    ext_patches = parse_ext_patches(args)
 
     print(Fore.BLUE)
     print("#########################")
     print("# BEGINING BINARY PATCH #")
     print("#########################" + Style.RESET_ALL)
 
-    for p in patches:
+    for p in int_patches:
         if p.message:
             print(f"{Fore.MAGENTA}Applying patch:{Style.RESET_ALL}  \"{p.message}\"")
-        p(firmware)
+        p(int_firmware)
+
+    for p in ext_patches:
+        if p.message:
+            print(f"{Fore.MAGENTA}Applying patch:{Style.RESET_ALL}  \"{p.message}\"")
+        p(ext_firmware)
 
     # Save patched firmware
-    args.output.write_bytes(firmware)
+    args.int_output.write_bytes(int_firmware)
+    args.ext_output.write_bytes(ext_firmware)
 
     print(Fore.GREEN + "Binary Patching Complete!\n" + Style.RESET_ALL)
 

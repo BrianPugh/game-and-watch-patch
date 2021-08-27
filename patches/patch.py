@@ -5,6 +5,7 @@ COMMAND_DESCRIPTIONS = {
     "bl": "replace bl",
     "ks_arm": "compile a snippet of assembly into ARM",
     "ks_thumb": "compile a snippet of assembly into Thumb",
+    "nop": "replace data at address with no-operations (NOPs)"
 }
 VALID_COMMANDS = set(list(COMMAND_DESCRIPTIONS.keys()))
 
@@ -122,6 +123,13 @@ class Patch:
 
     def ks_thumb(self, firmware):
         return self._ks(ks_thumb, firmware)
+
+    def nop(self, firmware):
+        if self.size is not None:
+            raise ValueError("Size must be none; use data field to specify number of nops")
+        size = self.data * 2
+        firmware[self.offset:self.offset+size] = b"\x00\xbf" * self.data
+        return self.data
 
 
 class Patches(list):

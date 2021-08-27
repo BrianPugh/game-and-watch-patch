@@ -28,17 +28,29 @@ class Firmware(bytearray):
     RAM_BASE = 0x02000000
     RAM_LEN  = 0x00020000
 
-    def __init__(self, firmware, elf):
+    def __init__(self, firmware, elf=None):
         with open(firmware, 'rb') as f:
             firmware_data = f.read()
 
         super().__init__(firmware_data)
+        self._verify()
 
-        self._elf_f = open(elf, 'rb')
-        self.elf = ELFFile(self._elf_f)
-        self.symtab = self.elf.get_section_by_name('.symtab')
+        if elf is None:
+            self.symtab = None
+        else:
+            self._elf_f = open(elf, 'rb')
+            self.elf = ELFFile(self._elf_f)
+            self.symtab = self.elf.get_section_by_name('.symtab')
+
+    def _verify(self):
+        h = hashlib.sha1(self).hexdigest()
+        if h != self.STOCK_ROM_SHA1_HASH:
+            raise InvalidStockRomError
 
     def address(self, symbol_name):
+        if self.symtab is None:
+            raise MissingElfError("ELF file must be provided to use this functionality.")
+
         symbols = self.symtab.get_symbol_by_name(symbol_name)
         if not symbols:
             raise MissingSymbolError(f"Cannot find symbol \"{symbol_name}\"")
@@ -51,6 +63,9 @@ class Firmware(bytearray):
         print(f"    found {symbol_name} at 0x{address:08X}")
         return address
 
+
+class MissingElfError(Exception):
+    """"""
 
 class InvalidStockRomError(Exception):
     """The provided stock ROM did not contain the expected data."""
@@ -88,16 +103,11 @@ def parse_args():
 
     return args
 
-def verify_stock_firmware(data):
-    h = hashlib.sha1(data).hexdigest()
-    if h != Firmware.STOCK_ROM_SHA1_HASH:
-        raise InvalidStockRomError
 
 def main():
     args = parse_args()
 
     firmware = Firmware(args.firmware, args.elf)
-    verify_stock_firmware(firmware)
 
     # Copy over novel code
     patch = args.patch.read_bytes()

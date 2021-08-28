@@ -7,6 +7,7 @@ COMMAND_DESCRIPTIONS = {
     "ks_thumb": "compile a snippet of assembly into Thumb",
     "nop": "replace data at address with no-operations (NOPs)",
     "move": "move block of data. Erase old location",
+    "copy": "copy block of data.",
     "add": "Perform inplace addition on data at address",
 }
 VALID_COMMANDS = set(list(COMMAND_DESCRIPTIONS.keys()))
@@ -162,6 +163,19 @@ class Patch:
                 _set_range(firmware, old_start, old_end)
 
         return self.size
+
+    def copy(self, firmware):
+        if not isinstance(self.data, int):
+            raise ValueError(f"Data must be int, got {type(self.data)}")
+
+        old_start = self.offset
+        old_end = old_start + self.size
+        new_start = self.offset + self.data
+        new_end = new_start + self.size
+        firmware[new_start:new_end] = firmware[old_start:old_end]
+
+        return self.size
+
 
     def add(self, firmware):
         if not isinstance(self.data, int):

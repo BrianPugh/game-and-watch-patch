@@ -40,7 +40,7 @@ class Patch:
             raise ValueError(f"offset must be an int; got {type(self.offset)}")
 
         if self.offset >= len(firmware):
-            raise IndexError(f"Patch offset {self.offset} exceeds firmware length {len(self)}")
+            raise IndexError(f"Patch offset {self.offset} exceeds firmware length {len(firmware)}")
 
         if self.offset >= firmware.STOCK_ROM_END:
             raise IndexError(f"Patch offset {self.offset} exceeds stock firmware region {firmware.STOCK_ROM_END}")

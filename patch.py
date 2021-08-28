@@ -8,7 +8,7 @@ import argparse
 import hashlib
 from elftools.elf.elffile import ELFFile
 
-from patches import parse_int_patches, parse_ext_patches, add_patch_args, patch_args_validation
+from patches import parse_patches, add_patch_args, patch_args_validation
 
 import colorama
 from colorama import Fore, Back, Style
@@ -45,6 +45,9 @@ class IntFirmware(Firmware):
         self.elf = ELFFile(self._elf_f)
         self.symtab = self.elf.get_section_by_name('.symtab')
 
+    def __str__(self):
+        return "internal"
+
     def _verify(self):
         h = hashlib.sha1(self).hexdigest()
         if h != self.STOCK_ROM_SHA1_HASH:
@@ -70,6 +73,9 @@ class ExtFirmware(Firmware):
     FLASH_BASE = 0x90000000
     FLASH_LEN  = 0x01000000
     STOCK_ROM_END  = 0x01000000
+
+    def __str__(self):
+        return "external"
 
     def _verify(self):
         h = hashlib.sha1(self[:-8192]).hexdigest()
@@ -129,25 +135,25 @@ def main():
     if len(int_firmware) != len(patch):
         raise InvalidPatchError(f"Expected patch length {len(int_firmware)}, got {len(patch)}")
     int_firmware[int_firmware.STOCK_ROM_END:] = patch[int_firmware.STOCK_ROM_END:]
+    del patch
 
     # Perform all replacements in stock code.
-    int_patches = parse_int_patches(args)
-    ext_patches = parse_ext_patches(args)
+    patches = parse_patches(args)
 
     print(Fore.BLUE)
     print("#########################")
     print("# BEGINING BINARY PATCH #")
     print("#########################" + Style.RESET_ALL)
 
-    for p in int_patches:
+    for p in patches:
+        if ext_firmware.FLASH_BASE <= p.offset < ext_firmware.FLASH_BASE + ext_firmware.FLASH_LEN:
+            p.offset -= ext_firmware.FLASH_BASE
+            firmware = ext_firmware
+        else:
+            firmware = int_firmware
         if p.message:
-            print(f"{Fore.MAGENTA}Applying patch:{Style.RESET_ALL}  \"{p.message}\"")
-        p(int_firmware)
-
-    for p in ext_patches:
-        if p.message:
-            print(f"{Fore.MAGENTA}Applying patch:{Style.RESET_ALL}  \"{p.message}\"")
-        p(ext_firmware)
+            print(f"{Fore.MAGENTA}Applying {str(firmware)} patch:{Style.RESET_ALL}  \"{p.message}\"")
+        p(firmware)
 
     # Save patched firmware
     args.int_output.write_bytes(int_firmware)

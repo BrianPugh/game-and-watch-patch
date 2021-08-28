@@ -149,10 +149,12 @@ def main():
         if ext_firmware.FLASH_BASE <= p.offset < ext_firmware.FLASH_BASE + ext_firmware.FLASH_LEN:
             p.offset -= ext_firmware.FLASH_BASE
             firmware = ext_firmware
+            color = Fore.YELLOW
         else:
             firmware = int_firmware
+            color = Fore.MAGENTA
         if p.message:
-            print(f"{Fore.MAGENTA}Applying {str(firmware)} patch:{Style.RESET_ALL}  \"{p.message}\"")
+            print(f"{color}Applying {str(firmware)} patch:{Style.RESET_ALL}  \"{p.message}\"")
         p(firmware)
 
     # Save patched firmware

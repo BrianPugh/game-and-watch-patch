@@ -74,8 +74,43 @@ def parse_patches(args):
         patches.append("add", 0x7350, -mario_song_len, size=4,
                        message="Update NES palette references 1")
 
-        # We'll need to move this palette location.
-        # NES palette at 0xA8B84
+        # Note: UNKNOWN* represents a block of data that i haven't decoded
+        # yet. If you know what the block of data is, please let me know!
+        patches.append("copy", 0x900a_8c44, -mario_song_len, size=0x900c58f8 - 0x900a8c44,
+                       message="Move UNKNOWN")
+        unknown_references = [
+            0x0_bc44,
+            0x0_cea8,
+            0x0_d2f8,
+            0x0_d010,
+            0x0_d004,
+            0x0_d2d8,
+            0x0_d2dc,
+            0x0_d2f4,
+            0x0_d2f0,
+            0x0_7374,
+            0x1_0964,
+            0x1_658c,
+            0x0_df88,
+            0x0_e8f8,
+            0x0_f4ec,
+            0x1_05b0,
+            0x0_f4f8,
+            0x0_e2e4,
+            0x0_f4fc,
+            0x1_6590,
+            0x1_0f9c,
+            0x0_43ec,
+            0x0_4594,
+        ]
+        for i, reference in enumerate(unknown_references):
+            patches.append("add", reference, -mario_song_len, size=4,
+                           message=f"Update UNKNOWN references {i} at {hex(reference)}")
+
+
+
+
+
         if False:
             patches.append("replace", 0x900a_8b84, b"\xFF" * 192,
                            message="NES palette")
@@ -86,8 +121,8 @@ def parse_patches(args):
 
 
         # The last 2 4096 byte blocks represent something in settings.
-        patches.append("replace", 0x900f_e000, b"\xFF" * 0x50,
-                       message="erase some settings?")
+        #patches.append("replace", 0x900f_e000, b"\xFF" * 0x50,
+        #               message="erase some settings?")
         #patches.append("replace", 0x900f_f000, b"\xFF" * 0x50,
         #               message="erasure causes first startup")
 

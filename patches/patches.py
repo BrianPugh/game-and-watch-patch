@@ -1,5 +1,12 @@
 from .patch import Patches
 
+
+# 0x9009_8b84 onwards (post mario song)
+#EXTFLASH_REFERENCES = {
+#    0x
+#}
+
+
 def _seconds_to_frames(seconds):
     return int(round(60 * seconds))
 
@@ -56,19 +63,25 @@ def parse_patches(args):
         patches.append("replace", 0x6C40, 0x91, size=1,
                        message=f"Disable sleep timer")
 
-        patches.append("replace", 0x9001_2D44, b"\xFF" * (0x85e40),
+        mario_song_len = 0x85e40
+        patches.append("replace", 0x9001_2D44, b"\xFF" * (mario_song_len),
                        message="Erasing Mario Song")
         # Right after this chunk is some graphics for the clock
-        # 0x97d44
+        # 0x9009_8b84
+
+        patches.append("move", 0x900a_8b84, -mario_song_len, size=192,
+                       message="Move NES palette")
+        patches.append("add", 0x7350, -mario_song_len, size=4,
+                       message="Update NES palette references 1")
 
         # We'll need to move this palette location.
         # NES palette at 0xA8B84
         if False:
-            patches.append("replace", 0x9000_a8b84, b"\xFF" * 192,
+            patches.append("replace", 0x900a_8b84, b"\xFF" * 192,
                            message="NES palette")
 
         if False:
-            patches.append("replace", 0x9000_a8c44, b"\xFF" * 3072,
+            patches.append("replace", 0x900a_8c44, b"\xFF" * 3072,
                            message="")
 
 

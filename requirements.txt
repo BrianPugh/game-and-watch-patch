@@ -1,3 +1,4 @@
 colorama
 keystone-engine
 pyelftools
+pycrypto

@@ -7,6 +7,7 @@ from pathlib import Path
 import argparse
 import hashlib
 from elftools.elf.elffile import ELFFile
+from Crypto.Cipher import AES
 
 from patches import parse_patches, add_patch_args, patch_args_validation
 
@@ -66,12 +67,23 @@ class IntFirmware(Firmware):
         print(f"    found {symbol_name} at 0x{address:08X}")
         return address
 
+    @property
+    def key(self):
+        offset = 0x106f4
+        return self[offset: offset+16]
+
+    @property
+    def nonce(self):
+        offset = 0x106e4
+        return self[offset:offset+8]
+
 
 class ExtFirmware(Firmware):
     STOCK_ROM_SHA1_HASH = "eea70bb171afece163fb4b293c5364ddb90637ae"
 
-    FLASH_BASE = 0x90000000
-    FLASH_LEN  = 0x01000000
+    FLASH_BASE = 0x9000_0000
+    FLASH_LEN  = 0x0010_0000
+    ENC_LEN    = 0xF_DFFF
     STOCK_ROM_END  = 0x01000000
 
     def __str__(self):
@@ -81,6 +93,32 @@ class ExtFirmware(Firmware):
         h = hashlib.sha1(self[:-8192]).hexdigest()
         if h != self.STOCK_ROM_SHA1_HASH:
             raise InvalidStockRomError
+
+    def _nonce_to_iv(self, nonce):
+        # need to convert nonce to 2
+        assert len(nonce) == 8
+        nonce = nonce[::-1]
+        # The lower 28bits (counter) will be updated in `crypt` method
+        return nonce + b"\x00\x00" + b"\x71\x23" + b"\x20\x00" + b"\x00\x00"
+
+    def crypt(self, key, nonce):
+        key = bytes(key[::-1])
+        iv = bytearray(self._nonce_to_iv(nonce))
+
+        aes = AES.new(key, AES.MODE_ECB)
+
+        for offset in range(0, self.ENC_LEN, 128 // 8):
+            counter_block = iv.copy()
+
+            counter = (self.FLASH_BASE + offset) >> 4
+            counter_block[12] = ((counter >> 24) & 0x0F) | (counter_block[12] & 0xF0)
+            counter_block[13] = (counter >> 16) & 0xFF
+            counter_block[14] = (counter >> 8) & 0xFF
+            counter_block[15] = (counter >> 0) & 0xFF
+
+            cipher_block = aes.encrypt(bytes(counter_block))
+            for i, cipher_byte in enumerate(reversed(cipher_block)):
+                self[offset + i] ^= cipher_byte
 
 
 class InvalidStockRomError(Exception):
@@ -130,6 +168,10 @@ def main():
     int_firmware = IntFirmware(args.int_firmware, args.elf)
     ext_firmware = ExtFirmware(args.ext_firmware)
 
+    # Decrypt the external firmware
+    ext_firmware.crypt(int_firmware.key, int_firmware.nonce)
+    #Path("decrypt.bin").write_bytes(ext_firmware)
+
     # Copy over novel code
     patch = args.patch.read_bytes()
     if len(int_firmware) != len(patch):
@@ -156,6 +198,9 @@ def main():
         if p.message:
             print(f"{color}Applying {str(firmware)} patch:{Style.RESET_ALL}  \"{p.message}\"")
         p(firmware)
+
+    # Re-encrypt the external firmware
+    ext_firmware.crypt(int_firmware.key, int_firmware.nonce)
 
     # Save patched firmware
     args.int_output.write_bytes(int_firmware)

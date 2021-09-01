@@ -189,7 +189,7 @@ def parse_patches(args):
                        message="Updating event lookup table reference")
 
 
-        patches.append("copy", 0x900bf838, -mario_song_len, size=280,)
+        patches.append("move", 0x900bf838, -mario_song_len, size=280,)
         patches.append("add", 0xe8f8, -mario_song_len, size=4)
         patches.append("add", 0xf4ec, -mario_song_len, size=4)
         patches.append("add", 0xf4f8, -mario_song_len, size=4)
@@ -197,12 +197,12 @@ def parse_patches(args):
         patches.append("add", 0x105b0, -mario_song_len, size=4)
 
 
-        patches.append("copy", 0x900bf950, -mario_song_len, size=180,)
+        patches.append("move", 0x900bf950, -mario_song_len, size=180,)
         patches.append("add", 0xe2e4, -mario_song_len, size=4)
         patches.append("add", 0xf4fc, -mario_song_len, size=4)
 
 
-        patches.append("copy", 0x900bfa04, -mario_song_len, size=8,)
+        patches.append("move", 0x900bfa04, -mario_song_len, size=8,)
         patches.append("add", 0x1_6590, -mario_song_len, size=4)
 
         # EVERYTHING IS GOOD UP TO HERE
@@ -210,6 +210,10 @@ def parse_patches(args):
         # Need to figure out code sections in extflash before proceeding
         #patches.append("copy", 0x900bfa0c, -mario_song_len, size=784,)
         #patches.append("add", 0x1_0f9c, -mario_song_len, size=4)
+
+
+        # Skipping to post-image section now, need to revisit ^
+        i#patches.append()
 
 
         #patches.append("add", , -mario_song_len, size=4)

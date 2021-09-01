@@ -144,7 +144,6 @@ def parse_patches(args):
         patches.append("add", 0x1_0964, -mario_song_len, size=4,
                        message="Two sets of uint8_t[8]. Not sure what they represent.")
 
-        # EVERYTHING IS GOOD UP TO HERE
 
 
         # These somehow describe the time scenes (impacts how all background is drawn)
@@ -159,9 +158,7 @@ def parse_patches(args):
                        message="Time dawn scene [0500, 0600)")
         #               message="Underground coin bonus scene (between 0000 and 1200 at XX:30)")
 
-        #return patches
-
-        # These might be 8x8 sprites?
+        # These might be 8x8 2-bpp sprites?
         eight_bytes_start = 0x900bf2a8
         eight_bytes_end   = 0x900bf410
         eight_bytes_len = eight_bytes_end - eight_bytes_start
@@ -169,25 +166,30 @@ def parse_patches(args):
             patches.append("move", addr, -mario_song_len, size=8)
 
 
+        # IDK what this is.
+        patches.append("move", 0x900bf410, -mario_song_len, size=144)
+        patches.append("add", 0x1_658c, -mario_song_len, size=4)
 
 
         # This table is related to time events.
         lookup_table_start = 0x900b_f4a0
         lookup_table_end   = 0x900b_f838
         lookup_table_len   = lookup_table_end - lookup_table_start  # 920
-
         def cond(addr):
             # Return True if it's beyond the mario song addr
-            #return 0x9001_2D44 <= addr < 0x900b_f2a8
+            # TODO: this ending addr is just until we successfullly move other stuff.
             return 0x9001_2D44 <= addr < eight_bytes_end
-
         for addr in range(lookup_table_start, lookup_table_end, 4):
             patches.append("add", addr, -mario_song_len, size=4, cond=cond)
         # Now move the table
-        #patches.append("move", lookup_table_start, -mario_song_len, size=lookup_table_len)
+        patches.append("move", lookup_table_start, -mario_song_len, size=lookup_table_len,
+                       message="Moving event lookup table")
+        patches.append("add", 0xdf88, -mario_song_len, size=4,
+                       message="Updating event lookup table reference")
         # TODO: move references to table
 
 
+        # EVERYTHING IS GOOD UP TO HERE
 
 
         if False:

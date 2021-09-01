@@ -213,6 +213,20 @@ def parse_patches(args):
 
 
         # Skipping to post-image section now, need to revisit ^
+
+        # Images Notes:
+        #    * In-between images are just zeros.
+        # start: 0x900C_58F8   end: 0x900C_D83F    mario sleeping
+        # start: 0x900C_D858   end: 0x900D_6C65    mario juggling
+        # start: 0x900D_6C78   end: 0x900E_16E2    bowser sleeping
+        # start: 0x900E_16F8   end: 0x900E_C301    mario and luigi eating pizza
+        # start: 0x900E_C318   end: 0x900F_4D04    minions sleeping
+        #          zero_padded_end: 0x900f_4d18
+        # Total Image Length: 193_568 bytes
+        patches.append("replace", 0x900c58f8, b"\x00" * 193_568,
+                       message="Deleting sleeping images")
+
+
         patches.append("move", 0x900f4d18, -mario_song_len, size=2880)
         patches.append("add", 0x10960, -mario_song_len, size=4)
 
@@ -223,6 +237,7 @@ def parse_patches(args):
         #patches.append("move", 0x900f5858, -mario_song_len, size=34728)
         #patches.append("add", 0x7210, -mario_song_len, size=4)
         patches.append("replace", 0x900f5858, b"\x00" * 34728)
+
 
         # TODO: Only the two save blocks remain here
 
@@ -286,15 +301,6 @@ def parse_patches(args):
 
 
 
-        # Images Notes:
-        #    * In-between images are just zeros.
-        # start: 0x900C_58F8   end: 0x900C_D83F    mario sleeping
-        # start: 0x900C_D858   end: 0x900D_6C65    mario juggling
-        # start: 0x900D_6C78   end: 0x900E_16E2    bowser sleeping
-        # start: 0x900E_16F8   end: 0x900E_C301    mario and luigi eating pizza
-        # start: 0x900E_C318   end: 0x900F_4D04    minions sleeping
-        #          zero_padded_end: 0x900f_4d18
-        # Total Image Length: 193_568 bytes
 
 
         if False:

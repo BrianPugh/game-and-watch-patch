@@ -21,8 +21,12 @@ def _set_range(firmware, start, end, val=b"\xFF"):
     return end - start
 
 
+def _addr(firmware, offset, size=4):
+    return int.from_bytes(firmware[offset:offset+size], 'little')
+
+
 class Patch:
-    def __init__(self, command, offset, data, size=None, message=None):
+    def __init__(self, command, offset, data, size=None, cond=None, message=None):
         if command not in VALID_COMMANDS:
             raise ValueError(f"Invalid command \"{command}\"")
         self.command = command
@@ -30,6 +34,10 @@ class Patch:
         self.data = data
         self.size = size
         self.message = message
+
+        if cond is None:
+            cond = lambda x: True
+        self.cond = cond
 
     @property
     def command_callable(self):
@@ -182,7 +190,12 @@ class Patch:
             raise ValueError(f"Data must be int, got {type(self.data)}")
         if self.size is None:
             raise ValueError("Size must not be none")
-        val = int.from_bytes(firmware[self.offset:self.offset+self.size], 'little')
+        val = _addr(firmware, self.offset, size=self.size)
+
+        if not self.cond(val):
+            print("SKIP")
+            return 0
+
         val += self.data
         firmware[self.offset:self.offset+self.size] = val.to_bytes(self.size, "little")
 

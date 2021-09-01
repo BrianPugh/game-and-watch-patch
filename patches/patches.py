@@ -178,7 +178,8 @@ def parse_patches(args):
         def cond(addr):
             # Return True if it's beyond the mario song addr
             # TODO: this ending addr is just until we successfullly move other stuff.
-            return 0x9001_2D44 <= addr < eight_bytes_end
+            #return 0x9001_2D44 <= addr < eight_bytes_end
+            return 0x9001_2D44 <= addr < 0x900bf950
         for addr in range(lookup_table_start, lookup_table_end, 4):
             patches.append("add", addr, -mario_song_len, size=4, cond=cond)
         # Now move the table
@@ -186,10 +187,19 @@ def parse_patches(args):
                        message="Moving event lookup table")
         patches.append("add", 0xdf88, -mario_song_len, size=4,
                        message="Updating event lookup table reference")
-        # TODO: move references to table
+
+
+        # This introduces some artifacting; seconds no longer work
+        patches.append("copy", 0x900bf838, -mario_song_len, size=280,)
+        patches.append("add", 0xe8f8, -mario_song_len, size=4)
+        patches.append("add", 0xf4ec, -mario_song_len, size=4)
+        patches.append("add", 0xf4f8, -mario_song_len, size=4)
+        patches.append("add", 0x10098, -mario_song_len, size=4)
+        patches.append("add", 0x105b0, -mario_song_len, size=4)
 
 
         # EVERYTHING IS GOOD UP TO HERE
+        #patches.append("add", , -mario_song_len, size=4)
 
 
         if False:

@@ -213,7 +213,16 @@ def parse_patches(args):
 
 
         # Skipping to post-image section now, need to revisit ^
-        i#patches.append()
+        patches.append("move", 0x900f4d18, -mario_song_len, size=2880)
+        patches.append("add", 0x10960, -mario_song_len, size=4)
+
+
+        # What is this data?
+        # TODO: set a bp at 0x0800666c to inspect how much is being memcpy'd
+        patches.append("move", 0x900f5858, -mario_song_len, size=34728)
+        patches.append("add", 0x7210, -mario_song_len, size=4)
+
+        # TODO: Only the two save blocks remain here
 
 
         #patches.append("add", , -mario_song_len, size=4)

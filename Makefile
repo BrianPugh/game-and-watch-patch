@@ -190,7 +190,7 @@ flash_stock_ext: flash_backup.bin
 flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock
 
-$(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin &: $(BUILD_DIR)/$(TARGET).bin patch.py patches/patches.py
+$(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin &: $(BUILD_DIR)/$(TARGET).bin patch.py patches/patches.py patches/patch.py
 	$(PYTHON) patch.py $(PATCH_PARAMS)
 
 patch: $(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin

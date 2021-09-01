@@ -102,6 +102,8 @@ class ExtFirmware(Firmware):
         return nonce + b"\x00\x00" + b"\x71\x23" + b"\x20\x00" + b"\x00\x00"
 
     def crypt(self, key, nonce):
+        """ Decrypts if encrypted; encrypts if in plain text.
+        """
         key = bytes(key[::-1])
         iv = bytearray(self._nonce_to_iv(nonce))
 

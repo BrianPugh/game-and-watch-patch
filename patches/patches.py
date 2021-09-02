@@ -300,15 +300,21 @@ def parse_patches(args):
         # Each only contains 0x50 bytes of data.
         # Round down offset to the nearest 4096
         offset = (offset // 4096) * 4096
-        #patches.append("replace", 0x900f_e000, b"\x00" * 4096,
-        #               message="erase some settings?")
-        #patches.append("replace", 0x900f_f000, b"\x00" * 4096,
-        #               message="erasure causes first startup")
 
-        #patches.append("move", 0x900f_e000, offset, size=4096,
-        #               message="erase some settings?")
-        #patches.append("move", 0x900f_f000, offset, size=4096,
-        #               message="erasure causes first startup")
+        patches.append("ks_thumb", 0x4856,
+                 "ite ne; "
+                f"movne.w r4, #{hex(0xff000 + offset)}; "
+                f"moveq.w r4, #{hex(0xfe000 + offset)}",
+                size=10,
+                message="Update NVRAM read addresses"
+        )
+        patches.append("ks_thumb", 0x48c0,
+                 "ite ne; "
+                f"movne.w r4, #{hex(0xff000 + offset)}; "
+                f"moveq.w r4, #{hex(0xfe000 + offset)}",
+                size=10,
+                message="Update NVRAM write addresses"
+        )
 
         # Finally, shorten the firmware
         patches.append("add", 0x1_06ec, offset, size=4)

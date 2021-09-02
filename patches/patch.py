@@ -209,6 +209,7 @@ class Patch:
         if firmware.ENC_LEN < 0:
             firmware.ENC_LEN = 0
         firmware[:] = firmware[:-self.data]
+        #firmware[-self.data:] = b"\x00" * self.data
 
 
 class Patches(list):

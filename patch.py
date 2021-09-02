@@ -233,8 +233,6 @@ def main():
         # Debug visualization
         ext_firmware.show()
 
-
-
     # Re-encrypt the external firmware
     Path("build/decrypt_flash_patched.bin").write_bytes(ext_firmware)
     ext_firmware.crypt(int_firmware.key, int_firmware.nonce)

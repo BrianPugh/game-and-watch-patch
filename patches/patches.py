@@ -75,10 +75,10 @@ def _relocate_external_functions(offset):
         0x900c3490,
         0x900c3498,
     ]
-    patches.append("move", 0x900bfd1c, offset, size=14244)
     for i, reference in enumerate(references):
         patches.append("add", reference, offset, size=4,
                        message=f"Update code references {i} at {hex(reference)}")
+    patches.append("move", 0x900bfd1c, offset, size=14244)
 
     return patches
 
@@ -251,7 +251,9 @@ def parse_patches(args):
         patches.append("move", 0x900bfa0c, -mario_song_len, size=784,)
         patches.append("add", 0x1_0f9c, -mario_song_len, size=4)
 
+
         patches.extend(_relocate_external_functions(-mario_song_len))
+
 
         patches.append("move", 0x900c34c0, -mario_song_len, size=6168)
         patches.append("add", 0x43ec, -mario_song_len, size=4)
@@ -264,6 +266,7 @@ def parse_patches(args):
 
         # Images Notes:
         #    * In-between images are just zeros.
+        #
         # start: 0x900C_58F8   end: 0x900C_D83F    mario sleeping
         # start: 0x900C_D858   end: 0x900D_6C65    mario juggling
         # start: 0x900D_6C78   end: 0x900E_16E2    bowser sleeping

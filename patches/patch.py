@@ -16,7 +16,7 @@ ks_arm = Ks(KS_ARCH_ARM, KS_MODE_ARM)
 ks_thumb = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
 
 
-def _set_range(firmware, start, end, val=b"\xFF"):
+def _set_range(firmware, start, end, val=b"\x00"):
     firmware[start:end] = val * (end - start)
     return end - start
 

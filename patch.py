@@ -150,6 +150,11 @@ def parse_args():
     parser.add_argument('--ext-output', type=Path, default="build/external_flash_patched.bin",
                         help="Patched external firmware.")
 
+    debugging = parser.add_argument_group("debugging")
+    debugging.add_argument("--show", action="store_true",
+                           help="Show a picture representation of the external patched binary.")
+
+
     ########################
     # Patch configurations #
     ########################
@@ -200,6 +205,17 @@ def main():
         if p.message:
             print(f"{color}Applying {str(firmware)} patch:{Style.RESET_ALL}  \"{p.message}\"")
         p(firmware)
+
+    if args.show:
+        # Debug visualization
+        import numpy as  np
+        import matplotlib.pyplot as plt
+        decrypt = np.array(ext_firmware)
+        occupied = decrypt !=0
+        plt.imshow(occupied.reshape(1024, 1024))
+        plt.show()
+
+
 
     # Re-encrypt the external firmware
     Path("build/decrypt_flash_patched.bin").write_bytes(ext_firmware)

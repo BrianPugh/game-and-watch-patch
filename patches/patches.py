@@ -117,7 +117,7 @@ def parse_patches(args):
     #               message="Intercept time_graphics_draw_tiles 1");
 
     if args.slim:
-        # TODO: remove the 5 sleep images
+        offset = 0
 
         mario_song_len = 0x85e40  # 548,416 bytes
         # This isn't really necessary, but we keep it here because its more explicit.
@@ -125,39 +125,40 @@ def parse_patches(args):
                        message="Erasing Mario Song")
         # Note, bytes starting at 0x90012ca4 leading up to the mario song
         # are also empty.
+        offset -= mario_song_len
 
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
         # These index into a palette. TODO: where is the palette
-        patches.append("move", 0x9009_8b84, -mario_song_len, size=0x1_0000,
+        patches.append("move", 0x9009_8b84, offset, size=0x1_0000,
                        message="Moving custom clock graphics.")
-        patches.append("add", 0x7350, -mario_song_len, size=4,
+        patches.append("add", 0x7350, offset, size=4,
                        message="Update custom clock graphics references")
 
         # Note: the clock uses a different palette; this palette only applies
         # to ingame Super Mario Bros 1 & 2
-        patches.append("move", 0x900a_8b84, -mario_song_len, size=192,
+        patches.append("move", 0x900a_8b84, offset, size=192,
                        message="Move NES emulator palette.")
-        patches.append("add", 0xb720, -mario_song_len, size=4,
+        patches.append("add", 0xb720, offset, size=4,
                        message="Update NES emulator palette references.")
 
         # Note: UNKNOWN* represents a block of data that i haven't decoded
         # yet. If you know what the block of data is, please let me know!
-        patches.append("move", 0x900a_8c44, -mario_song_len, size=8352,
+        patches.append("move", 0x900a_8c44, offset, size=8352,
                        message="Move UNKNOWN1")
-        patches.append("add", 0xbc44, -mario_song_len, size=4,
+        patches.append("add", 0xbc44, offset, size=4,
                        message=f"Update UNKNOWN1 references")
 
-        #patches.append("move", 0x900a_ace4, -mario_song_len, size=9088,
-        patches.append("move", 0x900a_ace4, -mario_song_len, size=0x3f00,
+        #patches.append("move", 0x900a_ace4, offset, size=9088,
+        patches.append("move", 0x900a_ace4, offset, size=0x3f00,
                        message="Move GAME menu icons")
-        patches.append("add", 0xcea8, -mario_song_len, size=4,
+        patches.append("add", 0xcea8, offset, size=4,
                        message=f"Update GAME menu icons references")
         # I'm not sure when this is used
-        patches.append("add", 0xd2f8, -mario_song_len, size=4,
+        patches.append("add", 0xd2f8, offset, size=4,
                        message=f"Update GAME menu icons references UNKNOWN")
 
 
-        patches.append("move", 0x900a_ebe4, -mario_song_len, size=116,
+        patches.append("move", 0x900a_ebe4, offset, size=116,
                        message="Move menu stuff (icons? meta?)")
         references = [
             0x0_d010,
@@ -168,38 +169,38 @@ def parse_patches(args):
             0x0_d2f0,
         ]
         for i, reference in enumerate(references):
-            patches.append("add", reference, -mario_song_len, size=4,
+            patches.append("add", reference, offset, size=4,
                            message=f"Update menu references {i} at {hex(reference)}")
 
 
         # I think the memcpy code should only be 65536 long.
         # stock firmware copies 122_880, like halfway into the mario juggling pic
-        patches.append("move", 0x900a_ec58, -mario_song_len, size=0x1_0000,
+        patches.append("move", 0x900a_ec58, offset, size=0x1_0000,
                        message="Move mario 2 rom")
         patches.append("ks_thumb", 0x6a0a, "mov.w r2, #0x10000", size=4,
                        message="Fix bug? Mario 2 ROM is only 65536 long.")
         patches.append("ks_thumb", 0x6a1e, "mov.w r3, #0x10000", size=4,
                        message="Fix bug? Mario 2 ROM is only 65536 long.")
-        patches.append("add", 0x0_7374, -mario_song_len, size=4,
+        patches.append("add", 0x0_7374, offset, size=4,
                        message=f"Update Mario 2 ROM reference")
 
         # Not sure what this data is
-        patches.append("move", 0x900bec58, -mario_song_len, size=8 * 2,
+        patches.append("move", 0x900bec58, offset, size=8 * 2,
                        message="Two sets of uint8_t[8]. Not sure what they represent.")
-        patches.append("add", 0x1_0964, -mario_song_len, size=4,
+        patches.append("add", 0x1_0964, offset, size=4,
                        message="Two sets of uint8_t[8]. Not sure what they represent.")
 
 
 
         # These somehow describe the time scenes (impacts how all background is drawn)
-        patches.append("move", 0x900bec68, -mario_song_len, size=320,
+        patches.append("move", 0x900bec68, offset, size=320,
                        message="Time generic scene [0600, 1700)")
-        patches.append("move", 0x900beda8, -mario_song_len, size=320,
+        patches.append("move", 0x900beda8, offset, size=320,
                        message="Time generic scene [1800, 0400)")
-        patches.append("move", 0x900beee8, -mario_song_len, size=320,
+        patches.append("move", 0x900beee8, offset, size=320,
                         message="Time underwater scene (between 1200 and 2400 at XX:30)")
-        patches.append("move", 0x900bf028, -mario_song_len, size=320)
-        patches.append("move", 0x900bf168, -mario_song_len, size=320,
+        patches.append("move", 0x900bf028, offset, size=320)
+        patches.append("move", 0x900bf168, offset, size=320,
                        message="Time dawn scene [0500, 0600)")
         #               message="Underground coin bonus scene (between 0000 and 1200 at XX:30)")
 
@@ -208,12 +209,12 @@ def parse_patches(args):
         eight_bytes_end   = 0x900bf410
         eight_bytes_len = eight_bytes_end - eight_bytes_start
         for addr in range(eight_bytes_start, eight_bytes_end, 8):
-            patches.append("move", addr, -mario_song_len, size=8)
+            patches.append("move", addr, offset, size=8)
 
 
         # IDK what this is.
-        patches.append("move", 0x900bf410, -mario_song_len, size=144)
-        patches.append("add", 0x1_658c, -mario_song_len, size=4)
+        patches.append("move", 0x900bf410, offset, size=144)
+        patches.append("add", 0x1_658c, offset, size=4)
 
 
         # This table is related to time events.
@@ -224,45 +225,45 @@ def parse_patches(args):
             # Return True if it's beyond the mario song addr
             return 0x9001_2D44 <= addr
         for addr in range(lookup_table_start, lookup_table_end, 4):
-            patches.append("add", addr, -mario_song_len, size=4, cond=cond)
+            patches.append("add", addr, offset, size=4, cond=cond)
         # Now move the table
-        patches.append("move", lookup_table_start, -mario_song_len, size=lookup_table_len,
+        patches.append("move", lookup_table_start, offset, size=lookup_table_len,
                        message="Moving event lookup table")
-        patches.append("add", 0xdf88, -mario_song_len, size=4,
+        patches.append("add", 0xdf88, offset, size=4,
                        message="Updating event lookup table reference")
 
 
-        patches.append("move", 0x900bf838, -mario_song_len, size=280,)
-        patches.append("add", 0xe8f8, -mario_song_len, size=4)
-        patches.append("add", 0xf4ec, -mario_song_len, size=4)
-        patches.append("add", 0xf4f8, -mario_song_len, size=4)
-        patches.append("add", 0x10098, -mario_song_len, size=4)
-        patches.append("add", 0x105b0, -mario_song_len, size=4)
+        patches.append("move", 0x900bf838, offset, size=280,)
+        patches.append("add", 0xe8f8, offset, size=4)
+        patches.append("add", 0xf4ec, offset, size=4)
+        patches.append("add", 0xf4f8, offset, size=4)
+        patches.append("add", 0x10098, offset, size=4)
+        patches.append("add", 0x105b0, offset, size=4)
 
 
-        patches.append("move", 0x900bf950, -mario_song_len, size=180,)
-        patches.append("add", 0xe2e4, -mario_song_len, size=4)
-        patches.append("add", 0xf4fc, -mario_song_len, size=4)
+        patches.append("move", 0x900bf950, offset, size=180,)
+        patches.append("add", 0xe2e4, offset, size=4)
+        patches.append("add", 0xf4fc, offset, size=4)
 
 
-        patches.append("move", 0x900bfa04, -mario_song_len, size=8,)
-        patches.append("add", 0x1_6590, -mario_song_len, size=4)
+        patches.append("move", 0x900bfa04, offset, size=8,)
+        patches.append("add", 0x1_6590, offset, size=4)
 
-        patches.append("move", 0x900bfa0c, -mario_song_len, size=784,)
-        patches.append("add", 0x1_0f9c, -mario_song_len, size=4)
-
-
-        patches.extend(_relocate_external_functions(-mario_song_len))
+        patches.append("move", 0x900bfa0c, offset, size=784,)
+        patches.append("add", 0x1_0f9c, offset, size=4)
 
 
-        patches.append("move", 0x900c34c0, -mario_song_len, size=6168)
-        patches.append("add", 0x43ec, -mario_song_len, size=4)
+        patches.extend(_relocate_external_functions(offset))
 
-        patches.append("move", 0x900c4cd8, -mario_song_len, size=2984)
-        patches.append("add", 0x459c, -mario_song_len, size=4)
 
-        patches.append("move", 0x900c5880, -mario_song_len, size=120)
-        patches.append("add", 0x4594, -mario_song_len, size=4)
+        patches.append("move", 0x900c34c0, offset, size=6168)
+        patches.append("add", 0x43ec, offset, size=4)
+
+        patches.append("move", 0x900c4cd8, offset, size=2984)
+        patches.append("add", 0x459c, offset, size=4)
+
+        patches.append("move", 0x900c5880, offset, size=120)
+        patches.append("add", 0x4594, offset, size=4)
 
         # Images Notes:
         #    * In-between images are just zeros.
@@ -274,19 +275,20 @@ def parse_patches(args):
         # start: 0x900E_C318   end: 0x900F_4D04    minions sleeping
         #          zero_padded_end: 0x900f_4d18
         # Total Image Length: 193_568 bytes
-        patches.append("replace", 0x900c58f8, b"\x00" * 193_568,
+        total_image_length = 193_568
+        patches.append("replace", 0x900c58f8, b"\x00" * total_image_length,
                        message="Deleting sleeping images")
+        offset -= total_image_length
 
 
-        patches.append("move", 0x900f4d18, -mario_song_len, size=2880)
-        patches.append("add", 0x10960, -mario_song_len, size=4)
+        patches.append("move", 0x900f4d18, offset, size=2880)
+        patches.append("add", 0x10960, offset, size=4)
 
 
         # What is this data?
-        # TODO: set a bp at 0x0800666c to inspect how much is being memcpy'd
         # The memcpy to this address is all zero, so i guess its not used?
-        #patches.append("move", 0x900f5858, -mario_song_len, size=34728)
-        #patches.append("add", 0x7210, -mario_song_len, size=4)
+        #patches.append("move", 0x900f5858, offset, size=34728)
+        #patches.append("add", 0x7210, offset, size=4)
         patches.append("replace", 0x900f5858, b"\x00" * 34728)
 
 
@@ -298,7 +300,5 @@ def parse_patches(args):
         #               message="erase some settings?")
         #patches.append("replace", 0x900f_f000, b"\xFF" * 0x50,
         #               message="erasure causes first startup")
-
-        #patches.append("replace", 0xac00, 10, size=1)
 
     return patches

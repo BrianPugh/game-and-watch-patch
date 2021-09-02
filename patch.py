@@ -84,7 +84,7 @@ class ExtFirmware(Firmware):
 
     FLASH_BASE = 0x9000_0000
     FLASH_LEN  = 0x0010_0000
-    ENC_LEN    = 0xF_6000
+    ENC_LEN    = 0xF_E000  # end address at 0x080106ec
     STOCK_ROM_END  = 0x0010_0000
 
     def __str__(self):

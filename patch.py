@@ -122,6 +122,26 @@ class ExtFirmware(Firmware):
             for i, cipher_byte in enumerate(reversed(cipher_block)):
                 self[offset + i] ^= cipher_byte
 
+    def show(self, wrap=1024):
+        import numpy as  np
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as ticker
+
+        def to_hex(x, pos):
+            return f"0x{int(x):06X}"
+
+        n_bytes = len(self)
+        rows = int(np.ceil(n_bytes / wrap))
+        occupied = np.array(self) != 0
+        plt.imshow(occupied.reshape(rows, wrap))
+        axes = plt.gca()
+        axes.get_xaxis().set_major_locator(ticker.MultipleLocator(128))
+        axes.get_xaxis().set_major_formatter(ticker.FuncFormatter(to_hex))
+        axes.get_yaxis().set_major_locator(ticker.MultipleLocator(32))
+        axes.get_yaxis().set_major_formatter(ticker.FuncFormatter(to_hex))
+        plt.show()
+
+
 
 class InvalidStockRomError(Exception):
     """The provided stock ROM did not contain the expected data."""
@@ -208,12 +228,7 @@ def main():
 
     if args.show:
         # Debug visualization
-        import numpy as  np
-        import matplotlib.pyplot as plt
-        decrypt = np.array(ext_firmware)
-        occupied = decrypt !=0
-        plt.imshow(occupied.reshape(1024, 1024))
-        plt.show()
+        ext_firmware.show()
 
 
 

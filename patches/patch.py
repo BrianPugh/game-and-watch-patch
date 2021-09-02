@@ -208,7 +208,7 @@ class Patch:
         firmware.ENC_LEN -= self.data
         if firmware.ENC_LEN < 0:
             firmware.ENC_LEN = 0
-        firmware[:] = firmware[:-self.data]
+        #firmware[:] = firmware[:-self.data]  # TODO: Uncomment
 
 
 class Patches(list):

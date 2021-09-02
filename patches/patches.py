@@ -290,15 +290,22 @@ def parse_patches(args):
         #patches.append("move", 0x900f5858, offset, size=34728)
         #patches.append("add", 0x7210, offset, size=4)
         patches.append("replace", 0x900f5858, b"\x00" * 34728)
+        offset -= 34728
 
 
         # TODO: Only the two save blocks remain here
 
 
         # The last 2 4096 byte blocks represent something in settings.
-        #patches.append("replace", 0x900f_e000, b"\xFF" * 0x50,
-        #               message="erase some settings?")
-        #patches.append("replace", 0x900f_f000, b"\xFF" * 0x50,
-        #               message="erasure causes first startup")
+        # Each only contains 0x50 bytes of data.
+        # Round down offset to the nearest 4096
+        offset = (offset // 4096) * 4096
+        patches.append("move", 0x900f_e000, offset, size=4096,
+                       message="erase some settings?")
+        patches.append("move", 0x900f_f000, offset, size=4096,
+                       message="erasure causes first startup")
+
+        # Finally, shorten the firmware
+        patches.append("shorten", 0x9000_0000, offset)
 
     return patches

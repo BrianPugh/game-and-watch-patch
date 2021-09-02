@@ -23,6 +23,7 @@ class Firmware(bytearray):
 
     RAM_BASE = 0x02000000
     RAM_LEN  = 0x00020000
+    ENC_LEN  = 0
 
     def __init__(self, firmware, elf=None):
         with open(firmware, 'rb') as f:
@@ -241,7 +242,11 @@ def main():
     args.int_output.write_bytes(int_firmware)
     args.ext_output.write_bytes(ext_firmware)
 
-    print(Fore.GREEN + "Binary Patching Complete!\n" + Style.RESET_ALL)
+    print(Fore.GREEN)
+    print( "Binary Patching Complete!")
+    print(f"    Internal Firmware Used: {len(int_firmware)} bytes")  # TODO: show free amount
+    print(f"    External Firmware Used: {len(ext_firmware)} bytes")
+    print(Style.RESET_ALL)
 
 
 if __name__ == "__main__":

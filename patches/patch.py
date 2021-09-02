@@ -9,6 +9,7 @@ COMMAND_DESCRIPTIONS = {
     "move": "move block of data. Erase old location",
     "copy": "copy block of data.",
     "add": "Perform inplace addition on data at address",
+    "shorten": "Shorten the firmware by removing these last bytes."
 }
 VALID_COMMANDS = set(list(COMMAND_DESCRIPTIONS.keys()))
 
@@ -197,6 +198,17 @@ class Patch:
 
         val += self.data
         firmware[self.offset:self.offset+self.size] = val.to_bytes(self.size, "little")
+
+
+    def shorten(self, firmware):
+        if self.size is not None:
+            raise ValueError("Size must be none; use data field to specify number of bytes to shorten by.")
+        self.data = abs(self.data)
+
+        firmware.ENC_LEN -= self.data
+        if firmware.ENC_LEN < 0:
+            firmware.ENC_LEN = 0
+        firmware[:] = firmware[:-self.data]
 
 
 class Patches(list):

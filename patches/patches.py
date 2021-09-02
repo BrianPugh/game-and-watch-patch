@@ -37,6 +37,51 @@ def patch_args_validation(parser, args):
         parser.error("--mario_song-time must be in range [1, 1092]")
 
 
+def _relocate_external_functions(offset):
+    """
+    data start: 0x900bfd1c
+    fn start: 0x900c0258
+    fn end:   0x900c34c0
+    fn len: 12904
+    """
+    patches = Patches()
+
+    references = [
+        0x00d330,
+        0x00d310,
+        0x00d308,
+        0x00d338,
+        0x00d348,
+        0x00d360,
+        0x00d368,
+        0x00d388,
+        0x00d358,
+        0x00d320,
+        0x00d350,
+        0x00d380,
+        0x00d378,
+        0x00d318,
+        0x00d390,
+        0x00d370,
+        0x00d340,
+        0x00d398,
+        0x00d328,
+
+        0x900c1174,
+        0x900c313c,
+        0x900c049c,
+        0x900c1178,
+        0x900c220c,
+        0x900c3490,
+        0x900c3498,
+    ]
+    patches.append("move", 0x900bfd1c, offset, size=14244)
+    for i, reference in enumerate(references):
+        patches.append("add", reference, offset, size=4,
+                       message=f"Update code references {i} at {hex(reference)}")
+
+    return patches
+
 def parse_patches(args):
     patches = Patches()
 
@@ -177,9 +222,7 @@ def parse_patches(args):
         lookup_table_len   = lookup_table_end - lookup_table_start  # 920
         def cond(addr):
             # Return True if it's beyond the mario song addr
-            # TODO: this ending addr is just until we successfullly move other stuff.
-            #return 0x9001_2D44 <= addr < eight_bytes_end
-            return 0x9001_2D44 <= addr < 0x900bf950
+            return 0x9001_2D44 <= addr
         for addr in range(lookup_table_start, lookup_table_end, 4):
             patches.append("add", addr, -mario_song_len, size=4, cond=cond)
         # Now move the table
@@ -205,14 +248,19 @@ def parse_patches(args):
         patches.append("move", 0x900bfa04, -mario_song_len, size=8,)
         patches.append("add", 0x1_6590, -mario_song_len, size=4)
 
-        # EVERYTHING IS GOOD UP TO HERE
+        patches.append("move", 0x900bfa0c, -mario_song_len, size=784,)
+        patches.append("add", 0x1_0f9c, -mario_song_len, size=4)
 
-        # Need to figure out code sections in extflash before proceeding
-        #patches.append("copy", 0x900bfa0c, -mario_song_len, size=784,)
-        #patches.append("add", 0x1_0f9c, -mario_song_len, size=4)
+        patches.extend(_relocate_external_functions(-mario_song_len))
 
+        patches.append("move", 0x900c34c0, -mario_song_len, size=6168)
+        patches.append("add", 0x43ec, -mario_song_len, size=4)
 
-        # Skipping to post-image section now, need to revisit ^
+        patches.append("move", 0x900c4cd8, -mario_song_len, size=2984)
+        patches.append("add", 0x459c, -mario_song_len, size=4)
+
+        patches.append("move", 0x900c5880, -mario_song_len, size=120)
+        patches.append("add", 0x4594, -mario_song_len, size=4)
 
         # Images Notes:
         #    * In-between images are just zeros.
@@ -242,7 +290,6 @@ def parse_patches(args):
         # TODO: Only the two save blocks remain here
 
 
-        #patches.append("add", , -mario_song_len, size=4)
         if False:
             patches.append("copy", 0x900a_ec58, -mario_song_len, size=93_344,
                            message="Move mario 2 rom plus other stuff")

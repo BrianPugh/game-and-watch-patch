@@ -193,7 +193,6 @@ class Patch:
         val = _addr(firmware, self.offset, size=self.size)
 
         if not self.cond(val):
-            print("SKIP")
             return 0
 
         val += self.data

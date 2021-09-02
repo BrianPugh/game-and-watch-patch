@@ -83,8 +83,8 @@ class ExtFirmware(Firmware):
 
     FLASH_BASE = 0x9000_0000
     FLASH_LEN  = 0x0010_0000
-    ENC_LEN    = 0xF_DFFF
-    STOCK_ROM_END  = 0x01000000
+    ENC_LEN    = 0xF_6000
+    STOCK_ROM_END  = 0x0010_0000
 
     def __str__(self):
         return "external"

@@ -130,6 +130,9 @@ class ExtFirmware(Firmware):
         def to_hex(x, pos):
             return f"0x{int(x):06X}"
 
+        def to_hex_wrap(x, pos):
+            return f"0x{int(x)*wrap:06X}"
+
         n_bytes = len(self)
         rows = int(np.ceil(n_bytes / wrap))
         occupied = np.array(self) != 0
@@ -138,7 +141,7 @@ class ExtFirmware(Firmware):
         axes.get_xaxis().set_major_locator(ticker.MultipleLocator(128))
         axes.get_xaxis().set_major_formatter(ticker.FuncFormatter(to_hex))
         axes.get_yaxis().set_major_locator(ticker.MultipleLocator(32))
-        axes.get_yaxis().set_major_formatter(ticker.FuncFormatter(to_hex))
+        axes.get_yaxis().set_major_formatter(ticker.FuncFormatter(to_hex_wrap))
         plt.show()
 
 

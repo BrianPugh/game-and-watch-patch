@@ -300,6 +300,11 @@ def parse_patches(args):
         # Each only contains 0x50 bytes of data.
         # Round down offset to the nearest 4096
         offset = (offset // 4096) * 4096
+        #patches.append("replace", 0x900f_e000, b"\x00" * 4096,
+        #               message="erase some settings?")
+        #patches.append("replace", 0x900f_f000, b"\x00" * 4096,
+        #               message="erasure causes first startup")
+
         #patches.append("move", 0x900f_e000, offset, size=4096,
         #               message="erase some settings?")
         #patches.append("move", 0x900f_f000, offset, size=4096,

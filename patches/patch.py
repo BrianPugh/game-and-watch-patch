@@ -1,5 +1,6 @@
 from keystone import *
-import zopfli
+import struct
+import lzma
 
 
 COMMAND_DESCRIPTIONS = {
@@ -220,17 +221,13 @@ class Patch:
             raise ValueError("Size must not be none")
         data = firmware[self.offset:self.offset+self.data]
 
-        #import zlib
-        #c = zlib.compressobj(level=9, method=zlib.DEFLATED, wbits=-15, memLevel=9)
-        #c = zopfli.ZopfliCompressor(zopfli.ZOPFLI_FORMAT_DEFLATE)
-        #compressed_data = c.compress(data) + c.flush()
-        import lz4.frame as lz4
-        compressed_data = lz4.compress(
-            data,
-            compression_level=9,
-            block_size=lz4.BLOCKSIZE_MAX1MB,
-            block_linked=False,
-        )
+        # https://svn.python.org/projects/external/xz-5.0.3/doc/lzma-file-format.txt
+        compressed_data = lzma.compress(data, format=lzma.FORMAT_ALONE, filters=[{
+            "id": lzma.FILTER_LZMA1,
+            "preset": 6,
+            "dict_size": 16 * 1024,
+        }])
+        compressed_data = compressed_data[:5] + struct.pack('<Q', len(data)) + compressed_data[13:]
 
         # Clear the original data
         firmware[self.offset:self.offset+self.data] = b"\x00" * self.data

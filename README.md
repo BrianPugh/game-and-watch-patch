@@ -80,6 +80,7 @@ make flash_patch_ext
   configuration described in the linker file is unsafe, but currently we have
   no global/static variables.
 * Further slim the external flash firmware by compressing assets.
+* Custom sprites for clock.
 
 # Development
 Main stages to developing a feature:
@@ -90,3 +91,17 @@ Main stages to developing a feature:
 
 # Journal
 This is my first time ever developing patches for a closed source binary. [I documented my journey in hopes that it helps other people](docs/journal.md). If you have any recommendations, tips, tricks, or anything like that, please leave a github issue and I'll update the documentation!
+
+
+
+# Acknowledgement
+
+Thanks to the community that made this possible! This repo was built with the help of others. Repos referenced during the development of this project:
+
+* [game-and-watch-retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) by [kbeckmann](https://github.com/kbeckmann)
+* [game-and-watch-backup](https://github.com/ghidraninja/game-and-watch-backup) by [ghidraninja](https://github.com/ghidraninja)
+* [game-and-watch-base](https://github.com/ghidraninja/game-and-watch-base) by [ghidraninja](https://github.com/ghidraninja)
+* [game-and-watch-decrypt](https://github.com/GMMan/game-and-watch-decrypt) by [GMMan](https://github.com/GMMan)
+* [game-and-watch-drawing-song-re](https://github.com/jaames/game-and-watch-drawing-song-re/) by [jaames](https://github.com/jaames)
+
+I would also like to thank the [stacksmashing discord](https://discord.gg/zBN3ex8v4p) for all the help (special shoutout to @cyanic)!

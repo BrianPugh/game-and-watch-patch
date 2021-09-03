@@ -176,11 +176,11 @@ def parse_patches(args):
         # I think the memcpy code should only be 65536 long.
         # stock firmware copies 122_880, like halfway into the mario juggling pic
         patches.append("move", 0x900a_ec58, offset, size=0x1_0000,
-                       message="Move mario 2 rom")
+                       message="Move Mario 2 ROM")
         patches.append("ks_thumb", 0x6a0a, "mov.w r2, #0x10000", size=4,
-                       message="Fix bug? Mario 2 ROM is only 65536 long.")
+                       message="Fix stock bug? Mario 2 ROM is only 65536 long.")
         patches.append("ks_thumb", 0x6a1e, "mov.w r3, #0x10000", size=4,
-                       message="Fix bug? Mario 2 ROM is only 65536 long.")
+                       message="Fix stock bug? Mario 2 ROM is only 65536 long.")
         patches.append("add", 0x0_7374, offset, size=4,
                        message=f"Update Mario 2 ROM reference")
 
@@ -199,7 +199,8 @@ def parse_patches(args):
                        message="Time generic scene [1800, 0400)")
         patches.append("move", 0x900beee8, offset, size=320,
                         message="Time underwater scene (between 1200 and 2400 at XX:30)")
-        patches.append("move", 0x900bf028, offset, size=320)
+        patches.append("move", 0x900bf028, offset, size=320,
+                       message="Time unknown scene")
         patches.append("move", 0x900bf168, offset, size=320,
                        message="Time dawn scene [0500, 0600)")
         #               message="Underground coin bonus scene (between 0000 and 1200 at XX:30)")

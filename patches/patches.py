@@ -135,15 +135,16 @@ def parse_patches(args):
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
         # These index into a palette. TODO: where is the palette
         #compressed_tile_len = 7094  # zopfli
-        #compressed_tile_len = 11906  # lz4
-        #patches.append("compress", 0x9009_ec58, 0x1_0000, size=compressed_tile_len,
-        #               message="Compress time tiles.")
-        #patches.append("bl", 0x678e, "memcpy_inflate")
-        patches.append("move", 0x9009_8b84, offset, size=0x1_0000,
+        compressed_tile_len = 10185  # lz4
+        patches.append("compress", 0x9009_8b84, 0x1_0000, size=compressed_tile_len,
+                       message="Compress time tiles.")
+        patches.append("bl", 0x678e, "memcpy_inflate")
+        patches.append("move", 0x9009_8b84, offset, size=compressed_tile_len,
                        message="Moving custom clock graphics.")
         patches.append("add", 0x7350, offset, size=4,
                        message="Update custom clock graphics references")
-        # TODO: update offset
+        compressed_tile_len = _round_up_word(compressed_tile_len)
+        offset -= (0x1_0000 - compressed_tile_len)
 
         # Note: the clock uses a different palette; this palette only applies
         # to ingame Super Mario Bros 1 & 2

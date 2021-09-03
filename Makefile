@@ -238,6 +238,14 @@ start_bank_2:
 		-c 'resume;exit'
 .PHONY: start_bank_2
 
+help:
+	@python patch.py --help
+	@echo ""
+	@echo "Provide configuration parameters via PATCH_PARAMS"
+	@echo ""
+	@echo "Example:"
+	@echo "    make PATCH_PARAMS=\"--sleep-time=120 --slim\" flash_patched_ext"
+
 #######################################
 # clean up
 #######################################

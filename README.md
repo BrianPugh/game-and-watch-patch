@@ -56,7 +56,7 @@ make clean
 make PATCH_PARAMS="--slim" flash_patched_ext
 make PATCH_PARAMS="--slim" flash_patched_int
 
-# in the retro-go repo; this assumees you have the stock 1MB flashchip
+# in the retro-go repo; this assumes you have the stock 1MB flashchip
 # NOTE: MUST have the patched openocd installed:
 #         https://github.com/kbeckmann/ubuntu-openocd-git-builder
 make clean

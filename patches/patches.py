@@ -129,7 +129,8 @@ def parse_patches(args):
 
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
         # These index into a palette. TODO: where is the palette
-        #compressed_tile_len = 7094
+        #compressed_tile_len = 7094  # zopfli
+        #compressed_tile_len = 11906  # lz4
         #patches.append("compress", 0x9009_ec58, 0x1_0000, size=compressed_tile_len,
         #               message="Compress time tiles.")
         #patches.append("bl", 0x678e, "memcpy_inflate")
@@ -189,10 +190,14 @@ def parse_patches(args):
                        message="Move mario 2 rom")
         patches.append("add", 0x0_7374, offset, size=4,
                        message="Update Mario 2 ROM reference")
-        #offset -= (65536 - compressed_mario_2)  # Move by the space savings.
-
         # Round to nearest page so that the length can be used as an imm
+
         compressed_mario_2 = _round_up_page(compressed_mario_2)
+
+        # TODO: Something downstream needs to be paged aligned. Once that's fixed,
+        # this can be moved before the _round_up_page call
+        offset -= (65536 - compressed_mario_2)  # Move by the space savings.
+
         patches.append("ks_thumb", 0x6a0a, f"mov.w r2, #{compressed_mario_2}", size=4,
                        message="Fix bug? Mario 2 ROM is only 65536 long.")
         patches.append("ks_thumb", 0x6a1e, f"mov.w r3, #{compressed_mario_2}", size=4,

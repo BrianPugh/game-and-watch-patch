@@ -5,7 +5,6 @@
 #include <assert.h>
 #include "gw_linker.h"
 #include "stm32h7xx_hal.h"
-#include "lz4_depack.h"
 #include "LzmaDec.h"
 
 

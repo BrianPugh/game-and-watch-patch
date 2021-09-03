@@ -27,7 +27,6 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 Core/Src/main.c \
-Core/lz4/lz4_depack.c \
 Core/lzma/LzmaDec.c \
 
 # ASM sources
@@ -92,7 +91,6 @@ AS_INCLUDES =
 # C includes
 C_INCLUDES =  \
 -ICore/Inc \
--ICore/lz4 \
 -ICore/lzma \
 -IDrivers/STM32H7xx_HAL_Driver/Inc \
 -IDrivers/STM32H7xx_HAL_Driver/Inc/Legacy \

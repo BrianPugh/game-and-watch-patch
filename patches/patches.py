@@ -1,12 +1,6 @@
 from .patch import Patches
 
 
-# 0x9009_8b84 onwards (post mario song)
-#EXTFLASH_REFERENCES = {
-#    0x
-#}
-
-
 def _seconds_to_frames(seconds):
     return int(round(60 * seconds))
 

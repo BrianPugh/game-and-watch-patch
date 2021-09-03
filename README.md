@@ -14,9 +14,10 @@ functionality to the stock Game and Watch firmware. This is the only custom firm
 * Press button combination (`LEFT` + `A` + `GAME`) to launch retro-go from internal flash bank 2.
 * Configurable sleep timeout.
 * Configurable hard-reset timeout.
-* Reduced external flash firmware size `--slim`; reduced from 1,048,576 bytes to just **270,336** bytes
+* Reduced external flash firmware size `--slim`; reduced from 1,048,576 bytes to just **200,704** bytes
     * Removed the "Mario Song" easter egg.
     * Removed the 5 sleeping illustrations.
+    * lz4 compressed SMB2 ROM and Clock graphic tiles.
 
 
 # Usage
@@ -60,7 +61,7 @@ make PATCH_PARAMS="--slim" flash_patched_int
 # NOTE: MUST have the patched openocd installed:
 #         https://github.com/kbeckmann/ubuntu-openocd-git-builder
 make clean
-make -j8 EXTFLASH_SIZE=778240 EXTFLASH_OFFSET=270336 INTFLASH_BANK=2 flash
+make -j8 EXTFLASH_SIZE=847872 EXTFLASH_OFFSET=200704 INTFLASH_BANK=2 flash
 ```
 
 # Advanced usage
@@ -79,6 +80,9 @@ make flash_patch_ext
 * Figure out safe place in RAM to store global/static variables. The current
   configuration described in the linker file is unsafe, but currently we have
   no global/static variables.
+  * Currently we cannot use zlib/zopfli compression for assets because it
+    requires some globals in RAM. So in order to do that, we need to find
+    some unused ram first. This could improve compression a bit.
 * Further slim the external flash firmware by compressing assets.
 * Custom sprites for clock.
 

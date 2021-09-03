@@ -2,3 +2,4 @@ colorama
 keystone-engine
 pyelftools
 pycrypto
+zopflipy

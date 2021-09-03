@@ -2,6 +2,11 @@ from .patch import Patches
 from math import ceil, floor
 
 
+def _round_down_word(val):
+    return (val // 4) * 4
+
+def _round_up_word(val):
+    return ceil(val  / 4) * 4
 
 def _round_down_page(val):
     return (val // 4096) * 4096
@@ -190,13 +195,12 @@ def parse_patches(args):
                        message="Move mario 2 rom")
         patches.append("add", 0x0_7374, offset, size=4,
                        message="Update Mario 2 ROM reference")
-        # Round to nearest page so that the length can be used as an imm
 
-        compressed_mario_2 = _round_up_page(compressed_mario_2)
-
-        # TODO: Something downstream needs to be paged aligned. Once that's fixed,
-        # this can be moved before the _round_up_page call
+        compressed_mario_2 = _round_up_word(compressed_mario_2)
         offset -= (65536 - compressed_mario_2)  # Move by the space savings.
+
+        # Round to nearest page so that the length can be used as an imm
+        compressed_mario_2 = _round_up_page(compressed_mario_2)
 
         patches.append("ks_thumb", 0x6a0a, f"mov.w r2, #{compressed_mario_2}", size=4,
                        message="Fix bug? Mario 2 ROM is only 65536 long.")

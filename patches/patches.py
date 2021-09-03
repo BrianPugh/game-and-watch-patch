@@ -1,5 +1,18 @@
 from .patch import Patches
+from math import ceil, floor
 
+
+def _round_down_word(val):
+    return (val // 4) * 4
+
+def _round_up_word(val):
+    return ceil(val  / 4) * 4
+
+def _round_down_page(val):
+    return (val // 4096) * 4096
+
+def _round_up_page(val):
+    return ceil(val  / 4096) * 4096
 
 def _seconds_to_frames(seconds):
     return int(round(60 * seconds))
@@ -104,11 +117,9 @@ def parse_patches(args):
         patches.append("ks_thumb", 0x6fc4, f"cmp.w r0, #{mario_song_frames}", size=4,
                        message=f"Setting Mario Song time to {args.mario_song_time} seconds.")
 
-
-    #patches.append("bl", 0xfaa0, "time_graphics_draw_tiles",
-    #               message="Intercept time_graphics_draw_tiles 1");
-    #patches.append("bl", 0xfbd6, "time_graphics_draw_tiles",
-    #               message="Intercept time_graphics_draw_tiles 1");
+    if False:
+        patches.append("ks_thumb", 0x135de, "and r1, r1, #0x7F", size=4,
+                       message="Disable watchdog WWDG.")
 
     if args.slim:
         offset = 0
@@ -123,10 +134,17 @@ def parse_patches(args):
 
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
         # These index into a palette. TODO: where is the palette
-        patches.append("move", 0x9009_8b84, offset, size=0x1_0000,
+        #compressed_tile_len = 7094  # zopfli
+        compressed_tile_len = 10185  # lz4
+        patches.append("compress", 0x9009_8b84, 0x1_0000, size=compressed_tile_len,
+                       message="Compress time tiles.")
+        patches.append("bl", 0x678e, "memcpy_inflate")
+        patches.append("move", 0x9009_8b84, offset, size=compressed_tile_len,
                        message="Moving custom clock graphics.")
         patches.append("add", 0x7350, offset, size=4,
                        message="Update custom clock graphics references")
+        compressed_tile_len = _round_up_word(compressed_tile_len)
+        offset -= (0x1_0000 - compressed_tile_len)
 
         # Note: the clock uses a different palette; this palette only applies
         # to ingame Super Mario Bros 1 & 2
@@ -169,14 +187,26 @@ def parse_patches(args):
 
         # I think the memcpy code should only be 65536 long.
         # stock firmware copies 122_880, like halfway into the mario juggling pic
-        patches.append("move", 0x900a_ec58, offset, size=0x1_0000,
-                       message="Move Mario 2 ROM")
-        patches.append("ks_thumb", 0x6a0a, "mov.w r2, #0x10000", size=4,
-                       message="Fix stock bug? Mario 2 ROM is only 65536 long.")
-        patches.append("ks_thumb", 0x6a1e, "mov.w r3, #0x10000", size=4,
-                       message="Fix stock bug? Mario 2 ROM is only 65536 long.")
+        #compressed_mario_2 = 44_338  # zopfli
+        compressed_mario_2 = 51542  # lz4
+        patches.append("compress", 0x900a_ec58, 0x1_0000, size=compressed_mario_2,
+                       message="Compress Mario 2 ROM.")
+        patches.append("bl", 0x6a12, "memcpy_inflate")
+        patches.append("move", 0x900a_ec58, offset, size=compressed_mario_2,
+                       message="Move mario 2 rom")
         patches.append("add", 0x0_7374, offset, size=4,
-                       message=f"Update Mario 2 ROM reference")
+                       message="Update Mario 2 ROM reference")
+
+        compressed_mario_2 = _round_up_word(compressed_mario_2)
+        offset -= (65536 - compressed_mario_2)  # Move by the space savings.
+
+        # Round to nearest page so that the length can be used as an imm
+        compressed_mario_2 = _round_up_page(compressed_mario_2)
+
+        patches.append("ks_thumb", 0x6a0a, f"mov.w r2, #{compressed_mario_2}", size=4,
+                       message="Fix bug? Mario 2 ROM is only 65536 long.")
+        patches.append("ks_thumb", 0x6a1e, f"mov.w r3, #{compressed_mario_2}", size=4,
+                       message="Fix bug? Mario 2 ROM is only 65536 long.")
 
         # Not sure what this data is
         patches.append("move", 0x900bec58, offset, size=8 * 2,
@@ -293,8 +323,7 @@ def parse_patches(args):
 
         # The last 2 4096 byte blocks represent something in settings.
         # Each only contains 0x50 bytes of data.
-        # Round down offset to the nearest 4096
-        offset = (offset // 4096) * 4096
+        offset = _round_down_page(offset)
 
         patches.append("ks_thumb", 0x4856,
                  "ite ne; "

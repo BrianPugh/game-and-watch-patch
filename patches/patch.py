@@ -1,4 +1,6 @@
 from keystone import *
+import zopfli
+
 
 COMMAND_DESCRIPTIONS = {
     "replace": "simple byte substitution",
@@ -9,7 +11,8 @@ COMMAND_DESCRIPTIONS = {
     "move": "move block of data. Erase old location",
     "copy": "copy block of data.",
     "add": "Perform inplace addition on data at address",
-    "shorten": "Shorten the firmware by removing these last bytes."
+    "shorten": "Shorten the firmware by removing these last bytes.",
+    "compress": "Compress data inplace with zopfli."
 }
 VALID_COMMANDS = set(list(COMMAND_DESCRIPTIONS.keys()))
 
@@ -157,6 +160,7 @@ class Patch:
         old_end = old_start + self.size
         new_start = self.offset + self.data
         new_end = new_start + self.size
+        print(f"    moving {self.size} bytes from 0x{old_start:08X} to 0x{new_start:08X}")
         firmware[new_start:new_end] = firmware[old_start:old_end]
 
         # Erase old copy
@@ -211,9 +215,35 @@ class Patch:
         firmware[:] = firmware[:-self.data]
         #firmware[-self.data:] = b"\x00" * self.data
 
+    def compress(self, firmware):
+        if self.size is None:
+            raise ValueError("Size must not be none")
+        data = firmware[self.offset:self.offset+self.data]
+
+        #import zlib
+        #c = zlib.compressobj(level=9, method=zlib.DEFLATED, wbits=-15, memLevel=9)
+        #c = zopfli.ZopfliCompressor(zopfli.ZOPFLI_FORMAT_DEFLATE)
+        #compressed_data = c.compress(data) + c.flush()
+        import lz4.frame as lz4
+        compressed_data = lz4.compress(
+            data,
+            compression_level=9,
+            block_size=lz4.BLOCKSIZE_MAX1MB,
+            block_linked=False,
+        )
+
+        # Clear the original data
+        firmware[self.offset:self.offset+self.data] = b"\x00" * self.data
+        # Insert the compressed data
+        firmware[self.offset:self.offset+len(compressed_data)] = compressed_data
+
+        print(f"    compressed {len(data)}->{len(compressed_data)} bytes")
+        if len(compressed_data) != self.size:
+            raise Exception(f"Compressed {len(data)}->{len(compressed_data)} bytes. Expected {self.size}")
+        return len(compressed_data)
+
 
 class Patches(list):
     def append(self, *args, **kwargs):
         super().append(Patch(*args, **kwargs))
-
 

@@ -120,6 +120,10 @@ def parse_patches(args):
 
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
         # These index into a palette. TODO: where is the palette
+        compressed_tile_len = 7094
+        patches.append("compress", 0x9009_ec58, 0x1_0000, size=compressed_tile_len,
+                       message="Compress time tiles.")
+        patches.append("bl", 0x678e, "memcpy_inflate")
         patches.append("move", 0x9009_8b84, offset, size=0x1_0000,
                        message="Moving custom clock graphics.")
         patches.append("add", 0x7350, offset, size=4,
@@ -166,14 +170,23 @@ def parse_patches(args):
 
         # I think the memcpy code should only be 65536 long.
         # stock firmware copies 122_880, like halfway into the mario juggling pic
-        patches.append("move", 0x900a_ec58, offset, size=0x1_0000,
-                       message="Move Mario 2 ROM")
-        patches.append("ks_thumb", 0x6a0a, "mov.w r2, #0x10000", size=4,
-                       message="Fix stock bug? Mario 2 ROM is only 65536 long.")
-        patches.append("ks_thumb", 0x6a1e, "mov.w r3, #0x10000", size=4,
-                       message="Fix stock bug? Mario 2 ROM is only 65536 long.")
+        compressed_mario_2 = 44_338  # zopfli
+        #compressed_mario_2 = 45589  # zlib
+        patches.append("compress", 0x900a_ec58, 0x1_0000, size=compressed_mario_2,
+                       message="Compress Mario 2 ROM.")
+        patches.append("bl", 0x6a12, "memcpy_inflate")
+        #compressed_mario_2 = 0x1_0000
+        compressed_mario_2 = ceil(compressed_mario_2  / 4096) * 4096
+        #patches.append("move", 0x900a_ec58, offset, size=compressed_mario_2,
+        patches.append("move", 0x900a_ec58, offset, size=compressed_mario_2,
+                       message="Move mario 2 rom")
+        patches.append("ks_thumb", 0x6a0a, f"mov.w r2, #{compressed_mario_2}", size=4,
+                       message="Fix bug? Mario 2 ROM is only 65536 long.")
+        patches.append("ks_thumb", 0x6a1e, f"mov.w r3, #{compressed_mario_2}", size=4,
+                       message="Fix bug? Mario 2 ROM is only 65536 long.")
         patches.append("add", 0x0_7374, offset, size=4,
                        message=f"Update Mario 2 ROM reference")
+        # TODO: update offset
 
         # Not sure what this data is
         patches.append("move", 0x900bec58, offset, size=8 * 2,

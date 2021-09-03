@@ -28,6 +28,7 @@ BUILD_DIR = build
 C_SOURCES =  \
 Core/Src/main.c \
 Core/miniz-2.2.0/miniz.c \
+Core/lz4/lz4_depack.c \
 
 # ASM sources
 ASM_SOURCES =  \
@@ -99,6 +100,7 @@ AS_INCLUDES =
 C_INCLUDES =  \
 -ICore/Inc \
 -ICore/miniz-2.2.0 \
+-ICore/lz4 \
 -IDrivers/STM32H7xx_HAL_Driver/Inc \
 -IDrivers/STM32H7xx_HAL_Driver/Inc/Legacy \
 -IDrivers/CMSIS/Device/ST/STM32H7xx/Include \

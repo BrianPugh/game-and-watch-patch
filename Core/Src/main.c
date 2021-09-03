@@ -6,6 +6,7 @@
 #include "gw_linker.h"
 #include "stm32h7xx_hal.h"
 #include "miniz.h"
+#include "lz4_depack.h"
 
 
 #define BANK_2_ADDRESS 0x08100000
@@ -78,9 +79,10 @@ gamepad_t read_buttons() {
  */
 void *memcpy_inflate(void *dst, void *src, size_t n){
     //return memcpy(dst, src, n);
-    int flags = 0;
-    flags |= TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
-    tinfl_decompress_mem_to_mem(dst, 393216, src, n, flags);
+    //int flags = 0;
+    //flags |= TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
+    //tinfl_decompress_mem_to_mem(dst, 393216, src, n, flags);
+    lz4_uncompress(src, dst);
     return dst;
 }
 

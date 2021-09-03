@@ -27,7 +27,6 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 Core/Src/main.c \
-Core/miniz-2.2.0/miniz.c \
 Core/lz4/lz4_depack.c \
 
 # ASM sources
@@ -84,13 +83,6 @@ AS_DEFS =
 C_DEFS =  \
 -DUSE_HAL_DRIVER \
 -DSTM32H7B0xx \
--DMINIZ_NO_MALLOC \
--DMINIZ_NO_TIME \
--DMINIZ_NO_ARCHIVE_APIS \
--DMINIZ_NO_ARCHIVE_WRITING_APIS \
--DMINIZ_LITTLE_ENDIAN=1 \
--DMINIZ_HAS_64BIT_REGISTERS=0 \
--DMINIZ_NO_STDIO \
 
 
 # AS includes
@@ -99,7 +91,6 @@ AS_INCLUDES =
 # C includes
 C_INCLUDES =  \
 -ICore/Inc \
--ICore/miniz-2.2.0 \
 -ICore/lz4 \
 -IDrivers/STM32H7xx_HAL_Driver/Inc \
 -IDrivers/STM32H7xx_HAL_Driver/Inc/Legacy \

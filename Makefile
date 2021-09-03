@@ -27,6 +27,7 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 Core/Src/main.c \
+Core/miniz-2.2.0/miniz.c \
 
 # ASM sources
 ASM_SOURCES =  \
@@ -81,7 +82,14 @@ AS_DEFS =
 # C defines
 C_DEFS =  \
 -DUSE_HAL_DRIVER \
--DSTM32H7B0xx
+-DSTM32H7B0xx \
+-DMINIZ_NO_MALLOC \
+-DMINIZ_NO_TIME \
+-DMINIZ_NO_ARCHIVE_APIS \
+-DMINIZ_NO_ARCHIVE_WRITING_APIS \
+-DMINIZ_LITTLE_ENDIAN=1 \
+-DMINIZ_HAS_64BIT_REGISTERS=0 \
+-DMINIZ_NO_STDIO \
 
 
 # AS includes
@@ -90,6 +98,7 @@ AS_INCLUDES =
 # C includes
 C_INCLUDES =  \
 -ICore/Inc \
+-ICore/miniz-2.2.0 \
 -IDrivers/STM32H7xx_HAL_Driver/Inc \
 -IDrivers/STM32H7xx_HAL_Driver/Inc/Legacy \
 -IDrivers/CMSIS/Device/ST/STM32H7xx/Include \
@@ -123,6 +132,7 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--gc-sections \
 		  -Wl,--undefined=bootloader \
 		  -Wl,--undefined=read_buttons \
+		  -Wl,--undefined=memcpy_inflate \
 
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/internal_flash_patched.bin

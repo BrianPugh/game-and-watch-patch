@@ -1,4 +1,6 @@
 from .patch import Patches
+from math import ceil, floor
+
 
 
 def _seconds_to_frames(seconds):
@@ -104,11 +106,6 @@ def parse_patches(args):
         patches.append("ks_thumb", 0x6fc4, f"cmp.w r0, #{mario_song_frames}", size=4,
                        message=f"Setting Mario Song time to {args.mario_song_time} seconds.")
 
-
-    #patches.append("bl", 0xfaa0, "time_graphics_draw_tiles",
-    #               message="Intercept time_graphics_draw_tiles 1");
-    #patches.append("bl", 0xfbd6, "time_graphics_draw_tiles",
-    #               message="Intercept time_graphics_draw_tiles 1");
 
     if args.slim:
         offset = 0

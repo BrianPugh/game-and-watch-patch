@@ -3,34 +3,64 @@ Custom firmware for the Game and Watch: Super Mario Bros. console.
 
 [![Click to play demo](https://thumbs.gfycat.com/UntriedMajesticAfricancivet-mobile.jpg)](https://gfycat.com/untriedmajesticafricancivet)
 
+
 # What is this?
 This repo contains custom code as well as a patching utility to add additional
-functionality to the stock Game and Watch firmware.
+functionality to the stock Game and Watch firmware. This is the only custom firmware that allows you to run both the stock firmware as well as retro-go without soldering a higher capacity flash chip!
+
 
 # Features
 * Works correctly with [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) in internal flash bank 2.
 * Press button combination (`LEFT` + `A` + `GAME`) to launch retro-go from internal flash bank 2.
 * Configurable sleep timeout.
 * Configurable hard-reset timeout.
+* Reduced external flash firmware size `--slim`; reduced from 1,048,576 bytes to just **270,336** bytes
+    * Removed the "Mario Song" easter egg.
+    * Removed the 5 sleeping illustrations.
 
 
 # Usage
 Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this
-repo. To extract these from your console, see the [game and watch backup repo](https://github.com/ghidraninja/game-and-watch-backup)
+repo. To extract these from your gnw system, see the [game and watch backup repo](https://github.com/ghidraninja/game-and-watch-backup)
 
-Install python dependencies via:
+Install python dependencies (>=python3.6 required) via:
+
 ```
 pip3 install -r requirements.txt
 ```
 
 Download STM32 Driver files:
+
 ```
 make download_sdk
 ```
 
-To just build and flash, run:
+To just build and flash, you can just run `make flash`, however it's a bit finicky. You'll probably have better success running:
+
 ```
-make flash
+make flash_patched_ext
+make flash_patched_int
+```
+
+I recommend pressing the power button at the same time you press enter. Note that the same configuration parameters have to be passed to each `make` command.
+
+For additional configuration options, run `make help`.
+
+
+### Retro Go
+Since most people are going to be using this with retro-go, here are the recommend commands:
+
+```
+# in this repo
+make clean
+make PATCH_PARAMS="--slim" flash_patched_ext
+make PATCH_PARAMS="--slim" flash_patched_int
+
+# in the retro-go repo; this assumees you have the stock 1MB flashchip
+# NOTE: MUST have the patched openocd installed:
+#         https://github.com/kbeckmann/ubuntu-openocd-git-builder
+make clean
+make -j8 EXTFLASH_SIZE=778240 EXTFLASH_OFFSET=270336 INTFLASH_BANK=2 flash
 ```
 
 # Advanced usage
@@ -42,14 +72,14 @@ make patch  # Generates the patched bin at build/internal_flash_patched.bin, but
 make flash_stock_int
 make flash_stock_ext
 make flash_patch_int
+make flash_patch_ext
 ```
 
 # TODO
 * Figure out safe place in RAM to store global/static variables. The current
   configuration described in the linker file is unsafe, but currently we have
   no global/static variables.
-* Maybe slim external flash ROM (remove easter eggs, ROMs, etc) to make room
-  for more homebrew.
+* Further slim the external flash firmware by compressing assets.
 
 # Development
 Main stages to developing a feature:

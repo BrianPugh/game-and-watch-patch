@@ -184,7 +184,7 @@ flash_stock_int: internal_flash_backup.bin
 
 flash_stock_ext: flash_backup.bin
 	$(FLASHAPP) $(ADAPTER) $<
-	mask reset
+	make reset
 .PHONY: flash_stock_ext
 
 flash_stock: flash_stock_int flash_stock_ext reset
@@ -206,14 +206,12 @@ flash_patched_int: build/internal_flash_patched.bin
 flash_patched_ext: build/external_flash_patched.bin
 	$(FLASHAPP) $(ADAPTER) $<
 	make reset
-
 .PHONY: flash_patched_ext
 
-flash_stock: flash_stock_int flash_stock_ext reset
-.PHONY: flash_stock
+flash_patched: flash_patched_int flash_patched_ext reset
+.PHONY: flash_patched
 
-
-flash: flash_patched_int flash_stock_ext reset
+flash: flash_patched
 .PHONY: flash
 
 

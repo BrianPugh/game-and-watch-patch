@@ -17,6 +17,7 @@ functionality to the stock Game and Watch firmware. This is the only custom firm
 * Reduced external flash firmware size `--slim`; reduced from 1,048,576 bytes to just **200,704** bytes
     * Removed the "Mario Song" easter egg.
     * Removed the 5 sleeping illustrations.
+    * lz4 compressed SMB2 ROM and Clock graphic tiles.
 
 
 # Usage

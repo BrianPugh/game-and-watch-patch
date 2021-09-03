@@ -134,8 +134,7 @@ def parse_patches(args):
 
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
         # These index into a palette. TODO: where is the palette
-        #compressed_tile_len = 7094  # zopfli
-        compressed_tile_len = 10185  # lz4
+        compressed_tile_len = 5356
         patches.append("compress", 0x9009_8b84, 0x1_0000, size=compressed_tile_len,
                        message="Compress time tiles.")
         patches.append("bl", 0x678e, "memcpy_inflate")
@@ -187,8 +186,7 @@ def parse_patches(args):
 
         # I think the memcpy code should only be 65536 long.
         # stock firmware copies 122_880, like halfway into the mario juggling pic
-        #compressed_mario_2 = 44_338  # zopfli
-        compressed_mario_2 = 51542  # lz4
+        compressed_mario_2 = 42917
         patches.append("compress", 0x900a_ec58, 0x1_0000, size=compressed_mario_2,
                        message="Compress Mario 2 ROM.")
         patches.append("bl", 0x6a12, "memcpy_inflate")

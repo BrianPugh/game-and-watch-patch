@@ -294,6 +294,7 @@ struct ISzAlloc
 {
   void *(*Alloc)(ISzAllocPtr p, size_t size);
   void (*Free)(ISzAllocPtr p, void *address); /* address can be 0 */
+  void *Mem;
 };
 
 #define ISzAlloc_Alloc(p, size) (p)->Alloc(p, size)

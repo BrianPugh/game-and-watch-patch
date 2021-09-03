@@ -6,6 +6,7 @@
 #include "gw_linker.h"
 #include "stm32h7xx_hal.h"
 #include "lz4_depack.h"
+#include "LzmaDec.h"
 
 
 #define BANK_2_ADDRESS 0x08100000
@@ -73,15 +74,34 @@ gamepad_t read_buttons() {
     return gamepad;
 }
 
+#define LZMA_BUF_SIZE            (1 << 15)
+
+static void *SzAlloc(ISzAlloc *p, size_t size) {
+    void* res = p->Mem;
+    p->Mem += size;
+    return res;
+}
+
+static void SzFree(void *p, void *address) {
+}
+
+const ISzAlloc g_Alloc = { SzAlloc, SzFree };
+
 /**
  * Dropin replacement for memcpy for loading compressed assets.
  */
-void *memcpy_inflate(void *dst, void *src, size_t n){
-    //return memcpy(dst, src, n);
-    //int flags = 0;
-    //flags |= TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
-    //tinfl_decompress_mem_to_mem(dst, 393216, src, n, flags);
-    lz4_uncompress(src, dst);
+void *memcpy_inflate(uint8_t *dst, uint8_t *src, size_t n){
+    unsigned char lzma_heap[LZMA_BUF_SIZE];
+    ISzAlloc allocs = {
+        .Alloc=SzAlloc,
+        .Free=SzFree,
+        .Mem=lzma_heap,
+    };
+
+    ELzmaStatus lzmaStatus;
+    n -= 13;
+    size_t dst_len = 393216;
+    LzmaDecode(dst, &dst_len, &src[13], &n, src, 5, LZMA_FINISH_ANY, &lzmaStatus, &allocs);
     return dst;
 }
 

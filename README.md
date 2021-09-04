@@ -76,14 +76,18 @@ make flash_patch_int
 make flash_patch_ext
 ```
 
+# Known issues (--slim)
+* Some of the audio samples in BALL got deleted. Need to fix this.
+
+
 # TODO
+* Fix known issues.
 * Figure out safe place in RAM to store global/static variables. The current
   configuration described in the linker file is unsafe, but currently we have
   no global/static variables.
   * Currently we cannot use zlib/zopfli compression for assets because it
     requires some globals in RAM. So in order to do that, we need to find
     some unused ram first. This could improve compression a bit.
-* Further slim the external flash firmware by compressing assets.
 * Custom sprites for clock.
 
 # Development

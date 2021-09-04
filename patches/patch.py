@@ -13,7 +13,8 @@ COMMAND_DESCRIPTIONS = {
     "copy": "copy block of data.",
     "add": "Perform inplace addition on data at address",
     "shorten": "Shorten the firmware by removing these last bytes.",
-    "compress": "Compress data inplace with zopfli."
+    "compress": "Compress data inplace with zopfli.",
+    "move_to_int": "Move some data to abosolute intenral offset.",
 }
 VALID_COMMANDS = set(list(COMMAND_DESCRIPTIONS.keys()))
 
@@ -48,8 +49,8 @@ class Patch:
     def command_callable(self):
         return getattr(self, self.command)
 
-    def __call__(self, firmware):
-        return self.command_callable(firmware)
+    def __call__(self, *args, **kwargs):
+        return self.command_callable(*args, **kwargs)
 
     def replace(self, firmware):
         """
@@ -176,6 +177,15 @@ class Patch:
             else:
                 _set_range(firmware, old_start, old_end)
 
+        return self.size
+
+    def move_to_int(self, external, internal):
+        """ Unlike ``move``, this moves to an absolute offset.
+        """
+
+        data = external[self.offset:self.offset+self.size].copy()
+        external[self.offset:self.offset+self.size] = b"\x00" * self.size
+        internal[self.data:self.data+self.size] = data
         return self.size
 
     def copy(self, firmware):

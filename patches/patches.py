@@ -160,13 +160,15 @@ def parse_patches(args):
                        message=f"Update UNKNOWN1 references")
 
         #patches.append("move", 0x900a_ace4, offset, size=9088,
-        patches.append("move", 0x900a_ace4, offset, size=0x3f00,
-                       message="Move GAME menu icons")
+        patches.append("move", 0x900a_ace4, offset, size=9088,
+                       message="Move GAME menu icons 1.")
         patches.append("add", 0xcea8, offset, size=4,
                        message=f"Update GAME menu icons references")
-        # I'm not sure when this is used
+
+        patches.append("move", 0x900a_d064, offset, size=7040,
+                       message="Move GAME menu icons 2.")
         patches.append("add", 0xd2f8, offset, size=4,
-                       message=f"Update GAME menu icons references UNKNOWN")
+                       message=f"Update GAME menu icons references")
 
 
         patches.append("move", 0x900a_ebe4, offset, size=116,

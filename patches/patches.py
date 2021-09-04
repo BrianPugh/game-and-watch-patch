@@ -92,6 +92,9 @@ def _relocate_external_functions(offset):
 def parse_patches(args):
     patches = Patches()
 
+    int_addr_start = 0x0800_0000  # TODO: get this from int_firmware
+    int_pos = 0x1_D000  # TODO: this might change if more custom code is added
+
     patches.append("replace", 0x4, "bootloader",
                    message="Invoke custom bootloader prior to calling stock Reset_Handler")
     patches.append("bl", 0x6b52, "read_buttons",
@@ -134,16 +137,19 @@ def parse_patches(args):
 
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
         # These index into a palette. TODO: where is the palette
+        # Moving this to internal firmware for now as a PoC.
         compressed_tile_len = 5356
         patches.append("compress", 0x9009_8b84, 0x1_0000, size=compressed_tile_len,
                        message="Compress time tiles.")
         patches.append("bl", 0x678e, "memcpy_inflate")
-        patches.append("move", 0x9009_8b84, offset, size=compressed_tile_len,
-                       message="Moving custom clock graphics.")
-        patches.append("add", 0x7350, offset, size=4,
+        patches.append("move_to_int", 0x9009_8b84, int_pos, size=compressed_tile_len,
+                       message="Moving custom clock graphics to internal firmware.")
+        patches.append("replace", 0x7350, int_addr_start + int_pos, size=4,
                        message="Update custom clock graphics references")
+
         compressed_tile_len = _round_up_word(compressed_tile_len)
-        offset -= (0x1_0000 - compressed_tile_len)
+        int_pos += compressed_tile_len
+        offset -= 0x1_0000
 
         # Note: the clock uses a different palette; this palette only applies
         # to ingame Super Mario Bros 1 & 2

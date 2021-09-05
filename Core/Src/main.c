@@ -67,7 +67,11 @@ static inline void start_bank_2() {
 gamepad_t read_buttons() {
     gamepad_t gamepad = 0;
     gamepad = stock_read_buttons();
-    if((gamepad & GAMEPAD_LEFT) && (gamepad & GAMEPAD_A) && (gamepad & GAMEPAD_GAME)){
+#if CLOCK_ONLY
+    if(gamepad & GAMEPAD_GAME){
+#else
+    if((gamepad & GAMEPAD_LEFT) && (gamepad & GAMEPAD_GAME)){
+#endif
         start_bank_2();
     }
     return gamepad;

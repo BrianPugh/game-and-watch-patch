@@ -18,12 +18,15 @@ def _seconds_to_frames(seconds):
     return int(round(60 * seconds))
 
 def add_patch_args(parser):
-    parser.add_argument("--disable-sleep", action="store_true",
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--disable-sleep", action="store_true",
                         help="Disables sleep timer")
-    parser.add_argument("--sleep-time", type=float, default=None,
+    group.add_argument("--sleep-time", type=float, default=None,
                         help="Go to sleep after this many seconds of inactivity.. "
                          "Valid range: [1, 1092]"
                         )
+
     parser.add_argument("--hard-reset-time", type=float, default=None,
                          help="Hold power button for this many seconds to perform hard reset."
                          )
@@ -31,17 +34,22 @@ def add_patch_args(parser):
                          help="Hold the A button for this many seconds on the time "
                          "screen to launch the mario drawing song easter egg."
                          )
+
+    group = parser.add_mutually_exclusive_group()
     parser.add_argument("--slim", action="store_true", default=False,
-                        help="Remove mario song from extflash")
+                        help="Remove mario song and sleeping images from extflash. Perform other space-saving measures.")
+    parser.add_argument("--clock-only", action="store_true", default=False,
+                        help="Everything in --slim plus remove SMB2. TODO: remove Ball.")
 
 
 def patch_args_validation(parser, args):
-    if args.disable_sleep and args.sleep_time:
-        parser.error("Conflicting options: cannot specify both --disable-sleep and --sleep-time")
     if args.sleep_time and (args.sleep_time < 1 or args.sleep_time > 1092):
         parser.error("--sleep-time must be in range [1, 1092]")
     if args.mario_song_time and (args.mario_song_time < 1 or args.mario_song_time > 1092):
         parser.error("--mario_song-time must be in range [1, 1092]")
+
+    if args.clock_only:
+        args.slim = True
 
 
 def _relocate_external_functions(offset):
@@ -192,27 +200,32 @@ def parse_patches(args):
                            message=f"Update menu references {i} at {hex(reference)}")
 
 
-        # I think the memcpy code should only be 65536 long.
-        # stock firmware copies 122_880, like halfway into the mario juggling pic
-        compressed_mario_2 = 42917
-        patches.append("compress", 0x900a_ec58, 0x1_0000, size=compressed_mario_2,
-                       message="Compress Mario 2 ROM.")
-        patches.append("bl", 0x6a12, "memcpy_inflate")
-        patches.append("move", 0x900a_ec58, offset, size=compressed_mario_2,
-                       message="Move mario 2 rom")
-        patches.append("add", 0x0_7374, offset, size=4,
-                       message="Update Mario 2 ROM reference")
+        if args.clock_only:
+            patches.append("replace", 0x900a_ec58, b"\x00" * 65536,
+                           message="Erasing SMB2 ROM")
+            offset -= 65536
+        else:
+            compressed_smb2 = 42917
+            patches.append("compress", 0x900a_ec58, 0x1_0000, size=compressed_smb2,
+                           message="Compress SMB2 ROM.")
+            patches.append("bl", 0x6a12, "memcpy_inflate")
+            patches.append("move", 0x900a_ec58, offset, size=compressed_smb2,
+                           message="Move SMB2 rom")
+            patches.append("add", 0x0_7374, offset, size=4,
+                           message="Update SMB2 ROM reference")
 
-        compressed_mario_2 = _round_up_word(compressed_mario_2)
-        offset -= (65536 - compressed_mario_2)  # Move by the space savings.
+            compressed_smb2 = _round_up_word(compressed_smb2)
+            offset -= (65536 - compressed_smb2)  # Move by the space savings.
 
-        # Round to nearest page so that the length can be used as an imm
-        compressed_mario_2 = _round_up_page(compressed_mario_2)
+            # Round to nearest page so that the length can be used as an imm
+            compressed_smb2 = _round_up_page(compressed_smb2)
 
-        patches.append("ks_thumb", 0x6a0a, f"mov.w r2, #{compressed_mario_2}", size=4,
-                       message="Fix bug? Mario 2 ROM is only 65536 long.")
-        patches.append("ks_thumb", 0x6a1e, f"mov.w r3, #{compressed_mario_2}", size=4,
-                       message="Fix bug? Mario 2 ROM is only 65536 long.")
+            # I think the memcpy code should only be 65536 long.
+            # stock firmware copies 122_880, like halfway into the mario juggling pic
+            patches.append("ks_thumb", 0x6a0a, f"mov.w r2, #{compressed_smb2}", size=4,
+                           message="Fix bug? SMB2 ROM is only 65536 long.")
+            patches.append("ks_thumb", 0x6a1e, f"mov.w r3, #{compressed_smb2}", size=4,
+                           message="Fix bug? SMB2 ROM is only 65536 long.")
 
         # Not sure what this data is
         patches.append("move", 0x900bec58, offset, size=8 * 2,

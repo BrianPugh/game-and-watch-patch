@@ -66,7 +66,7 @@ make PATCH_PARAMS="--slim" flash_patched_int
 # NOTE: MUST have the patched openocd installed:
 #         https://github.com/kbeckmann/ubuntu-openocd-git-builder
 make clean
-make -j8 EXTFLASH_SIZE=868352 EXTFLASH_OFFSET=188416 INTFLASH_BANK=2 flash
+make -j8 EXTFLASH_SIZE=868352 EXTFLASH_OFFSET=180224 INTFLASH_BANK=2 flash
 ```
 
 # Advanced usage

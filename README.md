@@ -44,6 +44,8 @@ make flash_patched_ext
 make flash_patched_int
 ```
 
+The default programmer interface is `stlink`, you can chose a different interface via the `ADAPTER` variable. For example, `ADAPTER=rpi`.
+
 I recommend pressing the power button at the same time you press enter. Note that the same configuration parameters have to be passed to each `make` command.
 
 For additional configuration options, run `make help`.

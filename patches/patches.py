@@ -17,6 +17,14 @@ def _round_up_page(val):
 def _seconds_to_frames(seconds):
     return int(round(60 * seconds))
 
+def _check_int_size(args, int_pos):
+    size = 0x20000
+    if args.extended:
+        size += 0x20000
+
+    if int_pos > size:
+        raise IndexError(f"Internal firmware pos {int_pos} exceeded internal firmware size {size}.")
+
 def add_patch_args(parser):
 
     group = parser.add_mutually_exclusive_group()
@@ -36,9 +44,9 @@ def add_patch_args(parser):
                          )
 
     group = parser.add_mutually_exclusive_group()
-    parser.add_argument("--slim", action="store_true", default=False,
+    group.add_argument("--slim", action="store_true", default=False,
                         help="Remove mario song and sleeping images from extflash. Perform other space-saving measures.")
-    parser.add_argument("--clock-only", action="store_true", default=False,
+    group.add_argument("--clock-only", action="store_true", default=False,
                         help="Everything in --slim plus remove SMB2. TODO: remove Ball.")
 
 

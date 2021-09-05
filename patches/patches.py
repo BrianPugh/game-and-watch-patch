@@ -173,6 +173,7 @@ def parse_patches(args):
             patches.append("move_to_int", 0x9000_be60, int_pos, size=11620)
             int_pos += _round_up_word(11620)
 
+            # Starting here I believe are BALL references
             patches.append("move_to_int", 0x9000_ebc4, int_pos, size=528)
             patches.append("replace", 0x4154, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(528)
@@ -214,6 +215,77 @@ def parse_patches(args):
             patches.append("replace", 0x456c, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(96)
 
+            patches.append("move_to_int", 0x9000_f498, int_pos, size=180)
+            patches.append("replace", 0x43f8, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(180)
+
+            patches.append("move_to_int", 0x9000_f54c, int_pos, size=1100)
+            patches.append("replace", 0x43fc, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(1100)
+
+            patches.append("move_to_int", 0x9000_f998, int_pos, size=180)
+            patches.append("replace", 0x4400, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(180)
+
+            patches.append("move_to_int", 0x9000_fa4c, int_pos, size=1136)
+            patches.append("replace", 0x4404, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(1136)
+
+            patches.append("move_to_int", 0x9000_febc, int_pos, size=864)
+            patches.append("replace", 0x450c, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(864)
+
+            patches.append("move_to_int", 0x9001_021c, int_pos, size=384)
+            patches.append("replace", 0x4510, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(384)
+
+            patches.append("move_to_int", 0x9001_039c, int_pos, size=384)
+            patches.append("replace", 0x451c, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(384)
+
+            patches.append("move_to_int", 0x9001_051c, int_pos, size=384)
+            patches.append("replace", 0x4410, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(384)
+
+            patches.append("move_to_int", 0x9001_069c, int_pos, size=384)
+            patches.append("replace", 0x44f8, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(384)
+
+            patches.append("move_to_int", 0x9001_081c, int_pos, size=384)
+            patches.append("replace", 0x4500, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(384)
+
+            patches.append("move_to_int", 0x9001_099c, int_pos, size=384)
+            patches.append("replace", 0x4414, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(384)
+
+            patches.append("move_to_int", 0x9001_0b1c, int_pos, size=384)
+            patches.append("replace", 0x44fc, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(384)
+
+            patches.append("move_to_int", 0x9001_0c9c, int_pos, size=384)
+            patches.append("replace", 0x4504, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(384)
+
+            patches.append("move_to_int", 0x9001_0e1c, int_pos, size=384)
+            patches.append("replace", 0x440c, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(384)
+
+            patches.append("move_to_int", 0x9001_0f9c, int_pos, size=384)
+            patches.append("replace", 0x4408, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(384)
+
+            #patches.append("move_to_int", 0x9001_, int_pos, size=)
+            #patches.append("replace", 0x, int_addr_start + int_pos, size=4)
+            #int_pos += _round_up_word()
+
+            #patches.append("move_to_int", 0x9001_, int_pos, size=)
+            #patches.append("replace", 0x, int_addr_start + int_pos, size=4)
+            #int_pos += _round_up_word()
+
+            #patches.append("move_to_int", 0x9001_, int_pos, size=)
+            #patches.append("replace", 0x, int_addr_start + int_pos, size=4)
+            #int_pos += _round_up_word()
 
 
         mario_song_len = 0x85e40  # 548,416 bytes

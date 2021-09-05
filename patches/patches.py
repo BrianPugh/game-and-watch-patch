@@ -147,10 +147,13 @@ def parse_patches(args):
         offset = 0
 
         if args.extended:
-            patches.append("move_to_int", 0x9000_0000, int_pos, size=7772)
-            patches.append("replace", 0x7204, int_addr_start + int_pos, size=4,
-                           message="Update reference")
-            int_pos += 7772
+            compressed_len = 5103
+            patches.append("compress", 0x9000_0000, 7772, size=compressed_len)
+            patches.append("move_to_int", 0x9000_0000, int_pos, size=compressed_len)
+            patches.append("replace", 0x7204, int_addr_start + int_pos, size=4)
+            patches.append("bl", 0x665c, "memcpy_inflate")
+            int_pos += _round_up_word(compressed_len)
+            # TODO: update offset
 
         mario_song_len = 0x85e40  # 548,416 bytes
         # This isn't really necessary, but we keep it here because its more explicit.

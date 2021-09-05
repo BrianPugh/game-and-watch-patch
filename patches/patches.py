@@ -156,12 +156,23 @@ def parse_patches(args):
             # TODO: update offset
 
 
+            # SMB1 looks hard to compress since there's so many references.
             patches.append("move_to_int", 0x9000_1e60, int_pos, size=40960,
                            message="Move SMB1 to internal firmware.")
             patches.append("replace", 0x7368, int_addr_start + int_pos, size=4)
+            patches.append("replace", 0x10954, int_addr_start + int_pos, size=4)
             patches.append("replace", 0x7218, int_addr_start + int_pos + 36864, size=4)
             int_pos += 40960
             # TODO: update offset
+
+
+            # I think these are all scenes for the clock, but not 100% sure.
+            # The giant lookup table references all these, we could maybe compress
+            # each individual scene.
+            internal_scene_start = int_addr_start + int_pos
+            patches.append("move_to_int", 0x9000_be60, int_pos, size=11620)
+            int_pos += 11620
+            # goes to ebc4
 
         mario_song_len = 0x85e40  # 548,416 bytes
         # This isn't really necessary, but we keep it here because its more explicit.
@@ -293,11 +304,16 @@ def parse_patches(args):
         lookup_table_start = 0x900b_f4a0
         lookup_table_end   = 0x900b_f838
         lookup_table_len   = lookup_table_end - lookup_table_start  # 920
-        def cond(addr):
+        def cond_post_mario_song(addr):
             # Return True if it's beyond the mario song addr
             return 0x9001_2D44 <= addr
+        def cond_pre_mario_song(addr):
+            # Return True if it's beyond the mario song addr
+            return 0x9001_2D44 > addr
         for addr in range(lookup_table_start, lookup_table_end, 4):
-            patches.append("add", addr, offset, size=4, cond=cond)
+            patches.append("add", addr, offset, size=4, cond=cond_post_mario_song)
+            if args.extended:
+                patches.append("add", addr, (internal_scene_start - 0x9000_be60), size=4, cond=cond_pre_mario_song)
         # Now move the table
         patches.append("move", lookup_table_start, offset, size=lookup_table_len,
                        message="Moving event lookup table")

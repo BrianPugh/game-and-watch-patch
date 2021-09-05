@@ -162,7 +162,7 @@ def parse_patches(args):
             patches.append("replace", 0x7368, int_addr_start + int_pos, size=4)
             patches.append("replace", 0x10954, int_addr_start + int_pos, size=4)
             patches.append("replace", 0x7218, int_addr_start + int_pos + 36864, size=4)
-            int_pos += 40960
+            int_pos += _round_up_word(40960)
             # TODO: update offset
 
 
@@ -171,8 +171,11 @@ def parse_patches(args):
             # each individual scene.
             internal_scene_start = int_addr_start + int_pos
             patches.append("move_to_int", 0x9000_be60, int_pos, size=11620)
-            int_pos += 11620
-            # goes to ebc4
+            int_pos += _round_up_word(11620)
+
+            patches.append("move_to_int", 0x9000_ebc4, int_pos, size=528)
+            patches.append("replace", 0x4154, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(528)
 
         mario_song_len = 0x85e40  # 548,416 bytes
         # This isn't really necessary, but we keep it here because its more explicit.

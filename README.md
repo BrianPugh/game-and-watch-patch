@@ -11,7 +11,7 @@ functionality to the stock Game and Watch firmware. This is the only custom firm
 
 # Features
 * Works correctly with [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) in internal flash bank 2.
-* Press button combination (`LEFT` + `A` + `GAME`) to launch retro-go from internal flash bank 2.
+* Press button combination (`LEFT` + `GAME`) to launch retro-go from internal flash bank 2.
 * Configurable sleep timeout.
 * Configurable hard-reset timeout.
 * Reduced external flash firmware size `--slim`; reduced from 1,048,576 bytes to just **180,224** bytes
@@ -19,7 +19,9 @@ functionality to the stock Game and Watch firmware. This is the only custom firm
     * Removed the 5 sleeping illustrations.
     * LZMA compressed SMB2 ROM and Clock graphic tiles.
     * Move Clock graphic tiles to internal flash. 
-
+* An even further stripped version `--clock-only` that further reduces extflash size to just **139,264** bytes. Uses all the techniques described in `slim` plus:
+    * Removed SMB2 ROM.
+    * Set retro-go macro to just `GAME`.
 
 # Usage
 Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this
@@ -88,10 +90,8 @@ make flash_patch_ext
 * Figure out safe place in RAM to store global/static variables. The current
   configuration described in the linker file is unsafe, but currently we have
   no global/static variables.
-  * Currently we cannot use zlib/zopfli compression for assets because it
-    requires some globals in RAM. So in order to do that, we need to find
-    some unused ram first. This could improve compression a bit.
 * Custom sprites for clock.
+* Add option to move external flash assets to the extended region of bank 1.
 
 # Development
 Main stages to developing a feature:

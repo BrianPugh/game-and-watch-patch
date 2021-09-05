@@ -85,6 +85,9 @@ C_DEFS =  \
 -DUSE_HAL_DRIVER \
 -DSTM32H7B0xx \
 
+ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
+	C_DEFS += -DCLOCK_ONLY
+endif
 
 # AS includes
 AS_INCLUDES = 

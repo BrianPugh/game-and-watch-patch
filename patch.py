@@ -174,6 +174,9 @@ def parse_args():
     parser.add_argument('--ext-output', type=Path, default="build/external_flash_patched.bin",
                         help="Patched external firmware.")
 
+    parser.add_argument("--extended", action="store_true", default=False,
+                        help="256KB internal flash image instead of 128KB.")
+
     debugging = parser.add_argument_group("debugging")
     debugging.add_argument("--show", action="store_true",
                            help="Show a picture representation of the external patched binary.")
@@ -209,6 +212,9 @@ def main():
         raise InvalidPatchError(f"Expected patch length {len(int_firmware)}, got {len(patch)}")
     int_firmware[int_firmware.STOCK_ROM_END:] = patch[int_firmware.STOCK_ROM_END:]
     del patch
+
+    if args.extended:
+        int_firmware.extend(b"\x00" * 0x20000)
 
     # Perform all replacements in stock code.
     patches = parse_patches(args)

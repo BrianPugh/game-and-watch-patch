@@ -14,6 +14,7 @@ OPT = -Og
 
 PATCH_PARAMS ?=
 
+ADAPTER ?= stlink
 #######################################
 # paths
 #######################################
@@ -107,10 +108,8 @@ ifeq ($(DEBUG), 1)
 CFLAGS += -g -gdwarf-2 -O0
 endif
 
-
 # Generate dependency information
 CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
-
 
 #######################################
 # LDFLAGS
@@ -161,12 +160,6 @@ $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	
 $(BUILD_DIR):
 	mkdir $@		
-
-
-
-# TODO cleanup
-ADAPTER ?= stlink
-OCDIFACE ?= interface/stlink.cfg
 
 .EXPORT_ALL_VARIABLES:
 
@@ -242,7 +235,10 @@ start_bank_2:
 help:
 	@python patch.py --help
 	@echo ""
-	@echo "Provide configuration parameters via PATCH_PARAMS"
+	@echo "Commandline arguments:"
+	@echo "    PATCH_PARAMS - Options to pass to the python patching utility."
+	@echo "                   Most options go here and will start with two dashes."
+	@echo "    ADAPTER - One of {stlink, jlink, rpi}. Defaults to stlink."
 	@echo ""
 	@echo "Example:"
 	@echo "    make PATCH_PARAMS=\"--sleep-time=120 --slim\" flash_patched_ext"

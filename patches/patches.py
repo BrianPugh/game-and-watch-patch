@@ -210,6 +210,10 @@ def parse_patches(args):
                 patches.append("replace", reference, int_addr_start + int_pos, size=4)
                 int_pos += _round_up_word(128)
 
+            patches.append("move_to_int", 0x9000_ef38, int_pos, size=96)
+            patches.append("replace", 0x456c, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(96)
+
 
 
         mario_song_len = 0x85e40  # 548,416 bytes

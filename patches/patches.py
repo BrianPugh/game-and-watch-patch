@@ -116,6 +116,9 @@ def parse_patches(args):
     patches.append("bl", 0x6b52, "read_buttons",
                    message="Intercept button presses for macros")
 
+    patches.append("ks_thumb", 0x49e0, "mov.w r1, #0x00000", size=4,
+                   message="Mute clock audio on first boot.")
+
     if args.hard_reset_time:
         hard_reset_time_ms = int(round(args.hard_reset_time * 1000))
         patches.append("ks_thumb", 0x9cee, f"movw r1, #{hard_reset_time_ms}", size=4,

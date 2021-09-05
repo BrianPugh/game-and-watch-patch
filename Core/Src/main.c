@@ -12,7 +12,7 @@
 #define BOOTLOADER_MAGIC 0x544F4F42  // "BOOT"
 #define BOOTLOADER_MAGIC_ADDRESS ((uint32_t *)0x2001FFF8)
 #define BOOTLOADER_JUMP_ADDRESS ((uint32_t **)0x2001FFFC)
-static void  __attribute__((naked)) start_app(uint32_t pc, uint32_t sp) {
+static void  __attribute__((naked)) start_app(void (* const pc)(void), uint32_t sp) {
     __asm("           \n\
           msr msp, r1 /* load r1 into MSP */\n\
           bx r0       /* branch to the address at r0 */\n\
@@ -21,7 +21,7 @@ static void  __attribute__((naked)) start_app(uint32_t pc, uint32_t sp) {
 
 static inline void set_bootloader(uint32_t address){
     *BOOTLOADER_MAGIC_ADDRESS = BOOTLOADER_MAGIC;
-    *BOOTLOADER_JUMP_ADDRESS = address;
+    *BOOTLOADER_JUMP_ADDRESS = (uint32_t *)address;
 }
 
 /**
@@ -52,7 +52,7 @@ void bootloader(){
         *BOOTLOADER_MAGIC_ADDRESS = 0;
         uint32_t sp = (*BOOTLOADER_JUMP_ADDRESS)[0];
         uint32_t pc = (*BOOTLOADER_JUMP_ADDRESS)[1];
-        start_app((uint32_t) pc, (uint32_t) sp);
+        start_app((void (* const)(void)) pc, (uint32_t) sp);
     }
 
     start_app(stock_Reset_Handler, 0x20011330);
@@ -79,13 +79,13 @@ gamepad_t read_buttons() {
 
 #define LZMA_BUF_SIZE            (1 << 15)
 
-static void *SzAlloc(ISzAlloc *p, size_t size) {
+static void *SzAlloc(ISzAllocPtr p, size_t size) {
     void* res = p->Mem;
-    p->Mem += size;
+    //p->Mem += size;
     return res;
 }
 
-static void SzFree(void *p, void *address) {
+static void SzFree(ISzAllocPtr p, void *address) {
 }
 
 const ISzAlloc g_Alloc = { SzAlloc, SzFree };

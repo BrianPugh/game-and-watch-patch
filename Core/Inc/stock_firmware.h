@@ -1,5 +1,8 @@
 #pragma once
 
+#pragma GCC diagnostic push 
+#pragma GCC diagnostic ignored "-Wint-conversion"
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -59,3 +62,5 @@ bool (* const is_usb_connected)(void) = 0x08010dc2 | THUMB;
  * Put system to sleep.
  */
 void (* const sleep)(void) = 0x080063a0 | THUMB;
+
+#pragma GCC diagnostic pop

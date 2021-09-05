@@ -187,10 +187,29 @@ def parse_patches(args):
                 0x9000_eeb8: 0x4520,
                 0x9000_eef8: 0x4524,
             }
-            for external, internal in referencees.items():
+            for external, internal in references.items():
                 patches.append("move_to_int", external, int_pos, size=64)
                 patches.append("replace", internal, int_addr_start + int_pos, size=4)
                 int_pos += _round_up_word(64)
+
+
+            references = [
+                0x2ac,
+                0x2b0,
+                0x2b4,
+                0x2b8,
+                0x2bc,
+                0x2c0,
+                0x2c4,
+                0x2c8,
+                0x2cc,
+                0x2d0,
+            ]
+            patches.append("move_to_int", 0x9000_ef38, int_pos, size=128*10)
+            for reference in references:
+                patches.append("replace", reference, int_addr_start + int_pos, size=4)
+                int_pos += _round_up_word(128)
+
 
 
         mario_song_len = 0x85e40  # 548,416 bytes

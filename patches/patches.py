@@ -109,7 +109,8 @@ def parse_patches(args):
     patches = Patches()
 
     int_addr_start = 0x0800_0000  # TODO: get this from int_firmware
-    int_pos = 0x1_D000  # TODO: this might change if more custom code is added
+    int_pos_start = 0x1_D000  # TODO: this might change if more custom code is added
+    int_pos = int_pos_start
 
     patches.append("replace", 0x4, "bootloader",
                    message="Invoke custom bootloader prior to calling stock Reset_Handler")
@@ -144,8 +145,6 @@ def parse_patches(args):
                        message="Disable watchdog WWDG.")
 
     if args.slim:
-        offset = 0
-
         if args.extended:
             compressed_len = 5103
             patches.append("compress", 0x9000_0000, 7772, size=compressed_len)
@@ -153,8 +152,6 @@ def parse_patches(args):
             patches.append("move_to_int", 0x9000_0000, int_pos, size=compressed_len)
             patches.append("replace", 0x7204, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(compressed_len)
-            # TODO: update offset
-
 
             # SMB1 looks hard to compress since there's so many references.
             patches.append("move_to_int", 0x9000_1e60, int_pos, size=40960,
@@ -211,7 +208,7 @@ def parse_patches(args):
                 patches.append("replace", reference, int_addr_start + int_pos, size=4)
                 int_pos += _round_up_word(128)
 
-            patches.append("move_to_int", 0x9000_ef38, int_pos, size=96)
+            patches.append("move_to_int", 0x9000_f438, int_pos, size=96)
             patches.append("replace", 0x456c, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(96)
 
@@ -367,6 +364,11 @@ def parse_patches(args):
             patches.append("replace", 0x4538, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(320)
 
+            #offset = -(int_pos - int_pos_start)
+            offset = 0
+        else:
+            offset = 0
+
         mario_song_len = 0x85e40  # 548,416 bytes
         # This isn't really necessary, but we keep it here because its more explicit.
         patches.append("replace", 0x9001_2D44, b"\x00" * (mario_song_len),
@@ -386,7 +388,6 @@ def parse_patches(args):
                        message="Moving custom clock graphics to internal firmware.")
         patches.append("replace", 0x7350, int_addr_start + int_pos, size=4,
                        message="Update custom clock graphics references")
-
         compressed_tile_len = _round_up_word(compressed_tile_len)
         int_pos += compressed_tile_len
         offset -= 0x1_0000

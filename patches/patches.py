@@ -160,8 +160,6 @@ def parse_patches(args):
             patches.append("replace", 0x10954, int_addr_start + int_pos, size=4)
             patches.append("replace", 0x7218, int_addr_start + int_pos + 36864, size=4)
             int_pos += _round_up_word(40960)
-            # TODO: update offset
-
 
             # I think these are all scenes for the clock, but not 100% sure.
             # The giant lookup table references all these, we could maybe compress
@@ -366,7 +364,9 @@ def parse_patches(args):
 
             # TODO: fix this
             #offset = -_round_down_page(int_pos - int_pos_start)
-            offset = -4096 * 16  # works!
+            #offset = -67000
+            offset = -68000  # Some palette is messed up
+            #import ipdb; ipdb.set_trace()
             #offset = -4096 * 17 # doesn't work
         else:
             offset = 0
@@ -562,6 +562,8 @@ def parse_patches(args):
         total_image_length = 193_568
         patches.append("replace", 0x900c58f8, b"\x00" * total_image_length,
                        message="Deleting sleeping images")
+        patches.append("replace", 0x1097c, b"\x00"*4*5,
+                       message="Erasing images reference")
         offset -= total_image_length
 
 

@@ -364,8 +364,10 @@ def parse_patches(args):
             patches.append("replace", 0x4538, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(320)
 
-            #offset = -(int_pos - int_pos_start)
-            offset = 0
+            # TODO: fix this
+            #offset = -_round_down_page(int_pos - int_pos_start)
+            offset = -4096 * 16  # works!
+            #offset = -4096 * 17 # doesn't work
         else:
             offset = 0
 

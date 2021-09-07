@@ -32,7 +32,7 @@ class Firmware(bytearray):
         super().__init__(firmware_data)
         self._verify()
 
-    def show(self, wrap=1024):
+    def show(self, wrap=1024, show=True):
         import numpy as  np
         import matplotlib.pyplot as plt
         import matplotlib.ticker as ticker
@@ -53,7 +53,8 @@ class Firmware(bytearray):
         axes.get_xaxis().set_major_formatter(ticker.FuncFormatter(to_hex))
         axes.get_yaxis().set_major_locator(ticker.MultipleLocator(32))
         axes.get_yaxis().set_major_formatter(ticker.FuncFormatter(to_hex_wrap))
-        plt.show()
+        if show:
+            plt.show()
 
 
 class IntFirmware(Firmware):
@@ -242,8 +243,12 @@ def main():
 
     if args.show:
         # Debug visualization
-        int_firmware.show()
-        ext_firmware.show()
+        import matplotlib.pyplot as plt
+        plt.subplot(2, 1, 1)
+        int_firmware.show(show=False)
+        plt.subplot(2, 1, 2)
+        ext_firmware.show(show=False)
+        plt.show()
 
     # Re-encrypt the external firmware
     Path("build/decrypt_flash_patched.bin").write_bytes(ext_firmware)

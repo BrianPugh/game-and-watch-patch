@@ -32,6 +32,29 @@ class Firmware(bytearray):
         super().__init__(firmware_data)
         self._verify()
 
+    def show(self, wrap=1024):
+        import numpy as  np
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as ticker
+
+        def to_hex(x, pos):
+            return f"0x{int(x):06X}"
+
+        def to_hex_wrap(x, pos):
+            return f"0x{int(x)*wrap:06X}"
+
+        n_bytes = len(self)
+        rows = int(np.ceil(n_bytes / wrap))
+        occupied = np.array(self) != 0
+        plt.imshow(occupied.reshape(rows, wrap))
+        plt.title(str(self))
+        axes = plt.gca()
+        axes.get_xaxis().set_major_locator(ticker.MultipleLocator(128))
+        axes.get_xaxis().set_major_formatter(ticker.FuncFormatter(to_hex))
+        axes.get_yaxis().set_major_locator(ticker.MultipleLocator(32))
+        axes.get_yaxis().set_major_formatter(ticker.FuncFormatter(to_hex_wrap))
+        plt.show()
+
 
 class IntFirmware(Firmware):
     STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
@@ -122,29 +145,6 @@ class ExtFirmware(Firmware):
             cipher_block = aes.encrypt(bytes(counter_block))
             for i, cipher_byte in enumerate(reversed(cipher_block)):
                 self[offset + i] ^= cipher_byte
-
-    def show(self, wrap=1024):
-        import numpy as  np
-        import matplotlib.pyplot as plt
-        import matplotlib.ticker as ticker
-
-        def to_hex(x, pos):
-            return f"0x{int(x):06X}"
-
-        def to_hex_wrap(x, pos):
-            return f"0x{int(x)*wrap:06X}"
-
-        n_bytes = len(self)
-        rows = int(np.ceil(n_bytes / wrap))
-        occupied = np.array(self) != 0
-        plt.imshow(occupied.reshape(rows, wrap))
-        axes = plt.gca()
-        axes.get_xaxis().set_major_locator(ticker.MultipleLocator(128))
-        axes.get_xaxis().set_major_formatter(ticker.FuncFormatter(to_hex))
-        axes.get_yaxis().set_major_locator(ticker.MultipleLocator(32))
-        axes.get_yaxis().set_major_formatter(ticker.FuncFormatter(to_hex_wrap))
-        plt.show()
-
 
 
 class InvalidStockRomError(Exception):
@@ -242,6 +242,7 @@ def main():
 
     if args.show:
         # Debug visualization
+        int_firmware.show()
         ext_firmware.show()
 
     # Re-encrypt the external firmware

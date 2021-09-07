@@ -583,9 +583,6 @@ def parse_patches(args):
         offset -= 34728
 
 
-        # TODO: Only the two save blocks remain here
-
-
         # The last 2 4096 byte blocks represent something in settings.
         # Each only contains 0x50 bytes of data.
         offset = _round_down_page(offset)
@@ -606,7 +603,8 @@ def parse_patches(args):
         )
 
         # Finally, shorten the firmware
-        patches.append("add", 0x1_06ec, offset, size=4)
+        patches.append("add", 0x1_06ec, offset, size=4,
+                       message="Updating end of OTFDEC pointer")
         patches.append("shorten", 0x9000_0000, offset)
 
     return patches

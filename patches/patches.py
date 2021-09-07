@@ -348,7 +348,7 @@ def parse_patches(args):
 
             patches.append("move_to_int", 0x9001_20e4, int_pos, size=2016)
             patches.append("replace", 0x4574, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(96)
+            int_pos += _round_up_word(2016)
 
             patches.append("move_to_int", 0x9001_28c4, int_pos, size=192)
             patches.append("replace", 0x4578, int_addr_start + int_pos, size=4)
@@ -363,9 +363,13 @@ def parse_patches(args):
             int_pos += _round_up_word(320)
 
             # TODO: fix this
+            #offset = -(int_pos - int_pos_start)
             #offset = -_round_down_page(int_pos - int_pos_start)
             #offset = -67000
             offset = -68000  # Some palette is messed up
+            #offset = -68800
+            #offset = -69000
+            #offset = -69600 # Doesn't work
             #import ipdb; ipdb.set_trace()
             #offset = -4096 * 17 # doesn't work
         else:

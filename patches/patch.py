@@ -15,6 +15,7 @@ COMMAND_DESCRIPTIONS = {
     "shorten": "Shorten the firmware by removing these last bytes.",
     "compress": "Compress data inplace with zopfli.",
     "move_to_int": "Move some data to abosolute intenral offset.",
+    "lookup": "Change addr according to a lookup dictionary",
 }
 VALID_COMMANDS = set(list(COMMAND_DESCRIPTIONS.keys()))
 
@@ -214,6 +215,25 @@ class Patch:
         val += self.data
         firmware[self.offset:self.offset+self.size] = val.to_bytes(self.size, "little")
 
+    def lookup(self, firmware):
+        if not isinstance(self.data, dict):
+            raise ValueError(f"Data must be dict, got {type(self.data)}")
+        if self.size is None:
+            raise ValueError("Size must not be none")
+
+        val = _addr(firmware, self.offset, size=self.size)
+        try:
+            new_val = self.data[val]
+        except KeyError as e:
+            if self.cond(val):
+                # This was an expected miss
+                return
+            else:
+                raise e
+            print(f"MISSING: {hex(val)}")
+            return
+
+        firmware[self.offset:self.offset+self.size] = new_val.to_bytes(self.size, "little")
 
     def shorten(self, firmware):
         if self.size is not None:

@@ -438,7 +438,6 @@ def parse_patches(args):
             patches.append("add", reference, offset, size=4,
                            message=f"Update menu references {i} at {hex(reference)}")
 
-
         if args.clock_only:
             patches.append("replace", 0x900a_ec58, b"\x00" * 65536,
                            message="Erasing SMB2 ROM")
@@ -472,48 +471,51 @@ def parse_patches(args):
         patches.append("add", 0x1_0964, offset, size=4,
                        message="Two sets of uint8_t[8]. Not sure what they represent.")
 
-
-
-        # These somehow describe the time scenes (impacts how all background is drawn)
+        # I believe these are palettes for different scenes and times of day.
+        # There are 80 colors, each in BGRA format, where A is always 0
         patches.append("move", 0x900bec68, offset, size=320,
-                       message="Time generic scene [0600, 1700)")
+                       message="Time generic palette [0600, 1700)")
         patches.append("move", 0x900beda8, offset, size=320,
-                       message="Time generic scene [1800, 0400)")
+                       message="Time generic palette [1800, 0400)")
         patches.append("move", 0x900beee8, offset, size=320,
-                        message="Time underwater scene (between 1200 and 2400 at XX:30)")
+                        essage="Time underwater palette (between 1200 and 2400 at XX:30)")
         patches.append("move", 0x900bf028, offset, size=320,
-                       message="Time unknown scene")
+                       message="Time unknown palette")
         patches.append("move", 0x900bf168, offset, size=320,
                        message="Time dawn scene [0500, 0600)")
-        #               message="Underground coin bonus scene (between 0000 and 1200 at XX:30)")
 
-        # These might be 8x8 2-bpp sprites?
-        eight_bytes_start = 0x900bf2a8
-        eight_bytes_end   = 0x900bf410
-        eight_bytes_len = eight_bytes_end - eight_bytes_start
-        for addr in range(eight_bytes_start, eight_bytes_end, 8):
-            patches.append("move", addr, offset, size=8)
+        # These are 2x uint32_t headers. They are MOSTLY [0x36, 0xF],
+        # but there are a few like [0x30, 0xF] and [0x20, 0xF],
+        patches.append("move", 0x900bf2a8, offset, size=45 * 8,
+                       message="Scene tilemap headers")
 
 
         # IDK what this is.
         patches.append("move", 0x900bf410, offset, size=144)
         patches.append("add", 0x1_658c, offset, size=4)
 
-
-        # This table is related to time events.
+        # SCENE TABLE
+        # Goes in chunks of 20 bytes (5 addresses)
+        # Each scene is represented by 5 pointers:
+        #    1. Pointer to a 2x uint32_t header (I think it's total tile (w, h) )
+        #            The H is always 15, which would be 240 pixels tall.
+        #            The W is usually 54, which would be 864 pixels (probably the flag pole?)
+        #    2. RLE something. Usually 32 bytes.
+        #    3. RLE something
+        #    4. RLE something
+        #    5. Palette
+        #
+        # The RLE encoded data could be background tilemap, animation routine, etc.
         lookup_table_start = 0x900b_f4a0
         lookup_table_end   = 0x900b_f838
-        lookup_table_len   = lookup_table_end - lookup_table_start  # 920
+        lookup_table_len   = lookup_table_end - lookup_table_start  # 46 * 5 * 4 = 920
         def cond_post_mario_song(addr):
             # Return True if it's beyond the mario song addr
             return 0x9001_2D44 <= addr
-        def cond_pre_mario_song(addr):
-            # Return True if it's beyond the mario song addr
-            return 0x9001_2D44 > addr
         for addr in range(lookup_table_start, lookup_table_end, 4):
             patches.append("add", addr, offset, size=4, cond=cond_post_mario_song)
             if args.extended:
-                patches.append("add", addr, (internal_scene_start - 0x9000_be60), size=4, cond=cond_pre_mario_song)
+                patches.append("lookup", addr, palette_lookup, size=4, cond=cond_post_mario_song)
         # Now move the table
         patches.append("move", lookup_table_start, offset, size=lookup_table_len,
                        message="Moving event lookup table")

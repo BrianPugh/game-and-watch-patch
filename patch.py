@@ -244,6 +244,9 @@ def main():
         else:
             p(firmware)
 
+    # Erase the extflash region
+    ext_firmware[-8192:] = b"\x00" * 8192
+
     if args.show:
         # Debug visualization
         import matplotlib.pyplot as plt

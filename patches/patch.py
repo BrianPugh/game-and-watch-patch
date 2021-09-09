@@ -239,6 +239,8 @@ class Patch:
         if self.size is not None:
             raise ValueError("Size must be none; use data field to specify number of bytes to shorten by.")
         self.data = abs(self.data)
+        if self.data == 0:
+            return
 
         firmware.ENC_LEN -= self.data
         if firmware.ENC_LEN < 0:

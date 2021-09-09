@@ -235,6 +235,9 @@ def main():
             color = Fore.MAGENTA
         if p.message:
             print(f"{color}Applying {str(firmware)} patch:{Style.RESET_ALL}  \"{p.message}\"")
+            if p.message == "break":
+                import ipdb as pdb
+                pdb.set_trace()
 
         if p.command == "move_to_int":
             p(ext_firmware, int_firmware)

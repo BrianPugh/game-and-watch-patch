@@ -109,5 +109,10 @@ void *memcpy_inflate(uint8_t *dst, uint8_t *src, size_t n){
 }
 
 
+void NMI_Handler(void) {
+    __BKPT(0);
+}
 
-void Error_Handler(){}
+void HardFault_Handler(void) {
+    __BKPT(0);
+}

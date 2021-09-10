@@ -224,12 +224,12 @@ class Patch:
         val = _addr(firmware, self.offset, size=self.size)
         try:
             new_val = self.data[val]
-        except KeyError as e:
+        except KeyError:
             if self.cond(val):
                 # This was an expected miss
                 return
             else:
-                raise e
+                raise KeyError(hex(val))
             print(f"MISSING: {hex(val)}")
             return
 

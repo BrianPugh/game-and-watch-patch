@@ -7,12 +7,21 @@ TARGET = gw_patch
 ######################################
 # building variables
 ######################################
-# debug build?
-DEBUG = 1
+
+PATCH_PARAMS ?=
+
+ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
+	C_DEFS += -DCLOCK_ONLY
+endif
+
+ifneq (,$(findstring --debug, $(PATCH_PARAMS)))
+	DEBUG =1 
+	C_DEFS += -DDEBUG
+endif
+
 # optimization
 OPT = -Og
 
-PATCH_PARAMS ?=
 
 ADAPTER ?= stlink
 #######################################
@@ -128,6 +137,8 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=bootloader \
 		  -Wl,--undefined=read_buttons \
 		  -Wl,--undefined=memcpy_inflate \
+		  -Wl,--undefined=NMI_Handler \
+		  -Wl,--undefined=HardFault_Handler \
 
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/internal_flash_patched.bin

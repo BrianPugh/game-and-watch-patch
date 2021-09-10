@@ -181,6 +181,8 @@ def parse_args():
     debugging = parser.add_argument_group("debugging")
     debugging.add_argument("--show", action="store_true",
                            help="Show a picture representation of the external patched binary.")
+    debugging.add_argument("--debug", action="store_true",
+                           help="Install useful debugging fault handlers.")
 
 
     ########################

@@ -120,6 +120,11 @@ def parse_patches(args):
     patches.append("ks_thumb", 0x49e0, "mov.w r1, #0x00000", size=4,
                    message="Mute clock audio on first boot.")
 
+    if args.debug:
+        # Override fault handlers for easier debugging via gdb.
+        patches.append("replace", 0x8, "NMI_Handler")
+        patches.append("replace", 0xC, "HardFault_Handler")
+
     if args.hard_reset_time:
         hard_reset_time_ms = int(round(args.hard_reset_time * 1000))
         patches.append("ks_thumb", 0x9cee, f"movw r1, #{hard_reset_time_ms}", size=4,

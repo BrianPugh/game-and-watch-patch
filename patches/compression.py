@@ -1,5 +1,18 @@
+import lzma
 
-def decompress(data):
+
+def lzma_compress(data):
+    # https://svn.python.org/projects/external/xz-5.0.3/doc/lzma-file-format.txt
+    compressed_data = lzma.compress(data, format=lzma.FORMAT_ALONE, filters=[{
+        "id": lzma.FILTER_LZMA1,
+        "preset": 6,
+        "dict_size": 16 * 1024,
+    }])
+    compressed_data = compressed_data[:5] + struct.pack('<Q', len(data)) + compressed_data[13:]
+    return compressed_data
+
+
+def lz77_decompress(data):
     """ Decompresses rwdata used to initialize variables.
 
     The table at address 0x0801807c has format:

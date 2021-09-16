@@ -1,5 +1,6 @@
 import struct
-import lzma
+from .compression import lzma_compress
+
 
 
 class FirmwarePatchMixin:
@@ -38,6 +39,29 @@ class FirmwarePatchMixin:
             raise ValueError(f"Don't know how to parse data type \"{data}\"")
 
         return n_bytes_patched
+
+    def relative(self, offset, data, size=None):
+        """
+        data
+            If str, looks up a function
+        """
+        src = self.FLASH_BASE + offset
+
+        if isinstance(data, str):
+            if size:
+                raise ValueError("Don't specify size when providing a symbol name.")
+            dst = self.address(data)
+        elif isinstance(data, int):
+            # must be 1, 2, or 4 bytes
+            if size is None:
+                raise ValueError("Must specify \"size\" when providing int data.")
+            if data < self.FLASH_BASE:
+                raise ValueError("Data {hex(data)} below FLASH_BASE {hex(self.FLASH_BASE)}.")
+            dst = self.int(self, offset, size=size)
+        rel_distance = dst - src
+        import ipdb; ipdb.set_trace()
+        print("meow")
+
 
     def bl(self, offset : int, data : str) -> int:
         """ Replace a branching statement to a branch to one of our functions
@@ -164,13 +188,7 @@ class FirmwarePatchMixin:
         """ Apply in-place LZMA compression. """
         data = self[offset:offset+data]
 
-        # https://svn.python.org/projects/external/xz-5.0.3/doc/lzma-file-format.txt
-        compressed_data = lzma.compress(data, format=lzma.FORMAT_ALONE, filters=[{
-            "id": lzma.FILTER_LZMA1,
-            "preset": 6,
-            "dict_size": 16 * 1024,
-        }])
-        compressed_data = compressed_data[:5] + struct.pack('<Q', len(data)) + compressed_data[13:]
+        compressed_data = lzma_compress(data)
 
         # Clear the original data
         self[offset:offset+data] = b"\x00" * data

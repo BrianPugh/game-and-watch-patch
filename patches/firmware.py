@@ -5,7 +5,7 @@ from elftools.elf.elffile import ELFFile
 
 from .patch import DevicePatchMixin, FirmwarePatchMixin
 from .exception import InvalidStockRomError, MissingSymbolError
-from .lz import decompress
+from .compression import lz77_decompress
 
 class Firmware(FirmwarePatchMixin, bytearray):
 
@@ -69,7 +69,9 @@ class IntFirmware(Firmware):
         self.elf = ELFFile(self._elf_f)
         self.symtab = self.elf.get_section_by_name('.symtab')
 
-        self.rwdata = decompress(self[0x18e75:0x18e75+(0x8fc >> 1)])
+        self.rwdata_addr = 0x18e75
+        self.rwdata_len = 0x8fc >> 1
+        self.rwdata = lz77_decompress(self[self.rwdata_addr : self.rwdata_addr + self.rwdata_len])
 
     def __str__(self):
         return "internal"

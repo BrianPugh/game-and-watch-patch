@@ -1,104 +1,51 @@
-from keystone import *
 import struct
 import lzma
 
 
-COMMAND_DESCRIPTIONS = {
-    "replace": "simple byte substitution",
-    "bl": "replace bl",
-    "ks_arm": "compile a snippet of assembly into ARM",
-    "ks_thumb": "compile a snippet of assembly into Thumb",
-    "nop": "replace data at address with no-operations (NOPs)",
-    "move": "move block of data. Erase old location",
-    "copy": "copy block of data.",
-    "add": "Perform inplace addition on data at address",
-    "shorten": "Shorten the firmware by removing these last bytes.",
-    "compress": "Compress data inplace with zopfli.",
-    "move_to_int": "Move some data to abosolute intenral offset.",
-    "lookup": "Change addr according to a lookup dictionary",
-}
-VALID_COMMANDS = set(list(COMMAND_DESCRIPTIONS.keys()))
+class FirmwarePatchMixin:
+    """ Patch commands that apply to a single firmware instance.
+    """
 
-ks_arm = Ks(KS_ARCH_ARM, KS_MODE_ARM)
-ks_thumb = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
-
-
-def _set_range(firmware, start, end, val=b"\x00"):
-    firmware[start:end] = val * (end - start)
-    return end - start
-
-
-def _addr(firmware, offset, size=4):
-    return int.from_bytes(firmware[offset:offset+size], 'little')
-
-
-class Patch:
-    def __init__(self, command, offset, data, size=None, cond=None, message=None):
-        if command not in VALID_COMMANDS:
-            raise ValueError(f"Invalid command \"{command}\"")
-        self.command = command
-        self.offset = offset
-        self.data = data
-        self.size = size
-        self.message = message
-
-        if cond is None:
-            cond = lambda x: True
-        self.cond = cond
-
-    @property
-    def command_callable(self):
-        return getattr(self, self.command)
-
-    def __call__(self, *args, **kwargs):
-        return self.command_callable(*args, **kwargs)
-
-    def replace(self, firmware):
+    def replace(self, offset : int, data, size=None) -> int:
         """
-        Parameters
-        ----------
-        firmware : Firmware
         """
 
-        if not isinstance(self.offset, int):
-            raise ValueError(f"offset must be an int; got {type(self.offset)}")
+        if offset >= len(self):
+            raise IndexError(f"Patch offset {offset} exceeds firmware length {len(self)}")
 
-        if self.offset >= len(firmware):
-            raise IndexError(f"Patch offset {self.offset} exceeds firmware length {len(firmware)}")
-
-        if self.offset >= firmware.STOCK_ROM_END:
-            raise IndexError(f"Patch offset {self.offset} exceeds stock firmware region {firmware.STOCK_ROM_END}")
+        if offset >= self.STOCK_ROM_END:
+            raise IndexError(f"Patch offset {offset} exceeds stock firmware region {self.STOCK_ROM_END}")
 
         n_bytes_patched = 0
 
-        if isinstance(self.data, bytes):
+        if isinstance(data, bytes):
             # Write the bytes at that address as is.
-            firmware[self.offset:self.offset + len(self.data)] = self.data
-            n_bytes_patched = len(self.data)
-        elif isinstance(self.data, str):
-            if self.size:
+            self[offset:offset + len(data)] = data
+            n_bytes_patched = len(data)
+        elif isinstance(data, str):
+            if size:
                 raise ValueError("Don't specify size when providing a symbol name.")
-            self.data = firmware.address(self.data)
-            firmware[self.offset:self.offset+4] = self.data.to_bytes(4, 'little')
-        elif isinstance(self.data, int):
+            data = self.address(data)
+            self[offset:offset+4] = data.to_bytes(4, 'little')
+        elif isinstance(data, int):
             # must be 1, 2, or 4 bytes
-            if self.size is None:
+            if size is None:
                 raise ValueError("Must specify \"size\" when providing int data")
-            if self.size not in (1, 2, 4):
-                raise ValueError(f"Size must be one of {1, 2, 4}; got {self.size}")
-            firmware[self.offset:self.offset+self.size] = self.data.to_bytes(self.size, 'little')
+            if size not in (1, 2, 4):
+                raise ValueError(f"Size must be one of {1, 2, 4}; got {size}")
+            self[offset:offset+size] = data.to_bytes(size, 'little')
         else:
-            raise ValueError(f"Don't know how to parse data type \"{self.data}\"")
+            raise ValueError(f"Don't know how to parse data type \"{data}\"")
 
         return n_bytes_patched
 
-    def bl(self, firmware):
-        if not isinstance(self.data, str):
-            raise ValueError(f"Data must be str, got {type(self.data)}")
+    def bl(self, offset : int, data : str) -> int:
+        """ Replace a branching statement to a branch to one of our functions
+        """
 
-        dst_address = firmware.address(self.data)
+        dst_address = self.address(data)
 
-        pc = firmware.FLASH_BASE + self.offset + 4
+        pc = self.FLASH_BASE + offset + 4
 
         jump = dst_address - pc
 
@@ -120,138 +67,102 @@ class Patch:
         stage_2_byte_1 = offset_stage_2 & 0xFF
 
         # Store the instructions in little endian order
-        firmware[self.offset + 0] = stage_1_byte_1
-        firmware[self.offset + 1] = stage_1_byte_0
-
-        firmware[self.offset + 2] = stage_2_byte_1
-        firmware[self.offset + 3] = stage_2_byte_0
+        self[offset + 0] = stage_1_byte_1
+        self[offset + 1] = stage_1_byte_0
+        self[offset + 2] = stage_2_byte_1
+        self[offset + 3] = stage_2_byte_0
 
         return 4
 
-    def _ks(self, ks, firmware):
-        if not isinstance(self.data, str):
-            raise ValueError(f"Data must be str, got {type(self.data)}")
-        encoding, _ = ks.asm(self.data)
+    @property
+    def _ks(self):
+        try:
+            return self._ks_inst
+        except AttributeError:
+            from keystone import Ks, KS_ARCH_ARM, KS_MODE_THUMB
+            self._ks_inst = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
+        return self._ks_inst
 
-        print(f"    \"{self.data}\" -> {[hex(x) for x in encoding]}")
-
-        assert len(encoding) == self.size
-
+    def asm(self, offset : int, data : str, size=None) -> int:
+        """
+        Parameters
+        ----------
+        data : str
+            Assembly instructions
+        """
+        encoding, _ = self._ks.asm(data)
+        print(f"    \"{data}\" -> {[hex(x) for x in encoding]}")
+        if size:
+            assert len(encoding) == size
         for i, val in enumerate(encoding):
-            firmware[self.offset + i] = val
-
+            self[offset + i] = val
         return len(encoding)
 
-    def ks_arm(self, firmware):
-        return self._ks(ks_arm, firmware)
+    def nop(self, offset : int, data : int) -> int:
+        """Insert N NOP operations (each 2 bytes long)."""
+        size = data * 2
+        self[offset:offset+size] = b"\x00\xbf" * data
+        return size
 
-    def ks_thumb(self, firmware):
-        return self._ks(ks_thumb, firmware)
-
-    def nop(self, firmware):
-        if self.size is not None:
-            raise ValueError("Size must be none; use data field to specify number of nops")
-        size = self.data * 2
-        firmware[self.offset:self.offset+size] = b"\x00\xbf" * self.data
-        return self.data
-
-    def move(self, firmware):
-        if not isinstance(self.data, int):
-            raise ValueError(f"Data must be int, got {type(self.data)}")
-
-        old_start = self.offset
-        old_end = old_start + self.size
-        new_start = self.offset + self.data
-        new_end = new_start + self.size
-        print(f"    moving {self.size} bytes from 0x{old_start:08X} to 0x{new_start:08X}")
-        firmware[new_start:new_end] = firmware[old_start:old_end]
+    def move(self, offset : int, data : int, size : int) -> int:
+        """ Move from offset -> data """
+        old_start = offset
+        old_end = old_start + size
+        new_start = offset + data
+        new_end = new_start + size
+        print(f"    moving {size} bytes from 0x{old_start:08X} to 0x{new_start:08X}")
+        self[new_start:new_end] = self[old_start:old_end]
 
         # Erase old copy
-        if self.data < 0:
-            if new_end > self.offset:
-                _set_range(firmware, new_end, old_end)
+        if data < 0:
+            if new_end > offset:
+                self.clear_range(new_end, old_end)
             else:
-                _set_range(firmware, old_start, old_end)
+                self.clear_range(old_start, old_end)
         else:
             if new_start < old_end:
-                _set_range(firmware, old_start, new_start)
+                self.clear_range(old_start, new_start)
             else:
-                _set_range(firmware, old_start, old_end)
+                self.clear_range(old_start, old_end)
 
-        return self.size
+        return size
 
-    def move_to_int(self, external, internal):
-        """ Unlike ``move``, this moves to an absolute offset.
-        """
+    def copy(self, offset : int, data : int, size : int):
+        """ Copy offset -> data """
 
-        data = external[self.offset:self.offset+self.size].copy()
-        external[self.offset:self.offset+self.size] = b"\x00" * self.size
-        internal[self.data:self.data+self.size] = data
-        return self.size
-
-    def copy(self, firmware):
         if not isinstance(self.data, int):
             raise ValueError(f"Data must be int, got {type(self.data)}")
 
         old_start = self.offset
-        old_end = old_start + self.size
+        old_end = old_start + size
         new_start = self.offset + self.data
-        new_end = new_start + self.size
-        firmware[new_start:new_end] = firmware[old_start:old_end]
+        new_end = new_start + size
+        self[new_start:new_end] = self[old_start:old_end]
 
         return self.size
 
+    def add(self, offset : int, data : int, size : int) -> int:
+        val = self.int(self, offset, size=size)
+        val += data
+        self[offset:offset+size] = val.to_bytes(size, "little")
 
-    def add(self, firmware):
-        if not isinstance(self.data, int):
-            raise ValueError(f"Data must be int, got {type(self.data)}")
-        if self.size is None:
-            raise ValueError("Size must not be none")
-        val = _addr(firmware, self.offset, size=self.size)
+        return size
 
-        if not self.cond(val):
-            return 0
-
-        val += self.data
-        firmware[self.offset:self.offset+self.size] = val.to_bytes(self.size, "little")
-
-    def lookup(self, firmware):
-        if not isinstance(self.data, dict):
-            raise ValueError(f"Data must be dict, got {type(self.data)}")
-        if self.size is None:
-            raise ValueError("Size must not be none")
-
-        val = _addr(firmware, self.offset, size=self.size)
-        try:
-            new_val = self.data[val]
-        except KeyError:
-            if self.cond(val):
-                # This was an expected miss
-                return
-            else:
-                raise KeyError(hex(val))
-            print(f"MISSING: {hex(val)}")
-            return
-
-        firmware[self.offset:self.offset+self.size] = new_val.to_bytes(self.size, "little")
-
-    def shorten(self, firmware):
-        if self.size is not None:
-            raise ValueError("Size must be none; use data field to specify number of bytes to shorten by.")
-        self.data = abs(self.data)
+    def shorten(self, data : int) -> int:
+        data = abs(data)
         if self.data == 0:
             return
 
-        firmware.ENC_LEN -= self.data
-        if firmware.ENC_LEN < 0:
-            firmware.ENC_LEN = 0
-        firmware[:] = firmware[:-self.data]
-        #firmware[-self.data:] = b"\x00" * self.data
+        self.ENC_LEN -= data
+        if self.ENC_LEN < 0:
+            self.ENC_LEN = 0
+        self[:] = self[:-data]
 
-    def compress(self, firmware):
-        if self.size is None:
-            raise ValueError("Size must not be none")
-        data = firmware[self.offset:self.offset+self.data]
+        return data
+
+    def compress(self, offset : int, data : int) -> int:
+        """ Apply in-place LZMA compression. """
+        data = self[offset:offset+data]
 
         # https://svn.python.org/projects/external/xz-5.0.3/doc/lzma-file-format.txt
         compressed_data = lzma.compress(data, format=lzma.FORMAT_ALONE, filters=[{
@@ -262,17 +173,43 @@ class Patch:
         compressed_data = compressed_data[:5] + struct.pack('<Q', len(data)) + compressed_data[13:]
 
         # Clear the original data
-        firmware[self.offset:self.offset+self.data] = b"\x00" * self.data
+        self[offset:offset+data] = b"\x00" * data
         # Insert the compressed data
-        firmware[self.offset:self.offset+len(compressed_data)] = compressed_data
+        self[offset:offset+len(compressed_data)] = compressed_data
 
         print(f"    compressed {len(data)}->{len(compressed_data)} bytes")
-        if len(compressed_data) != self.size:
-            raise Exception(f"Compressed {len(data)}->{len(compressed_data)} bytes. Expected {self.size}")
+
         return len(compressed_data)
 
+    # TODO: delete these once they're moved to their appropriate places
 
-class Patches(list):
-    def append(self, *args, **kwargs):
-        super().append(Patch(*args, **kwargs))
+    #def lookup(self, firmware):
+    #    if not isinstance(self.data, dict):
+    #        raise ValueError(f"Data must be dict, got {type(self.data)}")
+    #    if self.size is None:
+    #        raise ValueError("Size must not be none")
 
+    #    val = _addr(firmware, self.offset, size=self.size)
+    #    try:
+    #        new_val = self.data[val]
+    #    except KeyError:
+    #        if self.cond(val):
+    #            # This was an expected miss
+    #            return
+    #        else:
+    #            raise KeyError(hex(val))
+    #        print(f"MISSING: {hex(val)}")
+    #        return
+
+    #    firmware[self.offset:self.offset+self.size] = new_val.to_bytes(self.size, "little")
+
+
+class DevicePatchMixin:
+    def move(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
+        dst[dst_offset:dst_offset+size] = src[src_offset:src_offset+size]
+        src.clear_range(src_offset, src_offset + size)
+        return size
+
+    def copy(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
+        dst[dst_offset:dst_offset+size] = src[src_offset:src_offset+size]
+        return size

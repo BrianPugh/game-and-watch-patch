@@ -1,6 +1,12 @@
-from .patch import Patches
 from math import ceil, floor
+from colorama import Fore, Back, Style
 
+def printi(msg, *args):
+    print(Fore.MAGENTA + msg + Style.RESET_ALL, *args)
+def printe(msg, *args):
+    print(Fore.YELLOW + msg + Style.RESET_ALL, *args)
+def printd(msg, *args):
+    print(Fore.BLUE + msg + Style.RESET_ALL, *args)
 
 def _round_down_word(val):
     return (val // 4) * 4
@@ -50,7 +56,7 @@ def add_patch_args(parser):
                         help="Everything in --slim plus remove SMB2. TODO: remove Ball.")
 
 
-def patch_args_validation(parser, args):
+def validate_patch_args(parser, args):
     if args.sleep_time and (args.sleep_time < 1 or args.sleep_time > 1092):
         parser.error("--sleep-time must be in range [1, 1092]")
     if args.mario_song_time and (args.mario_song_time < 1 or args.mario_song_time > 1092):
@@ -105,49 +111,44 @@ def _relocate_external_functions(offset):
 
     return patches
 
-def parse_patches(args):
-    patches = Patches()
-
-    int_addr_start = 0x0800_0000  # TODO: get this from int_firmware
+def apply_patches(args, device):
+    int_addr_start = device.internal.FLASH_BASE
     int_pos_start = 0x1_D000  # TODO: this might change if more custom code is added
     int_pos = int_pos_start
 
-    patches.append("replace", 0x4, "bootloader",
-                   message="Invoke custom bootloader prior to calling stock Reset_Handler")
-    patches.append("bl", 0x6b52, "read_buttons",
-                   message="Intercept button presses for macros")
+    printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
+    device.internal.replace(0x4, "bootloader")
 
-    patches.append("ks_thumb", 0x49e0, "mov.w r1, #0x00000", size=4,
-                   message="Mute clock audio on first boot.")
+    printi("Intercept button presses for macros.")
+    device.internal.bl(0x6b52, "read_buttons")
+
+    printi("Mute clock audio on first boot.")
+    device.internal.asm(0x49e0, "mov.w r1, #0x00000")
 
     if args.debug:
         # Override fault handlers for easier debugging via gdb.
-        patches.append("replace", 0x8, "NMI_Handler")
-        patches.append("replace", 0xC, "HardFault_Handler")
+        printi("Overriding handlers for debugging.")
+        device.internal.replace(0x8, "NMI_Handler")
+        device.internal.replace(0xC, "HardFault_Handler")
 
     if args.hard_reset_time:
         hard_reset_time_ms = int(round(args.hard_reset_time * 1000))
-        patches.append("ks_thumb", 0x9cee, f"movw r1, #{hard_reset_time_ms}", size=4,
-                       message=f"Hold power button for {hard_reset_time_ms} "
-                                "milliseconds to perform hard reset.")
+        printi(f"Hold power button for {hard_reset_time_ms} milliseconds to perform hard reset.")
+        device.internal.asm(0x9cee, f"movw r1, #{hard_reset_time_ms}")
 
     if args.sleep_time:
+        printi(f"Setting sleep time to {args.sleep_time} seconds.")
         sleep_time_frames = _seconds_to_frames(args.sleep_time)
-        patches.append("ks_thumb", 0x6c3c, f"movw r2, #{sleep_time_frames}", size=4,
-                       message=f"Setting sleep time to {args.sleep_time} seconds.")
+        device.internal.asm(0x6c3c, f"movw r2, #{sleep_time_frames}")
 
     if args.disable_sleep:
-        patches.append("replace", 0x6C40, 0x91, size=1,
-                       message=f"Disable sleep timer")
+        printi(f"Disable sleep timer")
+        device.internal.replace(0x6C40, 0x91, size=1)
 
     if args.mario_song_time:
+        printi(f"Setting Mario Song time to {args.mario_song_time} seconds.")
         mario_song_frames = _seconds_to_frames(args.mario_song_time)
-        patches.append("ks_thumb", 0x6fc4, f"cmp.w r0, #{mario_song_frames}", size=4,
-                       message=f"Setting Mario Song time to {args.mario_song_time} seconds.")
-
-    if False:
-        patches.append("ks_thumb", 0x135de, "and r1, r1, #0x7F", size=4,
-                       message="Disable watchdog WWDG.")
+        device.internal.asm(0x6fc4, f"cmp.w r0, #{mario_song_frames}")
 
     if args.slim:
         if args.extended:
@@ -483,13 +484,13 @@ def parse_patches(args):
         patches.append("move", 0x900beda8, offset, size=320,
                        message="Time generic palette [1800, 0400)")
         patches.append("move", 0x900beee8, offset, size=320,
-                        essage="Time underwater palette (between 1200 and 2400 at XX:30)")
+                       message="Time underwater palette (between 1200 and 2400 at XX:30)")
         patches.append("move", 0x900bf028, offset, size=320,
                        message="Time unknown palette")
         patches.append("move", 0x900bf168, offset, size=320,
                        message="Time dawn scene [0500, 0600)")
 
-        # These are 2x uint32_t headers. They are MOSTLY [0x36, 0xF],
+        # These are 2x uint32_t scene headers. They are MOSTLY [0x36, 0xF],
         # but there are a few like [0x30, 0xF] and [0x20, 0xF],
         patches.append("move", 0x900bf2a8, offset, size=45 * 8,
                        message="Scene tilemap headers")
@@ -613,5 +614,3 @@ def parse_patches(args):
         patches.append("add", 0x1_06ec, offset, size=4,
                        message="Updating end of OTFDEC pointer")
         patches.append("shorten", 0x9000_0000, offset)
-
-    return patches

@@ -214,15 +214,16 @@ def apply_patches(args, device):
             device.move_to_int(0xbe60, int_pos, size=11620)
             int_pos += _round_up_word(11620)
 
-        if False:
             # Up to here is fine
             #import ipdb; ipdb.set_trace()
 
             # Starting here I believe are BALL references
-            patches.append("move_to_int", 0x9000_ebc4, int_pos, size=528)
-            patches.append("replace", 0x4154, int_addr_start + int_pos, size=4)
+            device.move_to_int(0xebc4, int_pos, size=528)
+            device.internal.replace(0x4154, int_addr_start + int_pos, size=4)
+            rwdata_add(0xebc4, 528, (int_addr_start + int_pos) - 0x9000_ebc4)
             int_pos += _round_up_word(528)
 
+        if False:
             patches.append("move_to_int", 0x9000_edd4, int_pos, size=100)
             patches.append("replace", 0x4570, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(100)

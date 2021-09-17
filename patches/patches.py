@@ -118,6 +118,17 @@ def apply_patches(args, device):
     int_pos_start = 0x1_D000  # TODO: this might change if more custom code is added
     int_pos = int_pos_start
 
+    def rwdata_add(lower, size, offset):
+        lower += 0x9000_0000
+        upper = lower + size
+
+        for i in range(0, len(device.internal.rwdata), 4):
+            val = int.from_bytes(device.internal.rwdata[i:i+4], 'little')
+            if lower <= val < upper:
+                new_val = val + offset
+                print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
+                device.internal.rwdata[i:i+4] = new_val.to_bytes(4, "little")
+
     printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
     device.internal.replace(0x4, "bootloader")
 
@@ -459,7 +470,6 @@ def apply_patches(args, device):
             device.internal.asm(0x6a0a, f"mov.w r2, #{compressed_len}")
             device.internal.asm(0x6a1e, f"mov.w r3, #{compressed_len}")
 
-    if True:
         # Not sure what this data is
         device.external.move(0xbec58, offset, size=8 * 2)
         device.internal.add(0x1_0964, offset)
@@ -534,8 +544,10 @@ def apply_patches(args, device):
         _relocate_external_functions(device, offset)
 
 
+        # BALL sounds
         device.external.move(0xc34c0, offset, size=6168)
         device.internal.add(0x43ec, offset)
+        rwdata_add(0xc34c0, 6168, offset)
 
         device.external.move(0xc4cd8, offset, size=2984)
         device.internal.add(0x459c, offset)

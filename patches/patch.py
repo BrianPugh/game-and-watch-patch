@@ -57,7 +57,7 @@ class FirmwarePatchMixin:
                 raise ValueError("Must specify \"size\" when providing int data.")
             if data < self.FLASH_BASE:
                 raise ValueError("Data {hex(data)} below FLASH_BASE {hex(self.FLASH_BASE)}.")
-            dst = self.int(self, offset, size=size)
+            dst = self.int(offset, size)
         rel_distance = dst - src
         if rel_distance < 0:
             rel_distance += 0x1_0000_0000
@@ -169,8 +169,8 @@ class FirmwarePatchMixin:
 
         return self.size
 
-    def add(self, offset : int, data : int, size : int) -> int:
-        val = self.int(self, offset, size=size)
+    def add(self, offset : int, data : int, size : int = 4) -> int:
+        val = self.int(offset, size)
         val += data
         self[offset:offset+size] = val.to_bytes(size, "little")
 
@@ -178,7 +178,7 @@ class FirmwarePatchMixin:
 
     def shorten(self, data : int) -> int:
         data = abs(data)
-        if self.data == 0:
+        if data == 0:
             return
 
         self.ENC_LEN -= data
@@ -188,14 +188,14 @@ class FirmwarePatchMixin:
 
         return data
 
-    def compress(self, offset : int, data : int) -> int:
+    def compress(self, offset : int, size : int) -> int:
         """ Apply in-place LZMA compression. """
-        data = self[offset:offset+data]
+        data = self[offset:offset+size]
 
         compressed_data = lzma_compress(data)
 
         # Clear the original data
-        self[offset:offset+data] = b"\x00" * data
+        self.clear_range(offset, offset+size)
         # Insert the compressed data
         self[offset:offset+len(compressed_data)] = compressed_data
 
@@ -235,3 +235,10 @@ class DevicePatchMixin:
     def copy(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
         dst[dst_offset:dst_offset+size] = src[src_offset:src_offset+size]
         return size
+
+    # Convenience methods for move and copy
+    def move_to_int(self, ext_offset:int, int_offset:int, size:int) -> int:
+        return self.move(self.internal, int_offset, self.external, ext_offset, size)
+
+    def copy_to_int(self, ext_offset:int, int_offset:int, size:int) -> int:
+        return self.copy(self.internal, int_offset, self.external, ext_offset, size)

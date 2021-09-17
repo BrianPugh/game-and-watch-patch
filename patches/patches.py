@@ -66,14 +66,13 @@ def validate_patch_args(parser, args):
         args.slim = True
 
 
-def _relocate_external_functions(offset):
+def _relocate_external_functions(device, offset):
     """
     data start: 0x900bfd1c
     fn start: 0x900c0258
     fn end:   0x900c34c0
     fn len: 12904
     """
-    patches = Patches()
 
     references = [
         0x00d330,
@@ -95,21 +94,24 @@ def _relocate_external_functions(offset):
         0x00d340,
         0x00d398,
         0x00d328,
-
-        0x900c1174,
-        0x900c313c,
-        0x900c049c,
-        0x900c1178,
-        0x900c220c,
-        0x900c3490,
-        0x900c3498,
     ]
-    for i, reference in enumerate(references):
-        patches.append("add", reference, offset, size=4,
-                       message=f"Update code references {i} at {hex(reference)}")
-    patches.append("move", 0x900bfd1c, offset, size=14244)
+    for reference in references:
+        device.internal.add(reference, offset)
 
-    return patches
+    references = [
+        0xc1174,
+        0xc313c,
+        0xc049c,
+        0xc1178,
+        0xc220c,
+        0xc3490,
+        0xc3498,
+    ]
+    for reference in references:
+        device.external.add(reference, offset)
+
+    device.external.move(0xbfd1c, offset, size=14244)
+
 
 def apply_patches(args, device):
     int_addr_start = device.internal.FLASH_BASE
@@ -383,55 +385,48 @@ def apply_patches(args, device):
 
         mario_song_len = 0x85e40  # 548,416 bytes
         # This isn't really necessary, but we keep it here because its more explicit.
-        patches.append("replace", 0x9001_2D44, b"\x00" * (mario_song_len),
-                       message="Erasing Mario Song")
+        printe("Erasing Mario Song")
+        device.external.replace(0x1_2D44, b"\x00" * mario_song_len)
         # Note, bytes starting at 0x90012ca4 leading up to the mario song
-        # are also empty.
+        # are also empty. TODO: maybe shift by that much as well.
         offset -= mario_song_len
 
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
         # These index into a palette. TODO: where is the palette
         # Moving this to internal firmware for now as a PoC.
-        compressed_tile_len = 5356
-        patches.append("compress", 0x9009_8b84, 0x1_0000, size=compressed_tile_len,
-                       message="Compress time tiles.")
-        patches.append("bl", 0x678e, "memcpy_inflate")
-        patches.append("move_to_int", 0x9009_8b84, int_pos, size=compressed_tile_len,
-                       message="Moving custom clock graphics to internal firmware.")
-        patches.append("replace", 0x7350, int_addr_start + int_pos, size=4,
-                       message="Update custom clock graphics references")
-        compressed_tile_len = _round_up_word(compressed_tile_len)
-        int_pos += compressed_tile_len
+        printe("Compressing clock graphics")
+        compressed_len = device.external.compress(0x9_8b84, 0x1_0000)
+        device.internal.bl(0x678e, "memcpy_inflate")
+
+        printe("Moving clock graphics to internal firmware")
+        device.move_to_int(0x9_8b84, int_pos, size=compressed_len)
+        device.internal.replace(0x7350, int_addr_start + int_pos, size=4)
+        compressed_len = _round_up_word(compressed_len)
+        int_pos += compressed_len
         offset -= 0x1_0000
+
 
         # Note: the clock uses a different palette; this palette only applies
         # to ingame Super Mario Bros 1 & 2
-        patches.append("move", 0x900a_8b84, offset, size=192,
-                       message="Move NES emulator palette.")
-        patches.append("add", 0xb720, offset, size=4,
-                       message="Update NES emulator palette references.")
+        printe("Moving NES emulator palette.")
+        device.external.move(0xa_8b84, offset, size=192)
+        device.internal.add(0xb720, offset)
 
         # Note: UNKNOWN* represents a block of data that i haven't decoded
         # yet. If you know what the block of data is, please let me know!
-        patches.append("move", 0x900a_8c44, offset, size=8352,
-                       message="Move UNKNOWN1")
-        patches.append("add", 0xbc44, offset, size=4,
-                       message=f"Update UNKNOWN1 references")
+        device.external.move(0xa_8c44, offset, size=8352)
+        device.internal.add(0xbc44, offset)
 
-        #patches.append("move", 0x900a_ace4, offset, size=9088,
-        patches.append("move", 0x900a_ace4, offset, size=9088,
-                       message="Move GAME menu icons 1.")
-        patches.append("add", 0xcea8, offset, size=4,
-                       message=f"Update GAME menu icons references")
+        printe("Moving GAME menu icons 1.")
+        device.external.move(0xa_ace4, offset, size=9088)
+        device.internal.add(0xcea8, offset)
 
-        patches.append("move", 0x900a_d064, offset, size=7040,
-                       message="Move GAME menu icons 2.")
-        patches.append("add", 0xd2f8, offset, size=4,
-                       message=f"Update GAME menu icons references")
+        printe("Moving GAME menu icons 2.")
+        device.external.move(0xa_d064, offset, size=7040)
+        device.internal.add(0xd2f8, offset)
 
-
-        patches.append("move", 0x900a_ebe4, offset, size=116,
-                       message="Move menu stuff (icons? meta?)")
+        printe("Moving menu stuff (icons? meta?)")
+        device.external.move(0xa_ebe4, offset, size=116)
         references = [
             0x0_d010,
             0x0_d004,
@@ -441,64 +436,50 @@ def apply_patches(args, device):
             0x0_d2f0,
         ]
         for i, reference in enumerate(references):
-            patches.append("add", reference, offset, size=4,
-                           message=f"Update menu references {i} at {hex(reference)}")
+            device.internal.add(reference, offset)
+
 
         if args.clock_only:
-            patches.append("replace", 0x900a_ec58, b"\x00" * 65536,
-                           message="Erasing SMB2 ROM")
+            printe("Erasing SMB2 ROM")
+            device.external.replace(0xa_ec58, b"\x00" * 65536,)
             offset -= 65536
         else:
-            compressed_smb2 = 42917
-            patches.append("compress", 0x900a_ec58, 0x1_0000, size=compressed_smb2,
-                           message="Compress SMB2 ROM.")
-            patches.append("bl", 0x6a12, "memcpy_inflate")
-            patches.append("move", 0x900a_ec58, offset, size=compressed_smb2,
-                           message="Move SMB2 rom")
-            patches.append("add", 0x0_7374, offset, size=4,
-                           message="Update SMB2 ROM reference")
-
-            compressed_smb2 = _round_up_word(compressed_smb2)
-            offset -= (65536 - compressed_smb2)  # Move by the space savings.
+            printe("Compressing and moving SMB2 ROM.")
+            compressed_len = device.external.compress(0xa_ec58, 0x1_0000)
+            device.internal.bl(0x6a12, "memcpy_inflate")
+            device.external.move(0xa_ec58, offset, size=compressed_len)
+            device.internal.add(0x7374, offset)
+            compressed_len = _round_up_word(compressed_len)
+            offset -= (65536 - compressed_len)  # Move by the space savings.
 
             # Round to nearest page so that the length can be used as an imm
-            compressed_smb2 = _round_up_page(compressed_smb2)
+            compressed_len = _round_up_page(compressed_len)
 
-            # I think the memcpy code should only be 65536 long.
-            # stock firmware copies 122_880, like halfway into the mario juggling pic
-            patches.append("ks_thumb", 0x6a0a, f"mov.w r2, #{compressed_smb2}", size=4,
-                           message="Fix bug? SMB2 ROM is only 65536 long.")
-            patches.append("ks_thumb", 0x6a1e, f"mov.w r3, #{compressed_smb2}", size=4,
-                           message="Fix bug? SMB2 ROM is only 65536 long.")
+            # Update the length of the compressed data (doesn't matter if its too large)
+            device.internal.asm(0x6a0a, f"mov.w r2, #{compressed_len}")
+            device.internal.asm(0x6a1e, f"mov.w r3, #{compressed_len}")
 
+    if True:
         # Not sure what this data is
-        patches.append("move", 0x900bec58, offset, size=8 * 2,
-                       message="Two sets of uint8_t[8]. Not sure what they represent.")
-        patches.append("add", 0x1_0964, offset, size=4,
-                       message="Two sets of uint8_t[8]. Not sure what they represent.")
+        device.external.move(0xbec58, offset, size=8 * 2)
+        device.internal.add(0x1_0964, offset)
 
-        # I believe these are palettes for different scenes and times of day.
+        printe("Moving Palettes")
         # There are 80 colors, each in BGRA format, where A is always 0
-        patches.append("move", 0x900bec68, offset, size=320,
-                       message="Time generic palette [0600, 1700)")
-        patches.append("move", 0x900beda8, offset, size=320,
-                       message="Time generic palette [1800, 0400)")
-        patches.append("move", 0x900beee8, offset, size=320,
-                       message="Time underwater palette (between 1200 and 2400 at XX:30)")
-        patches.append("move", 0x900bf028, offset, size=320,
-                       message="Time unknown palette")
-        patches.append("move", 0x900bf168, offset, size=320,
-                       message="Time dawn scene [0500, 0600)")
+        device.external.move(0xbec68, offset, size=320)  # Day palette [0600, 1700]
+        device.external.move(0xbeda8, offset, size=320)  # Night palette [1800, 0400)
+        device.external.move(0xbeee8, offset, size=320)  # Underwater palette (between 1200 and 2400 at XX:30)
+        device.external.move(0xbf028, offset, size=320)  # Unknown palette. Maybe bowser castle? need to check...
+        device.external.move(0xbf168, offset, size=320)  # Dawn palette [0500, 0600)
 
         # These are 2x uint32_t scene headers. They are MOSTLY [0x36, 0xF],
         # but there are a few like [0x30, 0xF] and [0x20, 0xF],
-        patches.append("move", 0x900bf2a8, offset, size=45 * 8,
-                       message="Scene tilemap headers")
+        device.external.move(0xbf2a8, offset, size=45 * 8)
 
 
         # IDK what this is.
-        patches.append("move", 0x900bf410, offset, size=144)
-        patches.append("add", 0x1_658c, offset, size=4)
+        device.external.move(0xbf410, offset, size=144)
+        device.internal.add(0x1658c, offset)
 
         # SCENE TABLE
         # Goes in chunks of 20 bytes (5 addresses)
@@ -512,54 +493,55 @@ def apply_patches(args, device):
         #    5. Palette
         #
         # The RLE encoded data could be background tilemap, animation routine, etc.
-        lookup_table_start = 0x900b_f4a0
-        lookup_table_end   = 0x900b_f838
+        lookup_table_start = 0xb_f4a0
+        lookup_table_end   = 0xb_f838
         lookup_table_len   = lookup_table_end - lookup_table_start  # 46 * 5 * 4 = 920
         def cond_post_mario_song(addr):
             # Return True if it's beyond the mario song addr
             return 0x9001_2D44 <= addr
         for addr in range(lookup_table_start, lookup_table_end, 4):
-            patches.append("add", addr, offset, size=4, cond=cond_post_mario_song)
-            if args.extended:
-                patches.append("lookup", addr, palette_lookup, size=4, cond=cond_post_mario_song)
+            if device.external.int(addr) > 0x9001_2D44:
+                # Past Mario Song
+                device.external.add(addr, offset)
+            # TODO: uncomment this for extended
+            #if args.extended:
+            #    patches.append("lookup", addr, palette_lookup, size=4, cond=cond_post_mario_song)
+
         # Now move the table
-        patches.append("move", lookup_table_start, offset, size=lookup_table_len,
-                       message="Moving event lookup table")
-        patches.append("add", 0xdf88, offset, size=4,
-                       message="Updating event lookup table reference")
+        device.external.move(lookup_table_start, offset, size=lookup_table_len)
+        device.internal.add(0xdf88, offset)
+
+        device.external.move(0xbf838, offset, size=280)
+        device.internal.add(0xe8f8, offset)
+        device.internal.add(0xf4ec, offset)
+        device.internal.add(0xf4f8, offset)
+        device.internal.add(0x10098, offset)
+        device.internal.add(0x105b0, offset)
 
 
-        patches.append("move", 0x900bf838, offset, size=280,)
-        patches.append("add", 0xe8f8, offset, size=4)
-        patches.append("add", 0xf4ec, offset, size=4)
-        patches.append("add", 0xf4f8, offset, size=4)
-        patches.append("add", 0x10098, offset, size=4)
-        patches.append("add", 0x105b0, offset, size=4)
+        device.external.move(0xbf950, offset, size=180)
+        device.internal.add(0xe2e4, offset)
+        device.internal.add(0xf4fc, offset)
 
 
-        patches.append("move", 0x900bf950, offset, size=180,)
-        patches.append("add", 0xe2e4, offset, size=4)
-        patches.append("add", 0xf4fc, offset, size=4)
+        device.external.move(0xbfa04, offset, size=8)
+        device.internal.add(0x1_6590, offset)
+
+        device.external.move(0xbfa0c, offset, size=784,)
+        device.internal.add(0x1_0f9c, offset)
 
 
-        patches.append("move", 0x900bfa04, offset, size=8,)
-        patches.append("add", 0x1_6590, offset, size=4)
-
-        patches.append("move", 0x900bfa0c, offset, size=784,)
-        patches.append("add", 0x1_0f9c, offset, size=4)
+        _relocate_external_functions(device, offset)
 
 
-        patches.extend(_relocate_external_functions(offset))
+        device.external.move(0xc34c0, offset, size=6168)
+        device.internal.add(0x43ec, offset)
 
+        device.external.move(0xc4cd8, offset, size=2984)
+        device.internal.add(0x459c, offset)
 
-        patches.append("move", 0x900c34c0, offset, size=6168)
-        patches.append("add", 0x43ec, offset, size=4)
-
-        patches.append("move", 0x900c4cd8, offset, size=2984)
-        patches.append("add", 0x459c, offset, size=4)
-
-        patches.append("move", 0x900c5880, offset, size=120)
-        patches.append("add", 0x4594, offset, size=4)
+        device.external.move(0xc5880, offset, size=120)
+        device.internal.add(0x4594, offset)
 
         # Images Notes:
         #    * In-between images are just zeros.
@@ -571,46 +553,49 @@ def apply_patches(args, device):
         # start: 0x900E_C318   end: 0x900F_4D04    minions sleeping
         #          zero_padded_end: 0x900f_4d18
         # Total Image Length: 193_568 bytes
+        printe("Deleting sleeping images.")
         total_image_length = 193_568
-        patches.append("replace", 0x900c58f8, b"\x00" * total_image_length,
-                       message="Deleting sleeping images")
-        patches.append("replace", 0x1097c, b"\x00"*4*5,
-                       message="Erasing images reference")
+        device.external.replace(0xc58f8, b"\x00" * total_image_length)
+        device.internal.replace(0x1097c, b"\x00"*4*5)  # Erase image references
         offset -= total_image_length
 
 
-        patches.append("move", 0x900f4d18, offset, size=2880)
-        patches.append("add", 0x10960, offset, size=4)
+        device.external.move(0xf4d18, offset, size=2880)
+        device.internal.add(0x10960, offset)
 
 
         # What is this data?
         # The memcpy to this address is all zero, so i guess its not used?
         #patches.append("move", 0x900f5858, offset, size=34728)
         #patches.append("add", 0x7210, offset, size=4)
-        patches.append("replace", 0x900f5858, b"\x00" * 34728)
+        device.external.replace(0xf5858, b"\x00" * 34728)
         offset -= 34728
-
 
         # The last 2 4096 byte blocks represent something in settings.
         # Each only contains 0x50 bytes of data.
-        offset = _round_down_page(offset)
+        # This rounds the negative offset towards zero.
+        offset = _round_up_page(offset)
 
-        patches.append("ks_thumb", 0x4856,
+        printi("Update NVRAM read addresses")
+        device.internal.asm(0x4856,
                  "ite ne; "
                 f"movne.w r4, #{hex(0xff000 + offset)}; "
                 f"moveq.w r4, #{hex(0xfe000 + offset)}",
-                size=10,
-                message="Update NVRAM read addresses"
         )
-        patches.append("ks_thumb", 0x48c0,
+        printi("Update NVRAM write addresses")
+        device.internal.asm(0x48c0,
                  "ite ne; "
                 f"movne.w r4, #{hex(0xff000 + offset)}; "
                 f"moveq.w r4, #{hex(0xfe000 + offset)}",
-                size=10,
-                message="Update NVRAM write addresses"
         )
+
+        if True:
+            # Disable nvram loading
+            # Disable nvram saving
+            #patches.append("ks_thumb", 0x48ba, "bx lr", size=2)
+            pass
 
         # Finally, shorten the firmware
-        patches.append("add", 0x1_06ec, offset, size=4,
-                       message="Updating end of OTFDEC pointer")
-        patches.append("shorten", 0x9000_0000, offset)
+        printi("Updating end of OTFDEC pointer")
+        device.internal.add(0x1_06ec, offset)
+        device.external.shorten(offset)

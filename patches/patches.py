@@ -112,6 +112,19 @@ def _relocate_external_functions(device, offset):
 
     device.external.move(0xbfd1c, offset, size=14244)
 
+def _print_rwdata_ext_references(rwdata):
+    """
+    For debugging/development purposes.
+    """
+    ls = {}
+    for i in range(0, len(rwdata), 4):
+        val = int.from_bytes(rwdata[i:i+4], 'little')
+        if 0x9000_0000 <= val <= 0x9010_0000:
+            ls[val] = i
+    for k, val in sorted(ls.items()):
+        print(f"0x{k:08X}: 0x{val:06X}")
+
+
 
 def apply_patches(args, device):
     int_addr_start = device.internal.FLASH_BASE
@@ -128,6 +141,15 @@ def apply_patches(args, device):
                 new_val = val + offset
                 print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
                 device.internal.rwdata[i:i+4] = new_val.to_bytes(4, "little")
+
+    def rwdata_erase(lower, size):
+        lower += 0x9000_0000
+        upper = lower + size
+
+        for i in range(0, len(device.internal.rwdata), 4):
+            val = int.from_bytes(device.internal.rwdata[i:i+4], 'little')
+            if lower <= val < upper:
+                device.internal.rwdata[i:i+4] = b"\x00\x00\x00\x00"
 
     printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
     device.internal.replace(0x4, "bootloader")
@@ -164,28 +186,37 @@ def apply_patches(args, device):
         device.internal.asm(0x6fc4, f"cmp.w r0, #{mario_song_frames}")
 
     if args.slim:
+        # This is a lazy brute force way of updating some references
+        # TODO: refactor
+        palette_lookup = {}
+
         if args.extended:
-            compressed_len = 5103
-            patches.append("compress", 0x9000_0000, 7772, size=compressed_len)
-            patches.append("bl", 0x665c, "memcpy_inflate")
-            patches.append("move_to_int", 0x9000_0000, int_pos, size=compressed_len)
-            patches.append("replace", 0x7204, int_addr_start + int_pos, size=4)
+            printd("Compressing and moving stuff stuff to internal firmware.")
+            compressed_len = device.external.compress(0x0, 7772)
+            device.internal.bl(0x665c, "memcpy_inflate")
+            device.move_to_int(0x0, int_pos, size=compressed_len)
+            device.internal.replace(0x7204, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(compressed_len)
 
             # SMB1 looks hard to compress since there's so many references.
-            patches.append("move_to_int", 0x9000_1e60, int_pos, size=40960,
-                           message="Move SMB1 to internal firmware.")
-            patches.append("replace", 0x7368, int_addr_start + int_pos, size=4)
-            patches.append("replace", 0x10954, int_addr_start + int_pos, size=4)
-            patches.append("replace", 0x7218, int_addr_start + int_pos + 36864, size=4)
+            printd("Moving SMB1 ROM to internal firmware.")
+            device.move_to_int(0x1e60, int_pos, size=40960)
+            device.internal.replace(0x7368, int_addr_start + int_pos, size=4)
+            device.internal.replace(0x10954, int_addr_start + int_pos, size=4)
+            device.internal.replace(0x7218, int_addr_start + int_pos + 36864, size=4)
             int_pos += _round_up_word(40960)
 
             # I think these are all scenes for the clock, but not 100% sure.
             # The giant lookup table references all these, we could maybe compress
             # each individual scene.
-            internal_scene_start = int_addr_start + int_pos
-            patches.append("move_to_int", 0x9000_be60, int_pos, size=11620)
+            for i in range(0, 11620, 4):
+                palette_lookup[0x9000_be60 + i] = int_addr_start + int_pos + i
+            device.move_to_int(0xbe60, int_pos, size=11620)
             int_pos += _round_up_word(11620)
+
+        if False:
+            # Up to here is fine
+            #import ipdb; ipdb.set_trace()
 
             # Starting here I believe are BALL references
             patches.append("move_to_int", 0x9000_ebc4, int_pos, size=528)
@@ -233,6 +264,7 @@ def apply_patches(args, device):
             patches.append("replace", 0x43f8, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(180)
 
+            # This is the first thing passed into the drawing engine.
             patches.append("move_to_int", 0x9000_f54c, int_pos, size=1100)
             patches.append("replace", 0x43fc, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(1100)
@@ -398,6 +430,7 @@ def apply_patches(args, device):
         # This isn't really necessary, but we keep it here because its more explicit.
         printe("Erasing Mario Song")
         device.external.replace(0x1_2D44, b"\x00" * mario_song_len)
+        rwdata_erase(0x1_2D44, mario_song_len)
         # Note, bytes starting at 0x90012ca4 leading up to the mario song
         # are also empty. TODO: maybe shift by that much as well.
         offset -= mario_song_len
@@ -513,9 +546,8 @@ def apply_patches(args, device):
             if device.external.int(addr) > 0x9001_2D44:
                 # Past Mario Song
                 device.external.add(addr, offset)
-            # TODO: uncomment this for extended
-            #if args.extended:
-            #    patches.append("lookup", addr, palette_lookup, size=4, cond=cond_post_mario_song)
+            elif args.extended and device.external.int(addr) in palette_lookup:
+                device.external.replace(addr, palette_lookup[device.external.int(addr)], size=4)
 
         # Now move the table
         device.external.move(lookup_table_start, offset, size=lookup_table_len)

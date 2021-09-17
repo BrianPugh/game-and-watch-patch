@@ -84,6 +84,7 @@ class IntFirmware(Firmware):
     def compress_rwdata(self):
         """ Compresses and hooks up the rwdata back into the firmware """
         compressed_rwdata = lzma_compress(bytes(self.rwdata))
+        print(f"compressed rwdata {len(self.rwdata)} -> {len(compressed_rwdata)}")
 
         self.clear_range(self.rwdata_addr, self.rwdata_len)
         self.replace(self.rwdata_addr, compressed_rwdata)

@@ -80,11 +80,6 @@ def lz77_decompress(data):
             for _ in range(pattern_len + 2):
                 out.append(out[-offset])
 
-    #for i in range(0, len(out), 4):
-    #    val = int.from_bytes(out[i:i+4], 'little')
-    #    if 0x9000_0000 <= val <= 0x9010_0000:
-    #        print(f"0x{i:06X}: 0x{val:08X}")
-
     return out
 
 

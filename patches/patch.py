@@ -1,6 +1,4 @@
-import struct
 from .compression import lzma_compress
-
 
 
 class FirmwarePatchMixin:
@@ -28,6 +26,7 @@ class FirmwarePatchMixin:
                 raise ValueError("Don't specify size when providing a symbol name.")
             data = self.address(data)
             self[offset:offset+4] = data.to_bytes(4, 'little')
+            n_bytes_patched = 4
         elif isinstance(data, int):
             # must be 1, 2, or 4 bytes
             if size is None:
@@ -35,12 +34,13 @@ class FirmwarePatchMixin:
             if size not in (1, 2, 4):
                 raise ValueError(f"Size must be one of {1, 2, 4}; got {size}")
             self[offset:offset+size] = data.to_bytes(size, 'little')
+            n_bytes_patched = size
         else:
             raise ValueError(f"Don't know how to parse data type \"{data}\"")
 
         return n_bytes_patched
 
-    def relative(self, offset, data, size=None):
+    def relative(self, offset, data, size=None) -> int:
         """
         data
             If str, looks up a function
@@ -59,8 +59,12 @@ class FirmwarePatchMixin:
                 raise ValueError("Data {hex(data)} below FLASH_BASE {hex(self.FLASH_BASE)}.")
             dst = self.int(self, offset, size=size)
         rel_distance = dst - src
-        import ipdb; ipdb.set_trace()
-        print("meow")
+        if rel_distance < 0:
+            rel_distance += 0x1_0000_0000
+
+        print(f"Computed relative distance 0x{rel_distance:08X}")
+
+        return self.replace(offset, rel_distance, size=4)
 
 
     def bl(self, offset : int, data : str) -> int:

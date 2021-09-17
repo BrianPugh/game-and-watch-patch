@@ -137,6 +137,7 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=bootloader \
 		  -Wl,--undefined=read_buttons \
 		  -Wl,--undefined=memcpy_inflate \
+		  -Wl,--undefined=rwdata_inflate \
 		  -Wl,--undefined=NMI_Handler \
 		  -Wl,--undefined=HardFault_Handler \
 
@@ -224,6 +225,9 @@ flash_patched: flash_patched_int flash_patched_ext reset
 flash: flash_patched
 .PHONY: flash
 
+dump:
+	arm-none-eabi-objdump -xDSs build/gw_patch.elf > dump.txt && vim dump.txt
+.PHONY: dump
 
 # Starts openocd and attaches to the target. To be used with 'flash_intflash_nc' and 'gdb'
 openocd:

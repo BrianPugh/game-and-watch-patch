@@ -1,3 +1,4 @@
+import struct
 import lzma
 
 

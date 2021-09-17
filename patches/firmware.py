@@ -5,7 +5,7 @@ from elftools.elf.elffile import ELFFile
 
 from .patch import DevicePatchMixin, FirmwarePatchMixin
 from .exception import InvalidStockRomError, MissingSymbolError
-from .compression import lz77_decompress
+from .compression import lz77_decompress, lzma_compress
 
 class Firmware(FirmwarePatchMixin, bytearray):
 
@@ -80,6 +80,19 @@ class IntFirmware(Firmware):
         h = hashlib.sha1(self).hexdigest()
         if h != self.STOCK_ROM_SHA1_HASH:
             raise InvalidStockRomError
+
+    def compress_rwdata(self):
+        """ Compresses and hooks up the rwdata back into the firmware """
+        compressed_rwdata = lzma_compress(bytes(self.rwdata))
+
+        self.clear_range(self.rwdata_addr, self.rwdata_len)
+        self.replace(self.rwdata_addr, compressed_rwdata)
+
+        table_offset = 0x1_80b4
+        self.relative(table_offset, "rwdata_inflate")
+        import ipdb; ipdb.set_trace()
+        self.replace(table_offset + 8, len(compressed_rwdata) << 1, size=4)
+
 
     def address(self, symbol_name):
         symbols = self.symtab.get_symbol_by_name(symbol_name)

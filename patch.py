@@ -104,6 +104,9 @@ def main():
     Path("build/decrypt_flash_patched.bin").write_bytes(device.external)
     device.external.crypt(device.internal.key, device.internal.nonce)
 
+    # Compress, insert, and reference the modified rwdata
+    device.internal.compress_rwdata()
+
     # Save patched firmware
     args.int_output.write_bytes(device.internal)
     args.ext_output.write_bytes(device.external)

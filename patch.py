@@ -72,7 +72,9 @@ def main():
 
     # Decrypt the external firmware
     device.crypt()
-    # Path("decrypt.bin").write_bytes(device.external)
+
+    # Save the decrypted external firmware for debugging/development purposes.
+    Path("build/decrypt.bin").write_bytes(device.external)
 
     # Copy over novel code
     patch = args.patch.read_bytes()

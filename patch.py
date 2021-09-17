@@ -96,6 +96,9 @@ def main():
     # Erase the extflash vram region
     device.external[-8192:] = b"\x00" * 8192
 
+    # Compress, insert, and reference the modified rwdata
+    device.internal.compress_rwdata()
+
     if args.show:
         # Debug visualization
         device.show()
@@ -104,8 +107,6 @@ def main():
     Path("build/decrypt_flash_patched.bin").write_bytes(device.external)
     device.external.crypt(device.internal.key, device.internal.nonce)
 
-    # Compress, insert, and reference the modified rwdata
-    device.internal.compress_rwdata()
 
     # Save patched firmware
     args.int_output.write_bytes(device.internal)

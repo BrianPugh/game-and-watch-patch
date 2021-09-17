@@ -90,7 +90,6 @@ class IntFirmware(Firmware):
 
         table_offset = 0x1_80b4
         self.relative(table_offset, "rwdata_inflate")
-        import ipdb; ipdb.set_trace()
         self.replace(table_offset + 8, len(compressed_rwdata) << 1, size=4)
 
 

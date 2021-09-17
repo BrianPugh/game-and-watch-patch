@@ -151,6 +151,12 @@ def apply_patches(args, device):
             if lower <= val < upper:
                 device.internal.rwdata[i:i+4] = b"\x00\x00\x00\x00"
 
+    def move_to_int(ext, size, reference):
+        nonlocal int_pos
+        device.move_to_int(ext, int_pos, size=size)
+        device.internal.replace(reference, int_addr_start + int_pos, size=4)
+        int_pos += _round_up_word(size)
+
     printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
     device.internal.replace(0x4, "bootloader")
 
@@ -194,9 +200,7 @@ def apply_patches(args, device):
             printd("Compressing and moving stuff stuff to internal firmware.")
             compressed_len = device.external.compress(0x0, 7772)
             device.internal.bl(0x665c, "memcpy_inflate")
-            device.move_to_int(0x0, int_pos, size=compressed_len)
-            device.internal.replace(0x7204, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(compressed_len)
+            move_to_int(0x0, compressed_len, 0x7204)
 
             # SMB1 looks hard to compress since there's so many references.
             printd("Moving SMB1 ROM to internal firmware.")
@@ -214,19 +218,13 @@ def apply_patches(args, device):
             device.move_to_int(0xbe60, int_pos, size=11620)
             int_pos += _round_up_word(11620)
 
-            # Up to here is fine
-            #import ipdb; ipdb.set_trace()
-
             # Starting here I believe are BALL references
             device.move_to_int(0xebc4, int_pos, size=528)
             device.internal.replace(0x4154, int_addr_start + int_pos, size=4)
             rwdata_add(0xebc4, 528, (int_addr_start + int_pos) - 0x9000_ebc4)
             int_pos += _round_up_word(528)
 
-        if False:
-            patches.append("move_to_int", 0x9000_edd4, int_pos, size=100)
-            patches.append("replace", 0x4570, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(100)
+            move_to_int(0xedd4, 100, 0x4570)
 
             references = {
                 0x9000_ee38: 0x4514,
@@ -235,10 +233,7 @@ def apply_patches(args, device):
                 0x9000_eef8: 0x4524,
             }
             for external, internal in references.items():
-                patches.append("move_to_int", external, int_pos, size=64)
-                patches.append("replace", internal, int_addr_start + int_pos, size=4)
-                int_pos += _round_up_word(64)
-
+                move_to_int(external, 64, internal)
 
             references = [
                 0x2ac,
@@ -252,178 +247,59 @@ def apply_patches(args, device):
                 0x2cc,
                 0x2d0,
             ]
-            patches.append("move_to_int", 0x9000_ef38, int_pos, size=128*10)
+            device.move_to_int(0xef38, int_pos, size=128*10)
             for reference in references:
-                patches.append("replace", reference, int_addr_start + int_pos, size=4)
+                device.internal.replace(reference, int_addr_start + int_pos, size=4)
                 int_pos += _round_up_word(128)
 
-            patches.append("move_to_int", 0x9000_f438, int_pos, size=96)
-            patches.append("replace", 0x456c, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(96)
-
-            patches.append("move_to_int", 0x9000_f498, int_pos, size=180)
-            patches.append("replace", 0x43f8, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(180)
+            move_to_int(0xf438, 96, 0x456c)
+            move_to_int(0xf498, 180, 0x43f8)
 
             # This is the first thing passed into the drawing engine.
-            patches.append("move_to_int", 0x9000_f54c, int_pos, size=1100)
-            patches.append("replace", 0x43fc, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(1100)
+            move_to_int(0xf54c, 1100, 0x43fc)
+            move_to_int(0xf998, 180, 0x4400)
+            move_to_int(0xfa4c, 1136, 0x4404)
+            move_to_int(0xfebc, 864, 0x450c)
+            move_to_int(0x1_021c, 384, 0x4510)
+            move_to_int(0x1_039c, 384, 0x451c)
+            move_to_int(0x1_051c, 384, 0x4410)
+            move_to_int(0x1_069c, 384, 0x44f8)
+            move_to_int(0x1_081c, 384, 0x4500)
+            move_to_int(0x1_099c, 384, 0x4414)
+            move_to_int(0x1_0b1c, 384, 0x44fc)
+            move_to_int(0x1_0c9c, 384, 0x4504)
+            move_to_int(0x1_0e1c, 384, 0x440c)
+            move_to_int(0x1_0f9c, 384, 0x4408)
 
-            patches.append("move_to_int", 0x9000_f998, int_pos, size=180)
-            patches.append("replace", 0x4400, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(180)
+            for i in range(0, 0x9001_2D44 - 0x9001_111c, 4):
+                palette_lookup[0x9001_111c + i] = int_addr_start + int_pos + i
 
-            patches.append("move_to_int", 0x9000_fa4c, int_pos, size=1136)
-            patches.append("replace", 0x4404, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(1136)
+            move_to_int(0x1_111c, 192, 0x44f4)
+            move_to_int(0x1_11dc, 192, 0x4508)
+            move_to_int(0x1_129c, 304, 0x458c)
+            move_to_int(0x1_13cc, 768, 0x4584)
+            move_to_int(0x1_16cc, 1144, 0x4588)
+            move_to_int(0x1_1b44, 768, 0x4534)
+            move_to_int(0x1_1e44, 32, 0x455c)
+            move_to_int(0x1_1e64, 32, 0x4588)
+            move_to_int(0x1_1e84, 32, 0x4554)
+            move_to_int(0x1_1ea4, 32, 0x4560)
+            move_to_int(0x1_1ec4, 32, 0x4564)
+            move_to_int(0x1_1ee4, 64, 0x453c)
+            move_to_int(0x1_1f24, 64, 0x4530)
+            move_to_int(0x1_1f64, 64, 0x4540)
+            move_to_int(0x1_1fa4, 64, 0x4544)
+            move_to_int(0x1_1fe4, 64, 0x4548)
+            move_to_int(0x1_2024, 64, 0x454c)
+            move_to_int(0x1_2064, 64, 0x452c)
+            move_to_int(0x1_20a4, 64, 0x4550)
 
-            patches.append("move_to_int", 0x9000_febc, int_pos, size=864)
-            patches.append("replace", 0x450c, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(864)
+            move_to_int(0x1_20e4, 21 * 96, 0x4574)
+            move_to_int(0x1_28c4, 192, 0x4578)
+            move_to_int(0x1_2984, 640, 0x457c)
+            move_to_int(0x1_2c04, 320, 0x4538)  # I think this is a palette
 
-            patches.append("move_to_int", 0x9001_021c, int_pos, size=384)
-            patches.append("replace", 0x4510, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(384)
-
-            patches.append("move_to_int", 0x9001_039c, int_pos, size=384)
-            patches.append("replace", 0x451c, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(384)
-
-            patches.append("move_to_int", 0x9001_051c, int_pos, size=384)
-            patches.append("replace", 0x4410, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(384)
-
-            patches.append("move_to_int", 0x9001_069c, int_pos, size=384)
-            patches.append("replace", 0x44f8, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(384)
-
-            patches.append("move_to_int", 0x9001_081c, int_pos, size=384)
-            patches.append("replace", 0x4500, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(384)
-
-            patches.append("move_to_int", 0x9001_099c, int_pos, size=384)
-            patches.append("replace", 0x4414, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(384)
-
-            patches.append("move_to_int", 0x9001_0b1c, int_pos, size=384)
-            patches.append("replace", 0x44fc, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(384)
-
-            patches.append("move_to_int", 0x9001_0c9c, int_pos, size=384)
-            patches.append("replace", 0x4504, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(384)
-
-            patches.append("move_to_int", 0x9001_0e1c, int_pos, size=384)
-            patches.append("replace", 0x440c, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(384)
-
-            patches.append("move_to_int", 0x9001_0f9c, int_pos, size=384)
-            patches.append("replace", 0x4408, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(384)
-
-            patches.append("move_to_int", 0x9001_111c, int_pos, size=192)
-            patches.append("replace", 0x44f4, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(192)
-
-            patches.append("move_to_int", 0x9001_11dc, int_pos, size=192)
-            patches.append("replace", 0x4508, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(192)
-
-            patches.append("move_to_int", 0x9001_129c, int_pos, size=304)
-            patches.append("replace", 0x458c, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(304)
-
-            patches.append("move_to_int", 0x9001_13cc, int_pos, size=768)
-            patches.append("replace", 0x4584, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(768)
-
-            patches.append("move_to_int", 0x9001_16cc, int_pos, size=1144)
-            patches.append("replace", 0x4588, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(1144)
-
-            patches.append("move_to_int", 0x9001_1b44, int_pos, size=768)
-            patches.append("replace", 0x4534, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(768)
-
-            patches.append("move_to_int", 0x9001_1e44, int_pos, size=32)
-            patches.append("replace", 0x455c, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(32)
-
-            patches.append("move_to_int", 0x9001_1e64, int_pos, size=32)
-            patches.append("replace", 0x4588, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(32)
-
-            patches.append("move_to_int", 0x9001_1e84, int_pos, size=32)
-            patches.append("replace", 0x4554, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(32)
-
-            patches.append("move_to_int", 0x9001_1ea4, int_pos, size=32)
-            patches.append("replace", 0x4560, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(32)
-
-            patches.append("move_to_int", 0x9001_1ec4, int_pos, size=32)
-            patches.append("replace", 0x4564, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(32)
-
-            patches.append("move_to_int", 0x9001_1ee4, int_pos, size=64)
-            patches.append("replace", 0x453c, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(64)
-
-            patches.append("move_to_int", 0x9001_1f24, int_pos, size=64)
-            patches.append("replace", 0x4530, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(64)
-
-            patches.append("move_to_int", 0x9001_1f64, int_pos, size=64)
-            patches.append("replace", 0x4540, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(64)
-
-            patches.append("move_to_int", 0x9001_1fa4, int_pos, size=64)
-            patches.append("replace", 0x4544, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(64)
-
-            patches.append("move_to_int", 0x9001_1fe4, int_pos, size=64)
-            patches.append("replace", 0x4548, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(64)
-
-            patches.append("move_to_int", 0x9001_2024, int_pos, size=64)
-            patches.append("replace", 0x454c, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(64)
-
-            patches.append("move_to_int", 0x9001_2064, int_pos, size=64)
-            patches.append("replace", 0x452c, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(64)
-
-            patches.append("move_to_int", 0x9001_20a4, int_pos, size=64)
-            patches.append("replace", 0x4550, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(64)
-
-            patches.append("move_to_int", 0x9001_20e4, int_pos, size=2016)
-            patches.append("replace", 0x4574, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(2016)
-
-            patches.append("move_to_int", 0x9001_28c4, int_pos, size=192)
-            patches.append("replace", 0x4578, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(192)
-
-            patches.append("move_to_int", 0x9001_2984, int_pos, size=640)
-            patches.append("replace", 0x457c, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(640)
-
-            patches.append("move_to_int", 0x9001_2c04, int_pos, size=320)
-            patches.append("replace", 0x4538, int_addr_start + int_pos, size=4)
-            int_pos += _round_up_word(320)
-
-            # TODO: fix this
-            #offset = -(int_pos - int_pos_start)
-            #offset = -_round_down_page(int_pos - int_pos_start)
-            #offset = -67000
-            offset = -68000  # Some palette is messed up
-            #offset = -68800
-            #offset = -69000
-            #offset = -69600 # Doesn't work
-            #import ipdb; ipdb.set_trace()
-            #offset = -4096 * 17 # doesn't work
+            offset = -(int_pos - int_pos_start)
         else:
             offset = 0
 
@@ -540,12 +416,8 @@ def apply_patches(args, device):
         lookup_table_start = 0xb_f4a0
         lookup_table_end   = 0xb_f838
         lookup_table_len   = lookup_table_end - lookup_table_start  # 46 * 5 * 4 = 920
-        def cond_post_mario_song(addr):
-            # Return True if it's beyond the mario song addr
-            return 0x9001_2D44 <= addr
         for addr in range(lookup_table_start, lookup_table_end, 4):
-            if device.external.int(addr) > 0x9001_2D44:
-                # Past Mario Song
+            if device.external.int(addr) > 0x9001_2D44:  # Past Mario Song
                 device.external.add(addr, offset)
             elif args.extended and device.external.int(addr) in palette_lookup:
                 device.external.replace(addr, palette_lookup[device.external.int(addr)], size=4)
@@ -561,11 +433,9 @@ def apply_patches(args, device):
         device.internal.add(0x10098, offset)
         device.internal.add(0x105b0, offset)
 
-
         device.external.move(0xbf950, offset, size=180)
         device.internal.add(0xe2e4, offset)
         device.internal.add(0xf4fc, offset)
-
 
         device.external.move(0xbfa04, offset, size=8)
         device.internal.add(0x1_6590, offset)
@@ -573,11 +443,9 @@ def apply_patches(args, device):
         device.external.move(0xbfa0c, offset, size=784,)
         device.internal.add(0x1_0f9c, offset)
 
-
         _relocate_external_functions(device, offset)
 
-
-        # BALL sounds
+        # Some BALL sounds not properly updating when this is moved
         device.external.move(0xc34c0, offset, size=6168)
         device.internal.add(0x43ec, offset)
         rwdata_add(0xc34c0, 6168, offset)
@@ -604,23 +472,16 @@ def apply_patches(args, device):
         device.internal.replace(0x1097c, b"\x00"*4*5)  # Erase image references
         offset -= total_image_length
 
-
         device.external.move(0xf4d18, offset, size=2880)
         device.internal.add(0x10960, offset)
 
-
         # What is this data?
         # The memcpy to this address is all zero, so i guess its not used?
-        #patches.append("move", 0x900f5858, offset, size=34728)
-        #patches.append("add", 0x7210, offset, size=4)
-        device.external.replace(0xf5858, b"\x00" * 34728)
+        device.external.replace(0xf5858, b"\x00" * 34728)  # refence at internal 0x7210
         offset -= 34728
 
-        # The last 2 4096 byte blocks represent something in settings.
-        # Each only contains 0x50 bytes of data.
         # This rounds the negative offset towards zero.
         offset = _round_up_page(offset)
-
         printi("Update NVRAM read addresses")
         device.internal.asm(0x4856,
                  "ite ne; "

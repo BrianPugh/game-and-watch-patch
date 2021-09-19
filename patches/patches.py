@@ -530,3 +530,6 @@ def apply_patches(args, device):
         printi("Updating end of OTFDEC pointer")
         device.internal.add(0x1_06ec, offset)
         device.external.shorten(offset)
+
+    internal_remaining_free = len(device.internal) - int_pos
+    return internal_remaining_free

@@ -93,7 +93,7 @@ def main():
     print("#########################" + Style.RESET_ALL)
 
     # Perform all replacements in stock code.
-    apply_patches(args, device)
+    internal_remaining_free = apply_patches(args, device)
 
     # Erase the extflash vram region
     device.external[-8192:] = b"\x00" * 8192
@@ -116,7 +116,8 @@ def main():
 
     print(Fore.GREEN)
     print( "Binary Patching Complete!")
-    print(f"    Internal Firmware Used: {len(device.internal)} bytes")  # TODO: show free amount
+    print(f"    Internal Firmware Used: {len(device.internal) - internal_remaining_free} bytes")
+    print(f"        Free: {internal_remaining_free} bytes")
     print(f"    External Firmware Used: {len(device.external)} bytes")
     print(Style.RESET_ALL)
 

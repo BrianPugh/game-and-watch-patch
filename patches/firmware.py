@@ -64,6 +64,24 @@ class Firmware(FirmwarePatchMixin, bytearray):
 
         return super().__getitem__(key)
 
+    def __setitem__(self, key, new_val):
+        """ Properly raises index error if trying to access oob regions.
+        """
+
+        if isinstance(key, slice):
+            if key.start is not None:
+                try:
+                    self[key.start]
+                except IndexError:
+                    raise IndexError(f"Index {key.start} ({hex(key.start)}) out of range")
+            if key.stop is not None:
+                try:
+                    self[key.stop - 1]
+                except IndexError:
+                    raise IndexError(f"Index {key.stop - 1} ({hex(key.stop - 1)}) out of range")
+
+        return super().__setitem__(key, new_val)
+
     def int(self, offset : int, size=4):
         return int.from_bytes(self[offset:offset+size], 'little')
 
@@ -105,7 +123,8 @@ class IntFirmware(Firmware):
     FLASH_BASE = 0x08000000
     FLASH_LEN  = 0x00020000
 
-    STOCK_ROM_END = 0x00019300
+    #STOCK_ROM_END = 0x00019300
+    STOCK_ROM_END = 0x000191a0
 
     def __init__(self, firmware, elf):
         super().__init__(firmware)
@@ -130,7 +149,6 @@ class IntFirmware(Firmware):
         compressed_rwdata = lzma_compress(bytes(self.rwdata))
         print(f"compressed rwdata {len(self.rwdata)} -> {len(compressed_rwdata)}")
 
-        self.clear_range(self.rwdata_addr, self.rwdata_len)
         self.replace(self.rwdata_addr, compressed_rwdata)
 
         table_offset = 0x1_80b4

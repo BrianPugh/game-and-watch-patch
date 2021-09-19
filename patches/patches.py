@@ -1,6 +1,8 @@
 from math import ceil, floor
 from colorama import Fore, Back, Style
 
+from .exception import ParsingError
+
 def printi(msg, *args):
     print(Fore.MAGENTA + msg + Style.RESET_ALL, *args)
 def printe(msg, *args):
@@ -126,10 +128,20 @@ def _print_rwdata_ext_references(rwdata):
 
 
 
+def find_free_space(device):
+    # Detect a series of 0xFF to figure out the end of the patch.
+    for addr in range(0x1_AB00, device.internal.FLASH_LEN, 0x10):
+        if device.internal[addr:addr+256]  == b"\xFF" * 256:
+            int_pos_start = addr
+            break
+    else:
+        raise ParsingError("Couldn't find end of internal code.")
+    return int_pos_start
+
 def apply_patches(args, device):
     offset = 0
     int_addr_start = device.internal.FLASH_BASE
-    int_pos_start = 0x1_D000  # TODO: this might change if more custom code is added
+    int_pos_start = find_free_space(device)
     int_pos = int_pos_start
 
     def rwdata_add(lower, size, offset):
@@ -167,7 +179,7 @@ def apply_patches(args, device):
     else:
         def move_ext(ext, size, reference):
             device.external.move(ext, offset, size=size)
-            device.internal.add(reference, offset)
+            device.internal.lookup(reference)
 
     printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
     device.internal.replace(0x4, "bootloader")
@@ -203,10 +215,6 @@ def apply_patches(args, device):
         mario_song_frames = _seconds_to_frames(args.mario_song_time)
         device.internal.asm(0x6fc4, f"cmp.w r0, #{mario_song_frames}")
 
-    # This is a lazy brute force way of updating some references
-    # TODO: refactor
-    palette_lookup = {}
-
     if args.extended:
         printd("Compressing and moving stuff stuff to internal firmware.")
         compressed_len = device.external.compress(0x0, 7772)
@@ -224,8 +232,9 @@ def apply_patches(args, device):
         # I think these are all scenes for the clock, but not 100% sure.
         # The giant lookup table references all these, we could maybe compress
         # each individual scene.
+        # TODO: this might be redundant now.
         for i in range(0, 11620, 4):
-            palette_lookup[0x9000_be60 + i] = int_addr_start + int_pos + i
+            device.lookup[0x9000_be60 + i] = int_addr_start + int_pos + i
         device.move_to_int(0xbe60, int_pos, size=11620)
         int_pos += _round_up_word(11620)
 
@@ -284,7 +293,7 @@ def apply_patches(args, device):
         move_to_int(0x1_0f9c, 384, 0x4408)
 
         for i in range(0, 0x9001_2D44 - 0x9001_111c, 4):
-            palette_lookup[0x9001_111c + i] = int_addr_start + int_pos + i
+            device.lookup[0x9001_111c + i] = int_addr_start + int_pos + i
 
         move_to_int(0x1_111c, 192, 0x44f4)
         move_to_int(0x1_11dc, 192, 0x4508)
@@ -338,8 +347,7 @@ def apply_patches(args, device):
         offset -= 0x1_0000
 
 
-
-    if False and (args.slim or args.extended):
+    if args.slim or args.extended:
         # Note: the clock uses a different palette; this palette only applies
         # to ingame Super Mario Bros 1 & 2
         printe("Moving NES emulator palette.")
@@ -366,14 +374,14 @@ def apply_patches(args, device):
         ]
         if args.extended:
             device.move_to_int(0xa_ebe4, int_pos, size=116)
-            for i, reference in enumerate(references):
-                device.internal.add(reference, int_pos - device.external.FLASH_BASE)
+            for reference in references:
+                #device.internal.add(reference, int_pos - device.external.FLASH_BASE)
+                device.internal.lookup(reference)
             int_pos += _round_up_word(116)
         else:
             device.external.move(0xa_ebe4, offset, size=116)
-            for i, reference in enumerate(references):
+            for reference in references:
                 device.internal.add(reference, offset)
-
 
         if args.clock_only:
             printe("Erasing SMB2 ROM")
@@ -394,12 +402,11 @@ def apply_patches(args, device):
             device.internal.asm(0x6a0a, f"mov.w r2, #{compressed_len}")
             device.internal.asm(0x6a1e, f"mov.w r3, #{compressed_len}")
 
+    if False:
         # Not sure what this data is
         move_ext(0xbec58, 8*2, 0x10964)
 
         printe("Moving Palettes")
-        # TODO: pickup here
-        raise NotImplementedError
         # There are 80 colors, each in BGRA format, where A is always 0
         # These are referenced by the scene table.
         move_ext(0xbec68, 320, None)  # Day palette [0600, 1700]
@@ -432,20 +439,12 @@ def apply_patches(args, device):
         lookup_table_end   = 0xb_f838
         lookup_table_len   = lookup_table_end - lookup_table_start  # 46 * 5 * 4 = 920
         for addr in range(lookup_table_start, lookup_table_end, 4):
-            if args.extended:  # TODO: backwards
-                if device.external.int(addr) > 0x9001_2D44:  # Past Mario Song
-                    device.external.add(addr)
-                    # TODO: simplify everything into a single lookup table
-                    raise NotImplementedError
-                elif device.external.int(addr) in palette_lookup:
-                    device.external.replace(addr, palette_lookup[device.external.int(addr)], size=4)
-            else:
-                if device.external.int(addr) > 0x9001_2D44:  # Past Mario Song
-                    device.external.add(addr, offset)
+            #import ipdb; ipdb.set_trace()
+            #if device.external.int(addr) in device.lookup:
+            device.external.lookup(addr)
 
         # Now move the table
-        device.external.move(lookup_table_start, offset, size=lookup_table_len)
-        device.internal.add(0xdf88, offset)
+        move_ext(lookup_table_start, lookup_table_len, 0xdf88)
 
         device.external.move(0xbf838, offset, size=280)
         device.internal.add(0xe8f8, offset)

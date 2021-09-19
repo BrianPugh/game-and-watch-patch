@@ -132,8 +132,12 @@ class FirmwarePatchMixin:
         self[offset:offset+size] = b"\x00\xbf" * data
         return size
 
-    def move(self, offset : int, data : int, size : int) -> int:
+    def _move_copy(self, offset : int, data : int, size : int, delete : bool) -> int:
         """ Move from offset -> data """
+
+        if not isinstance(self.data, int):
+            raise ValueError(f"Data must be int, got {type(self.data)}")
+
         old_start = offset
         old_end = old_start + size
         new_start = offset + data
@@ -142,36 +146,28 @@ class FirmwarePatchMixin:
         self[new_start:new_end] = self[old_start:old_end]
 
         # Erase old copy
-        if data < 0:
-            if new_end > offset:
-                self.clear_range(new_end, old_end)
+        if delete:
+            if data < 0:
+                if new_end > offset:
+                    self.clear_range(new_end, old_end)
+                else:
+                    self.clear_range(old_start, old_end)
             else:
-                self.clear_range(old_start, old_end)
-        else:
-            if new_start < old_end:
-                self.clear_range(old_start, new_start)
-            else:
-                self.clear_range(old_start, old_end)
+                if new_start < old_end:
+                    self.clear_range(old_start, new_start)
+                else:
+                    self.clear_range(old_start, old_end)
 
-        self._lookup[self.FLASH_BASE + old_start] = self.FLASH_BASE + new_start
+        for i in range(0, size, 4):
+            self._lookup[self.FLASH_BASE + old_start + i] = self.FLASH_BASE + new_start + i
 
         return size
 
-    def copy(self, offset : int, data : int, size : int):
-        """ Copy offset -> data """
+    def move(self, offset : int, data : int, size : int) -> int:
+        return self._move_copy(offset, data, size, True)
 
-        if not isinstance(self.data, int):
-            raise ValueError(f"Data must be int, got {type(self.data)}")
-
-        old_start = self.offset
-        old_end = old_start + size
-        new_start = self.offset + self.data
-        new_end = new_start + size
-        self[new_start:new_end] = self[old_start:old_end]
-
-        self._lookup[self.FLASH_BASE + old_start] = self.FLASH_BASE + new_start
-
-        return self.size
+    def copy(self, offset : int, data : int, size : int) -> int:
+        return self._move_copy(offset, data, size, False)
 
     def add(self, offset : int, data : int, size : int = 4) -> int:
         val = self.int(offset, size)
@@ -213,25 +209,26 @@ class FirmwarePatchMixin:
         try:
             new_val = self._lookup[val]
         except KeyError:
-            raise KeyError(f"0x{val:08X}")
+            raise KeyError(f"0x{val:08X} at offset 0x{offset:08X}")
         self[offset:offset+size] = new_val.to_bytes(size, "little")
 
 
 class DevicePatchMixin:
-    def move(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
+    def _move_copy(self, dst, dst_offset : int, src, src_offset : int, size : int, delete : bool) -> int:
         dst[dst_offset:dst_offset+size] = src[src_offset:src_offset+size]
-        src.clear_range(src_offset, src_offset + size)
+        if delete:
+            src.clear_range(src_offset, src_offset + size)
 
-        self.lookup[src.FLASH_BASE + src_offset] = dst.FLASH_BASE + dst_offset
+        for i in range(0, size, 4):
+            self.lookup[src.FLASH_BASE + src_offset + i] = dst.FLASH_BASE + dst_offset + i
 
         return size
+
+    def move(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
+        return self._move_copy(dst, dst_offset, src, src_offset, size, True)
 
     def copy(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
-        dst[dst_offset:dst_offset+size] = src[src_offset:src_offset+size]
-
-        self.lookup[src.FLASH_BASE + src_offset] = dst.FLASH_BASE + dst_offset
-
-        return size
+        return self._move_copy(dst, dst_offset, src, src_offset, size, False)
 
     # Convenience methods for move and copy
     def move_to_int(self, ext_offset:int, int_offset:int, size:int) -> int:

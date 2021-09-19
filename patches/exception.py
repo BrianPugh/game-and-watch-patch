@@ -7,4 +7,5 @@ class InvalidStockRomError(Exception):
 class InvalidPatchError(Exception):
     """"""
 
-
+class ParsingError(Exception):
+    """"""

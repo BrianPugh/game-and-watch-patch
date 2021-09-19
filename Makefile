@@ -19,10 +19,6 @@ ifneq (,$(findstring --debug, $(PATCH_PARAMS)))
 	C_DEFS += -DDEBUG
 endif
 
-# optimization
-OPT = -Og
-
-
 ADAPTER ?= stlink
 #######################################
 # paths
@@ -118,6 +114,8 @@ CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-
 
 ifeq ($(DEBUG), 1)
 CFLAGS += -g -gdwarf-2 -O0
+else
+CFLAGS += -Os
 endif
 
 # Generate dependency information
@@ -201,7 +199,7 @@ flash_stock_ext: flash_backup.bin
 flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock
 
-$(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin &: $(BUILD_DIR)/$(TARGET).bin patch.py patches/patches.py patches/patch.py
+$(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin &: $(BUILD_DIR)/$(TARGET).bin patch.py $(shell find patches -type f)
 	$(PYTHON) patch.py $(PATCH_PARAMS)
 
 patch: $(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin

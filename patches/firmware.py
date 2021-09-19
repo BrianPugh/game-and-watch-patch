@@ -5,7 +5,7 @@ from elftools.elf.elffile import ELFFile
 from colorama import Fore, Back, Style
 
 from .patch import DevicePatchMixin, FirmwarePatchMixin
-from .exception import InvalidStockRomError, MissingSymbolError
+from .exception import InvalidStockRomError, MissingSymbolError, NotEnoughSpaceError
 from .compression import lz77_decompress, lzma_compress
 
 
@@ -73,12 +73,12 @@ class Firmware(FirmwarePatchMixin, bytearray):
                 try:
                     self[key.start]
                 except IndexError:
-                    raise IndexError(f"Index {key.start} ({hex(key.start)}) out of range")
+                    raise NotEnoughSpaceError(f"Starting index {key.start} ({hex(key.start)}) exceeds firmware length {len(self)} ({hex(len(self))})")
             if key.stop is not None:
                 try:
                     self[key.stop - 1]
                 except IndexError:
-                    raise IndexError(f"Index {key.stop - 1} ({hex(key.stop - 1)}) out of range")
+                    raise NotEnoughSpaceError(f"Ending index {key.stop - 1} ({hex(key.stop - 1)}) exceeds firmware length {len(self)} ({hex(len(self))})")
 
         return super().__setitem__(key, new_val)
 

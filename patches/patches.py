@@ -129,18 +129,19 @@ def apply_patches(args, device):
         int_pos += _round_up_word(size)
         return new_loc
 
-    if args.extended:
-        def move_ext(ext, size, reference):
-            nonlocal offset
-            new_loc = move_to_int(ext, size, reference)
-            offset -= size
-            return new_loc
-    else:
-        def move_ext(ext, size, reference):
-            device.external.move(ext, offset, size=size)
-            device.internal.lookup(reference)
-            new_loc = ext + offset
-            return new_loc
+    def move_ext_external(ext, size, reference):
+        device.external.move(ext, offset, size=size)
+        device.internal.lookup(reference)
+        new_loc = ext + offset
+        return new_loc
+
+    def move_ext_extended(ext, size, reference):
+        nonlocal offset
+        new_loc = move_to_int(ext, size, reference)
+        offset -= size
+        return new_loc
+
+    move_ext = move_ext_extended if args.extended else move_ext_external
 
     printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
     device.internal.replace(0x4, "bootloader")

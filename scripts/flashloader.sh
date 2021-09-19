@@ -8,7 +8,6 @@ MAGIC="0xdeadbeef"
 ERASE=1
 IMAGE=$2
 objdump=${OBJDUMP:-arm-none-eabi-objdump}
-OPENOCD=openocd
 
 function get_symbol {
 	name=$1

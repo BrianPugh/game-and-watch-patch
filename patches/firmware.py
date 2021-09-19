@@ -2,10 +2,34 @@ import hashlib
 
 from Crypto.Cipher import AES
 from elftools.elf.elffile import ELFFile
+from colorama import Fore, Back, Style
 
 from .patch import DevicePatchMixin, FirmwarePatchMixin
 from .exception import InvalidStockRomError, MissingSymbolError
 from .compression import lz77_decompress, lzma_compress
+
+
+def _val_to_color(val):
+    if 0x9010_0000 > val >= 0x9000_0000:
+        return Fore.YELLOW
+    elif 0x0804_0000 > val >= 0x0800_0000:
+        return Fore.MAGENTA
+    else:
+        return ""
+
+class Lookup(dict):
+    def __repr__(self):
+        substrs = []
+        substrs.append("{")
+        for k, v in sorted(self.items()):
+            k_color = _val_to_color(k)
+            v_color = _val_to_color(v)
+
+            substrs.append(f"    {k_color}0x{k:08X}{Style.RESET_ALL}: "
+                           f"{v_color}0x{v:08X}{Style.RESET_ALL},"
+                           )
+        substrs.append("}")
+        return "\n".join(substrs)
 
 
 class Firmware(FirmwarePatchMixin, bytearray):
@@ -19,6 +43,7 @@ class Firmware(FirmwarePatchMixin, bytearray):
             firmware_data = f.read()
 
         super().__init__(firmware_data)
+        self._lookup = Lookup()
         self._verify()
 
     def __getitem__(self, key):
@@ -186,6 +211,11 @@ class Device(DevicePatchMixin):
     def __init__(self, internal, external):
         self.internal = internal
         self.external = external
+
+        self.lookup = Lookup()
+        self.internal._lookup = self.lookup
+        self.external._lookup = self.lookup
+
 
     def crypt(self):
         self.external.crypt(self.internal.key, self.internal.nonce)

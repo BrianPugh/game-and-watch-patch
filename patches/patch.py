@@ -1,6 +1,5 @@
 from .compression import lzma_compress
 
-lookup = {}
 
 class FirmwarePatchMixin:
     """ Patch commands that apply to a single firmware instance.
@@ -154,7 +153,7 @@ class FirmwarePatchMixin:
             else:
                 self.clear_range(old_start, old_end)
 
-        lookup[self.FLASH_BASE + old_start] = self.FLASH_BASE + new_start
+        self._lookup[self.FLASH_BASE + old_start] = self.FLASH_BASE + new_start
 
         return size
 
@@ -170,7 +169,7 @@ class FirmwarePatchMixin:
         new_end = new_start + size
         self[new_start:new_end] = self[old_start:old_end]
 
-        lookup[self.FLASH_BASE + old_start] = self.FLASH_BASE + new_start
+        self._lookup[self.FLASH_BASE + old_start] = self.FLASH_BASE + new_start
 
         return self.size
 
@@ -212,29 +211,25 @@ class FirmwarePatchMixin:
         size = 4
         val = self.int(offset, size)
         try:
-            new_val = lookup[val]
+            new_val = self._lookup[val]
         except KeyError:
             raise KeyError(f"0x{val:08X}")
         self[offset:offset+size] = new_val.to_bytes(size, "little")
 
 
 class DevicePatchMixin:
-    @property
-    def lookup(self):
-        return lookup
-
     def move(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
         dst[dst_offset:dst_offset+size] = src[src_offset:src_offset+size]
         src.clear_range(src_offset, src_offset + size)
 
-        lookup[src.FLASH_BASE + src_offset] = dst.FLASH_BASE + dst_offset
+        self.lookup[src.FLASH_BASE + src_offset] = dst.FLASH_BASE + dst_offset
 
         return size
 
     def copy(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
         dst[dst_offset:dst_offset+size] = src[src_offset:src_offset+size]
 
-        lookup[src.FLASH_BASE + src_offset] = dst.FLASH_BASE + dst_offset
+        self.lookup[src.FLASH_BASE + src_offset] = dst.FLASH_BASE + dst_offset
 
         return size
 

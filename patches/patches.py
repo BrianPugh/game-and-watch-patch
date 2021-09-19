@@ -457,16 +457,15 @@ def apply_patches(args, device):
         device.internal.replace(0x1097c, b"\x00"*4*5)  # Erase image references
         offset -= total_image_length
 
-    # Shorten the external firmware
 
-    device.external.move(0xf4d18, offset, size=2880)
-    device.internal.add(0x10960, offset)
+    move_ext(0xf4d18, 2880, 0x10960)
 
     # What is this data?
     # The memcpy to this address is all zero, so i guess its not used?
     device.external.replace(0xf5858, b"\x00" * 34728)  # refence at internal 0x7210
     offset -= 34728
 
+    # Shorten the external firmware
     # This rounds the negative offset towards zero.
     offset = _round_up_page(offset)
     printi("Update NVRAM read addresses")

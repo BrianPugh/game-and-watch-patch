@@ -67,52 +67,6 @@ def validate_patch_args(parser, args):
         args.slim = True
 
 
-def _relocate_external_functions(device, offset):
-    """
-    data start: 0x900bfd1c
-    fn start: 0x900c0258
-    fn end:   0x900c34c0
-    fn len: 12904
-    """
-
-    references = [
-        0x00d330,
-        0x00d310,
-        0x00d308,
-        0x00d338,
-        0x00d348,
-        0x00d360,
-        0x00d368,
-        0x00d388,
-        0x00d358,
-        0x00d320,
-        0x00d350,
-        0x00d380,
-        0x00d378,
-        0x00d318,
-        0x00d390,
-        0x00d370,
-        0x00d340,
-        0x00d398,
-        0x00d328,
-    ]
-    for reference in references:
-        device.internal.add(reference, offset)
-
-    references = [
-        0xc1174,
-        0xc313c,
-        0xc049c,
-        0xc1178,
-        0xc220c,
-        0xc3490,
-        0xc3498,
-    ]
-    for reference in references:
-        device.external.add(reference, offset)
-
-    device.external.move(0xbfd1c, offset, size=14244)
-
 def _print_rwdata_ext_references(rwdata):
     """
     For debugging/development purposes.
@@ -143,18 +97,21 @@ def apply_patches(args, device):
     int_pos_start = find_free_space(device)
     int_pos = int_pos_start
 
-    def rwdata_add(lower, size, offset):
+    def rwdata_lookup(lower, size):
         lower += 0x9000_0000
         upper = lower + size
 
         for i in range(0, len(device.internal.rwdata), 4):
             val = int.from_bytes(device.internal.rwdata[i:i+4], 'little')
             if lower <= val < upper:
-                new_val = val + offset
+                new_val = device.lookup[val]
                 print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
                 device.internal.rwdata[i:i+4] = new_val.to_bytes(4, "little")
 
     def rwdata_erase(lower, size):
+        """
+        Erasing no longer used references makes it compress better.
+        """
         lower += 0x9000_0000
         upper = lower + size
 
@@ -168,17 +125,22 @@ def apply_patches(args, device):
         device.move_to_int(ext, int_pos, size=size)
         if reference is not None:
             device.internal.lookup(reference)
+        new_loc = int_pos
         int_pos += _round_up_word(size)
+        return new_loc
 
     if args.extended:
         def move_ext(ext, size, reference):
             nonlocal offset
-            move_to_int(ext, size, reference)
+            new_loc = move_to_int(ext, size, reference)
             offset -= size
+            return new_loc
     else:
         def move_ext(ext, size, reference):
             device.external.move(ext, offset, size=size)
             device.internal.lookup(reference)
+            new_loc = ext + offset
+            return new_loc
 
     printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
     device.internal.replace(0x4, "bootloader")
@@ -237,7 +199,7 @@ def apply_patches(args, device):
         # Starting here are BALL references
         device.move_to_int(0xebc4, int_pos, size=528)
         device.internal.replace(0x4154, int_addr_start + int_pos, size=4)
-        rwdata_add(0xebc4, 528, (int_addr_start + int_pos) - 0x9000_ebc4)
+        rwdata_lookup(0xebc4, 528)
         int_pos += _round_up_word(528)
 
         move_to_int(0xedd4, 100, 0x4570)
@@ -286,10 +248,6 @@ def apply_patches(args, device):
         move_to_int(0x1_0c9c, 384, 0x4504)
         move_to_int(0x1_0e1c, 384, 0x440c)
         move_to_int(0x1_0f9c, 384, 0x4408)
-
-        for i in range(0, 0x9001_2D44 - 0x9001_111c, 4):
-            device.lookup[0x9001_111c + i] = int_addr_start + int_pos + i
-
         move_to_int(0x1_111c, 192, 0x44f4)
         move_to_int(0x1_11dc, 192, 0x4508)
         move_to_int(0x1_129c, 304, 0x458c)
@@ -429,37 +387,67 @@ def apply_patches(args, device):
         # Now move the table
         move_ext(lookup_table_start, lookup_table_len, 0xdf88)
 
-    if False:
-        #move_ext(0xbf838, 280, None)
-        device.external.move(0xbf838, offset, size=280)
-        device.internal.add(0xe8f8, offset)
-        device.internal.add(0xf4ec, offset)
-        device.internal.add(0xf4f8, offset)
-        device.internal.add(0x10098, offset)
-        device.internal.add(0x105b0, offset)
+        # Not sure what this is
+        references = [
+            0xe8f8,
+            0xf4ec,
+            0xf4f8,
+            0x10098,
+            0x105b0,
+        ]
+        move_ext(0xbf838, 280, references)
 
-        device.external.move(0xbf950, offset, size=180)
-        device.internal.add(0xe2e4, offset)
-        device.internal.add(0xf4fc, offset)
+        move_ext(0xbf950, 180, [0xe2e4, 0xf4fc])
+        move_ext(0xbfa04, 8, 0x1_6590)
+        move_ext(0xbfa0c, 784, 0x1_0f9c)
 
-        device.external.move(0xbfa04, offset, size=8)
-        device.internal.add(0x1_6590, offset)
+        # MOVE EXTERNAL FUNCTIONS
+        new_loc = move_ext(0xb_fd1c, 14244, None)
+        references = [  # internal references to external functions
+            0x00d330,
+            0x00d310,
+            0x00d308,
+            0x00d338,
+            0x00d348,
+            0x00d360,
+            0x00d368,
+            0x00d388,
+            0x00d358,
+            0x00d320,
+            0x00d350,
+            0x00d380,
+            0x00d378,
+            0x00d318,
+            0x00d390,
+            0x00d370,
+            0x00d340,
+            0x00d398,
+            0x00d328,
+        ]
+        for reference in references:
+            device.internal.lookup(reference)
 
-        device.external.move(0xbfa0c, offset, size=784,)
-        device.internal.add(0x1_0f9c, offset)
-
-        _relocate_external_functions(device, offset)
+        references = [  # external references to external functions
+            0xc_1174,
+            0xc_313c,
+            0xc_049c,
+            0xc_1178,
+            0xc_220c,
+            0xc_3490,
+            0xc_3498,
+        ]
+        for reference in references:
+            reference = reference - 0xb_fd1c + new_loc
+            if args.extended:
+                device.internal.lookup(reference)
+            else:
+                device.external.lookup(reference)
 
         # BALL sound samples.
-        device.external.move(0xc34c0, offset, size=6168)
-        device.internal.add(0x43ec, offset)
-        rwdata_add(0xc34c0, 6168, offset)
-
-        device.external.move(0xc4cd8, offset, size=2984)
-        device.internal.add(0x459c, offset)
-
-        device.external.move(0xc5880, offset, size=120)
-        device.internal.add(0x4594, offset)
+        move_ext(0xc34c0, 6168, 0x43ec)
+        rwdata_lookup(0xc34c0, 6168)
+        move_ext(0xc4cd8, 2984, 0x459c)
+        move_ext(0xc5880, 120, 0x4594)
 
     if args.slim or args.extended:
         # Images Notes:
@@ -479,7 +467,7 @@ def apply_patches(args, device):
         offset -= total_image_length
 
 
-    if False and (args.slim or args.extended):
+    if args.slim or args.extended:
         # Shorten the external firmware
 
         device.external.move(0xf4d18, offset, size=2880)

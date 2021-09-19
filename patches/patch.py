@@ -135,8 +135,8 @@ class FirmwarePatchMixin:
     def _move_copy(self, offset : int, data : int, size : int, delete : bool) -> int:
         """ Move from offset -> data """
 
-        if not isinstance(self.data, int):
-            raise ValueError(f"Data must be int, got {type(self.data)}")
+        if not isinstance(data, int):
+            raise ValueError(f"Data must be int, got {type(data)}")
 
         old_start = offset
         old_end = old_start + size
@@ -158,7 +158,7 @@ class FirmwarePatchMixin:
                 else:
                     self.clear_range(old_start, old_end)
 
-        for i in range(0, size, 4):
+        for i in range(size):
             self._lookup[self.FLASH_BASE + old_start + i] = self.FLASH_BASE + new_start + i
 
         return size
@@ -224,7 +224,7 @@ class DevicePatchMixin:
         if delete:
             src.clear_range(src_offset, src_offset + size)
 
-        for i in range(0, size, 4):
+        for i in range(size):
             self.lookup[src.FLASH_BASE + src_offset + i] = dst.FLASH_BASE + dst_offset + i
 
         return size

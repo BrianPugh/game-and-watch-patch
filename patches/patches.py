@@ -127,6 +127,7 @@ def _print_rwdata_ext_references(rwdata):
 
 
 def apply_patches(args, device):
+    offset = 0
     int_addr_start = device.internal.FLASH_BASE
     int_pos_start = 0x1_D000  # TODO: this might change if more custom code is added
     int_pos = int_pos_start
@@ -154,8 +155,19 @@ def apply_patches(args, device):
     def move_to_int(ext, size, reference):
         nonlocal int_pos
         device.move_to_int(ext, int_pos, size=size)
-        device.internal.replace(reference, int_addr_start + int_pos, size=4)
+        if reference is not None:
+            device.internal.lookup(reference)
         int_pos += _round_up_word(size)
+
+    if args.extended:
+        def move_ext(ext, size, reference):
+            nonlocal offset
+            move_to_int(ext, size, reference)
+            offset -= size
+    else:
+        def move_ext(ext, size, reference):
+            device.external.move(ext, offset, size=size)
+            device.internal.add(reference, offset)
 
     printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
     device.internal.replace(0x4, "bootloader")
@@ -191,118 +203,117 @@ def apply_patches(args, device):
         mario_song_frames = _seconds_to_frames(args.mario_song_time)
         device.internal.asm(0x6fc4, f"cmp.w r0, #{mario_song_frames}")
 
-    if args.slim:
-        # This is a lazy brute force way of updating some references
-        # TODO: refactor
-        palette_lookup = {}
+    # This is a lazy brute force way of updating some references
+    # TODO: refactor
+    palette_lookup = {}
 
-        if args.extended:
-            printd("Compressing and moving stuff stuff to internal firmware.")
-            compressed_len = device.external.compress(0x0, 7772)
-            device.internal.bl(0x665c, "memcpy_inflate")
-            move_to_int(0x0, compressed_len, 0x7204)
+    if args.extended:
+        printd("Compressing and moving stuff stuff to internal firmware.")
+        compressed_len = device.external.compress(0x0, 7772)
+        device.internal.bl(0x665c, "memcpy_inflate")
+        move_to_int(0x0, compressed_len, 0x7204)
 
-            # SMB1 looks hard to compress since there's so many references.
-            printd("Moving SMB1 ROM to internal firmware.")
-            device.move_to_int(0x1e60, int_pos, size=40960)
-            device.internal.replace(0x7368, int_addr_start + int_pos, size=4)
-            device.internal.replace(0x10954, int_addr_start + int_pos, size=4)
-            device.internal.replace(0x7218, int_addr_start + int_pos + 36864, size=4)
-            int_pos += _round_up_word(40960)
+        # SMB1 looks hard to compress since there's so many references.
+        printd("Moving SMB1 ROM to internal firmware.")
+        device.move_to_int(0x1e60, int_pos, size=40960)
+        device.internal.replace(0x7368, int_addr_start + int_pos, size=4)
+        device.internal.replace(0x10954, int_addr_start + int_pos, size=4)
+        device.internal.replace(0x7218, int_addr_start + int_pos + 36864, size=4)
+        int_pos += _round_up_word(40960)
 
-            # I think these are all scenes for the clock, but not 100% sure.
-            # The giant lookup table references all these, we could maybe compress
-            # each individual scene.
-            for i in range(0, 11620, 4):
-                palette_lookup[0x9000_be60 + i] = int_addr_start + int_pos + i
-            device.move_to_int(0xbe60, int_pos, size=11620)
-            int_pos += _round_up_word(11620)
+        # I think these are all scenes for the clock, but not 100% sure.
+        # The giant lookup table references all these, we could maybe compress
+        # each individual scene.
+        for i in range(0, 11620, 4):
+            palette_lookup[0x9000_be60 + i] = int_addr_start + int_pos + i
+        device.move_to_int(0xbe60, int_pos, size=11620)
+        int_pos += _round_up_word(11620)
 
-            # Starting here I believe are BALL references
-            device.move_to_int(0xebc4, int_pos, size=528)
-            device.internal.replace(0x4154, int_addr_start + int_pos, size=4)
-            rwdata_add(0xebc4, 528, (int_addr_start + int_pos) - 0x9000_ebc4)
-            int_pos += _round_up_word(528)
+        # Starting here I believe are BALL references
+        device.move_to_int(0xebc4, int_pos, size=528)
+        device.internal.replace(0x4154, int_addr_start + int_pos, size=4)
+        rwdata_add(0xebc4, 528, (int_addr_start + int_pos) - 0x9000_ebc4)
+        int_pos += _round_up_word(528)
 
-            move_to_int(0xedd4, 100, 0x4570)
+        move_to_int(0xedd4, 100, 0x4570)
 
-            references = {
-                0x9000_ee38: 0x4514,
-                0x9000_ee78: 0x4518,
-                0x9000_eeb8: 0x4520,
-                0x9000_eef8: 0x4524,
-            }
-            for external, internal in references.items():
-                move_to_int(external, 64, internal)
+        references = {
+            0xee38: 0x4514,
+            0xee78: 0x4518,
+            0xeeb8: 0x4520,
+            0xeef8: 0x4524,
+        }
+        for external, internal in references.items():
+            move_to_int(external, 64, internal)
 
-            references = [
-                0x2ac,
-                0x2b0,
-                0x2b4,
-                0x2b8,
-                0x2bc,
-                0x2c0,
-                0x2c4,
-                0x2c8,
-                0x2cc,
-                0x2d0,
-            ]
-            device.move_to_int(0xef38, int_pos, size=128*10)
-            for reference in references:
-                device.internal.replace(reference, int_addr_start + int_pos, size=4)
-                int_pos += _round_up_word(128)
+        references = [
+            0x2ac,
+            0x2b0,
+            0x2b4,
+            0x2b8,
+            0x2bc,
+            0x2c0,
+            0x2c4,
+            0x2c8,
+            0x2cc,
+            0x2d0,
+        ]
+        device.move_to_int(0xef38, int_pos, size=128*10)
+        for reference in references:
+            device.internal.replace(reference, int_addr_start + int_pos, size=4)
+            int_pos += _round_up_word(128)
 
-            move_to_int(0xf438, 96, 0x456c)
-            move_to_int(0xf498, 180, 0x43f8)
+        # GOOD
+        move_to_int(0xf438, 96, 0x456c)
+        move_to_int(0xf498, 180, 0x43f8)
 
-            # This is the first thing passed into the drawing engine.
-            move_to_int(0xf54c, 1100, 0x43fc)
-            move_to_int(0xf998, 180, 0x4400)
-            move_to_int(0xfa4c, 1136, 0x4404)
-            move_to_int(0xfebc, 864, 0x450c)
-            move_to_int(0x1_021c, 384, 0x4510)
-            move_to_int(0x1_039c, 384, 0x451c)
-            move_to_int(0x1_051c, 384, 0x4410)
-            move_to_int(0x1_069c, 384, 0x44f8)
-            move_to_int(0x1_081c, 384, 0x4500)
-            move_to_int(0x1_099c, 384, 0x4414)
-            move_to_int(0x1_0b1c, 384, 0x44fc)
-            move_to_int(0x1_0c9c, 384, 0x4504)
-            move_to_int(0x1_0e1c, 384, 0x440c)
-            move_to_int(0x1_0f9c, 384, 0x4408)
+        # This is the first thing passed into the drawing engine.
+        move_to_int(0xf54c, 1100, 0x43fc)
+        move_to_int(0xf998, 180, 0x4400)
+        move_to_int(0xfa4c, 1136, 0x4404)
+        move_to_int(0xfebc, 864, 0x450c)
+        move_to_int(0x1_021c, 384, 0x4510)
+        move_to_int(0x1_039c, 384, 0x451c)
+        move_to_int(0x1_051c, 384, 0x4410)
+        move_to_int(0x1_069c, 384, 0x44f8)
+        move_to_int(0x1_081c, 384, 0x4500)
+        move_to_int(0x1_099c, 384, 0x4414)
+        move_to_int(0x1_0b1c, 384, 0x44fc)
+        move_to_int(0x1_0c9c, 384, 0x4504)
+        move_to_int(0x1_0e1c, 384, 0x440c)
+        move_to_int(0x1_0f9c, 384, 0x4408)
 
-            for i in range(0, 0x9001_2D44 - 0x9001_111c, 4):
-                palette_lookup[0x9001_111c + i] = int_addr_start + int_pos + i
+        for i in range(0, 0x9001_2D44 - 0x9001_111c, 4):
+            palette_lookup[0x9001_111c + i] = int_addr_start + int_pos + i
 
-            move_to_int(0x1_111c, 192, 0x44f4)
-            move_to_int(0x1_11dc, 192, 0x4508)
-            move_to_int(0x1_129c, 304, 0x458c)
-            move_to_int(0x1_13cc, 768, 0x4584)
-            move_to_int(0x1_16cc, 1144, 0x4588)
-            move_to_int(0x1_1b44, 768, 0x4534)
-            move_to_int(0x1_1e44, 32, 0x455c)
-            move_to_int(0x1_1e64, 32, 0x4588)
-            move_to_int(0x1_1e84, 32, 0x4554)
-            move_to_int(0x1_1ea4, 32, 0x4560)
-            move_to_int(0x1_1ec4, 32, 0x4564)
-            move_to_int(0x1_1ee4, 64, 0x453c)
-            move_to_int(0x1_1f24, 64, 0x4530)
-            move_to_int(0x1_1f64, 64, 0x4540)
-            move_to_int(0x1_1fa4, 64, 0x4544)
-            move_to_int(0x1_1fe4, 64, 0x4548)
-            move_to_int(0x1_2024, 64, 0x454c)
-            move_to_int(0x1_2064, 64, 0x452c)
-            move_to_int(0x1_20a4, 64, 0x4550)
+        move_to_int(0x1_111c, 192, 0x44f4)
+        move_to_int(0x1_11dc, 192, 0x4508)
+        move_to_int(0x1_129c, 304, 0x458c)
+        move_to_int(0x1_13cc, 768, 0x4584)  # BALL logo tile idx tight
+        move_to_int(0x1_16cc, 1144, 0x4588)
+        move_to_int(0x1_1b44, 768, 0x4534)
+        move_to_int(0x1_1e44, 32, 0x455c)
+        move_to_int(0x1_1e64, 32, 0x4558)
+        move_to_int(0x1_1e84, 32, 0x4554)
+        move_to_int(0x1_1ea4, 32, 0x4560)
+        move_to_int(0x1_1ec4, 32, 0x4564)
+        move_to_int(0x1_1ee4, 64, 0x453c)
+        move_to_int(0x1_1f24, 64, 0x4530)
+        move_to_int(0x1_1f64, 64, 0x4540)
+        move_to_int(0x1_1fa4, 64, 0x4544)
+        move_to_int(0x1_1fe4, 64, 0x4548)
+        move_to_int(0x1_2024, 64, 0x454c)
+        move_to_int(0x1_2064, 64, 0x452c)
+        move_to_int(0x1_20a4, 64, 0x4550)
 
-            move_to_int(0x1_20e4, 21 * 96, 0x4574)
-            move_to_int(0x1_28c4, 192, 0x4578)
-            move_to_int(0x1_2984, 640, 0x457c)
-            move_to_int(0x1_2c04, 320, 0x4538)  # I think this is a palette
+        move_to_int(0x1_20e4, 21 * 96, 0x4574)
+        move_to_int(0x1_28c4, 192, 0x4578)
+        move_to_int(0x1_2984, 640, 0x457c)
+        move_to_int(0x1_2c04, 320, 0x4538)  # I think this is a palette
 
-            offset = -(int_pos - int_pos_start)
-        else:
-            offset = 0
+        offset = -(int_pos - int_pos_start)
 
+    if args.slim or args.extended:
         mario_song_len = 0x85e40  # 548,416 bytes
         # This isn't really necessary, but we keep it here because its more explicit.
         printe("Erasing Mario Song")
@@ -327,27 +338,24 @@ def apply_patches(args, device):
         offset -= 0x1_0000
 
 
+
+    if False and (args.slim or args.extended):
         # Note: the clock uses a different palette; this palette only applies
         # to ingame Super Mario Bros 1 & 2
         printe("Moving NES emulator palette.")
-        device.external.move(0xa_8b84, offset, size=192)
-        device.internal.add(0xb720, offset)
+        move_ext(0xa_8b84, 192, 0xb720)
 
         # Note: UNKNOWN* represents a block of data that i haven't decoded
         # yet. If you know what the block of data is, please let me know!
-        device.external.move(0xa_8c44, offset, size=8352)
-        device.internal.add(0xbc44, offset)
+        move_ext(0xa_8c44, 8352, 0xbc44)
 
         printe("Moving GAME menu icons 1.")
-        device.external.move(0xa_ace4, offset, size=9088)
-        device.internal.add(0xcea8, offset)
+        move_ext(0xa_ace4, 9088, 0xcea8)
 
         printe("Moving GAME menu icons 2.")
-        device.external.move(0xa_d064, offset, size=7040)
-        device.internal.add(0xd2f8, offset)
+        move_ext(0xa_d064, 7040, 0xd2f8)
 
         printe("Moving menu stuff (icons? meta?)")
-        device.external.move(0xa_ebe4, offset, size=116)
         references = [
             0x0_d010,
             0x0_d004,
@@ -356,8 +364,15 @@ def apply_patches(args, device):
             0x0_d2f4,
             0x0_d2f0,
         ]
-        for i, reference in enumerate(references):
-            device.internal.add(reference, offset)
+        if args.extended:
+            device.move_to_int(0xa_ebe4, int_pos, size=116)
+            for i, reference in enumerate(references):
+                device.internal.add(reference, int_pos - device.external.FLASH_BASE)
+            int_pos += _round_up_word(116)
+        else:
+            device.external.move(0xa_ebe4, offset, size=116)
+            for i, reference in enumerate(references):
+                device.internal.add(reference, offset)
 
 
         if args.clock_only:
@@ -368,8 +383,7 @@ def apply_patches(args, device):
             printe("Compressing and moving SMB2 ROM.")
             compressed_len = device.external.compress(0xa_ec58, 0x1_0000)
             device.internal.bl(0x6a12, "memcpy_inflate")
-            device.external.move(0xa_ec58, offset, size=compressed_len)
-            device.internal.add(0x7374, offset)
+            move_ext(0xa_ec58, compressed_len, 0x7374)
             compressed_len = _round_up_word(compressed_len)
             offset -= (65536 - compressed_len)  # Move by the space savings.
 
@@ -381,25 +395,26 @@ def apply_patches(args, device):
             device.internal.asm(0x6a1e, f"mov.w r3, #{compressed_len}")
 
         # Not sure what this data is
-        device.external.move(0xbec58, offset, size=8 * 2)
-        device.internal.add(0x1_0964, offset)
+        move_ext(0xbec58, 8*2, 0x10964)
 
         printe("Moving Palettes")
+        # TODO: pickup here
+        raise NotImplementedError
         # There are 80 colors, each in BGRA format, where A is always 0
-        device.external.move(0xbec68, offset, size=320)  # Day palette [0600, 1700]
-        device.external.move(0xbeda8, offset, size=320)  # Night palette [1800, 0400)
-        device.external.move(0xbeee8, offset, size=320)  # Underwater palette (between 1200 and 2400 at XX:30)
-        device.external.move(0xbf028, offset, size=320)  # Unknown palette. Maybe bowser castle? need to check...
-        device.external.move(0xbf168, offset, size=320)  # Dawn palette [0500, 0600)
+        # These are referenced by the scene table.
+        move_ext(0xbec68, 320, None)  # Day palette [0600, 1700]
+        move_ext(0xbeda8, 320, None)  # Night palette [1800, 0400)
+        move_ext(0xbeee8, 320, None)  # Underwater palette (between 1200 and 2400 at XX:30)
+        move_ext(0xbf028, 320, None)  # Unknown palette. Maybe bowser castle? need to check...
+        move_ext(0xbf168, 320, None)  # Dawn palette [0500, 0600)
 
-        # These are 2x uint32_t scene headers. They are MOSTLY [0x36, 0xF],
-        # but there are a few like [0x30, 0xF] and [0x20, 0xF],
-        device.external.move(0xbf2a8, offset, size=45 * 8)
-
+        # These are scene headers, each containing 2x uint32_t's.
+        # They are MOSTLY [0x36, 0xF], but there are a few like [0x30, 0xF] and [0x20, 0xF],
+        # Referenced by the scene table
+        move_ext(0xbf2a8, 45 * 8, None)
 
         # IDK what this is.
-        device.external.move(0xbf410, offset, size=144)
-        device.internal.add(0x1658c, offset)
+        move_ext(0xbf410, 144, 0x1658c)
 
         # SCENE TABLE
         # Goes in chunks of 20 bytes (5 addresses)
@@ -417,10 +432,16 @@ def apply_patches(args, device):
         lookup_table_end   = 0xb_f838
         lookup_table_len   = lookup_table_end - lookup_table_start  # 46 * 5 * 4 = 920
         for addr in range(lookup_table_start, lookup_table_end, 4):
-            if device.external.int(addr) > 0x9001_2D44:  # Past Mario Song
-                device.external.add(addr, offset)
-            elif args.extended and device.external.int(addr) in palette_lookup:
-                device.external.replace(addr, palette_lookup[device.external.int(addr)], size=4)
+            if args.extended:  # TODO: backwards
+                if device.external.int(addr) > 0x9001_2D44:  # Past Mario Song
+                    device.external.add(addr)
+                    # TODO: simplify everything into a single lookup table
+                    raise NotImplementedError
+                elif device.external.int(addr) in palette_lookup:
+                    device.external.replace(addr, palette_lookup[device.external.int(addr)], size=4)
+            else:
+                if device.external.int(addr) > 0x9001_2D44:  # Past Mario Song
+                    device.external.add(addr, offset)
 
         # Now move the table
         device.external.move(lookup_table_start, offset, size=lookup_table_len)
@@ -445,7 +466,7 @@ def apply_patches(args, device):
 
         _relocate_external_functions(device, offset)
 
-        # Some BALL sounds not properly updating when this is moved
+        # BALL sound samples.
         device.external.move(0xc34c0, offset, size=6168)
         device.internal.add(0x43ec, offset)
         rwdata_add(0xc34c0, 6168, offset)
@@ -456,6 +477,7 @@ def apply_patches(args, device):
         device.external.move(0xc5880, offset, size=120)
         device.internal.add(0x4594, offset)
 
+    if args.slim or args.extended:
         # Images Notes:
         #    * In-between images are just zeros.
         #
@@ -471,6 +493,10 @@ def apply_patches(args, device):
         device.external.replace(0xc58f8, b"\x00" * total_image_length)
         device.internal.replace(0x1097c, b"\x00"*4*5)  # Erase image references
         offset -= total_image_length
+
+
+    if False and (args.slim or args.extended):
+        # Shorten the external firmware
 
         device.external.move(0xf4d18, offset, size=2880)
         device.internal.add(0x10960, offset)

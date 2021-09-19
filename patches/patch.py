@@ -1,5 +1,6 @@
 from .compression import lzma_compress
 
+lookup = {}
 
 class FirmwarePatchMixin:
     """ Patch commands that apply to a single firmware instance.
@@ -153,6 +154,8 @@ class FirmwarePatchMixin:
             else:
                 self.clear_range(old_start, old_end)
 
+        lookup[self.FLASH_BASE + old_start] = self.FLASH_BASE + new_start
+
         return size
 
     def copy(self, offset : int, data : int, size : int):
@@ -166,6 +169,8 @@ class FirmwarePatchMixin:
         new_start = self.offset + self.data
         new_end = new_start + size
         self[new_start:new_end] = self[old_start:old_end]
+
+        lookup[self.FLASH_BASE + old_start] = self.FLASH_BASE + new_start
 
         return self.size
 
@@ -203,37 +208,34 @@ class FirmwarePatchMixin:
 
         return len(compressed_data)
 
-    # TODO: delete these once they're moved to their appropriate places
-
-    #def lookup(self, firmware):
-    #    if not isinstance(self.data, dict):
-    #        raise ValueError(f"Data must be dict, got {type(self.data)}")
-    #    if self.size is None:
-    #        raise ValueError("Size must not be none")
-
-    #    val = _addr(firmware, self.offset, size=self.size)
-    #    try:
-    #        new_val = self.data[val]
-    #    except KeyError:
-    #        if self.cond(val):
-    #            # This was an expected miss
-    #            return
-    #        else:
-    #            raise KeyError(hex(val))
-    #        print(f"MISSING: {hex(val)}")
-    #        return
-
-    #    firmware[self.offset:self.offset+self.size] = new_val.to_bytes(self.size, "little")
+    def lookup(self, offset):
+        size = 4
+        val = self.int(offset, size)
+        try:
+            new_val = lookup[val]
+        except KeyError:
+            raise KeyError(f"0x{val:08X}")
+        self[offset:offset+size] = new_val.to_bytes(size, "little")
 
 
 class DevicePatchMixin:
+    @property
+    def lookup(self):
+        return lookup
+
     def move(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
         dst[dst_offset:dst_offset+size] = src[src_offset:src_offset+size]
         src.clear_range(src_offset, src_offset + size)
+
+        lookup[src.FLASH_BASE + src_offset] = dst.FLASH_BASE + dst_offset
+
         return size
 
     def copy(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
         dst[dst_offset:dst_offset+size] = src[src_offset:src_offset+size]
+
+        lookup[src.FLASH_BASE + src_offset] = dst.FLASH_BASE + dst_offset
+
         return size
 
     # Convenience methods for move and copy

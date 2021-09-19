@@ -7,6 +7,7 @@ from .patch import DevicePatchMixin, FirmwarePatchMixin
 from .exception import InvalidStockRomError, MissingSymbolError
 from .compression import lz77_decompress, lzma_compress
 
+
 class Firmware(FirmwarePatchMixin, bytearray):
 
     RAM_BASE = 0x02000000
@@ -19,6 +20,24 @@ class Firmware(FirmwarePatchMixin, bytearray):
 
         super().__init__(firmware_data)
         self._verify()
+
+    def __getitem__(self, key):
+        """ Properly raises index error if trying to access oob regions.
+        """
+
+        if isinstance(key, slice):
+            if key.start is not None:
+                try:
+                    self[key.start]
+                except IndexError:
+                    raise IndexError(f"Index {key.start} ({hex(key.start)}) out of range")
+            if key.stop is not None:
+                try:
+                    self[key.stop - 1]
+                except IndexError:
+                    raise IndexError(f"Index {key.stop - 1} ({hex(key.stop - 1)}) out of range")
+
+        return super().__getitem__(key)
 
     def int(self, offset : int, size=4):
         return int.from_bytes(self[offset:offset+size], 'little')

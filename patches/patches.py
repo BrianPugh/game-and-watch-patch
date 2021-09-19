@@ -51,10 +51,9 @@ def add_patch_args(parser):
                          "screen to launch the mario drawing song easter egg."
                          )
 
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--slim", action="store_true", default=False,
+    parser.add_argument("--slim", action="store_true", default=False,
                         help="Remove mario song and sleeping images from extflash. Perform other space-saving measures.")
-    group.add_argument("--clock-only", action="store_true", default=False,
+    parser.add_argument("--clock-only", action="store_true", default=False,
                         help="Everything in --slim plus remove SMB2. TODO: remove Ball.")
 
 
@@ -232,13 +231,10 @@ def apply_patches(args, device):
         # I think these are all scenes for the clock, but not 100% sure.
         # The giant lookup table references all these, we could maybe compress
         # each individual scene.
-        # TODO: this might be redundant now.
-        for i in range(0, 11620, 4):
-            device.lookup[0x9000_be60 + i] = int_addr_start + int_pos + i
         device.move_to_int(0xbe60, int_pos, size=11620)
         int_pos += _round_up_word(11620)
 
-        # Starting here I believe are BALL references
+        # Starting here are BALL references
         device.move_to_int(0xebc4, int_pos, size=528)
         device.internal.replace(0x4154, int_addr_start + int_pos, size=4)
         rwdata_add(0xebc4, 528, (int_addr_start + int_pos) - 0x9000_ebc4)
@@ -272,7 +268,6 @@ def apply_patches(args, device):
             device.internal.replace(reference, int_addr_start + int_pos, size=4)
             int_pos += _round_up_word(128)
 
-        # GOOD
         move_to_int(0xf438, 96, 0x456c)
         move_to_int(0xf498, 180, 0x43f8)
 
@@ -372,16 +367,7 @@ def apply_patches(args, device):
             0x0_d2f4,
             0x0_d2f0,
         ]
-        if args.extended:
-            device.move_to_int(0xa_ebe4, int_pos, size=116)
-            for reference in references:
-                #device.internal.add(reference, int_pos - device.external.FLASH_BASE)
-                device.internal.lookup(reference)
-            int_pos += _round_up_word(116)
-        else:
-            device.external.move(0xa_ebe4, offset, size=116)
-            for reference in references:
-                device.internal.add(reference, offset)
+        move_ext(0xa_ebe4, 116, references)
 
         if args.clock_only:
             printe("Erasing SMB2 ROM")
@@ -402,7 +388,6 @@ def apply_patches(args, device):
             device.internal.asm(0x6a0a, f"mov.w r2, #{compressed_len}")
             device.internal.asm(0x6a1e, f"mov.w r3, #{compressed_len}")
 
-    if False:
         # Not sure what this data is
         move_ext(0xbec58, 8*2, 0x10964)
 
@@ -439,13 +424,13 @@ def apply_patches(args, device):
         lookup_table_end   = 0xb_f838
         lookup_table_len   = lookup_table_end - lookup_table_start  # 46 * 5 * 4 = 920
         for addr in range(lookup_table_start, lookup_table_end, 4):
-            #import ipdb; ipdb.set_trace()
-            #if device.external.int(addr) in device.lookup:
             device.external.lookup(addr)
 
         # Now move the table
         move_ext(lookup_table_start, lookup_table_len, 0xdf88)
 
+    if False:
+        #move_ext(0xbf838, 280, None)
         device.external.move(0xbf838, offset, size=280)
         device.internal.add(0xe8f8, offset)
         device.internal.add(0xf4ec, offset)

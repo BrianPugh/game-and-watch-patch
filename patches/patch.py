@@ -203,14 +203,19 @@ class FirmwarePatchMixin:
 
         return len(compressed_data)
 
-    def lookup(self, offset):
+    def lookup(self, offsets):
         size = 4
-        val = self.int(offset, size)
-        try:
-            new_val = self._lookup[val]
-        except KeyError:
-            raise KeyError(f"0x{val:08X} at offset 0x{offset:08X}")
-        self[offset:offset+size] = new_val.to_bytes(size, "little")
+
+        if not isinstance(offsets, list):
+            offsets = [offsets]
+
+        for offset in offsets:
+            val = self.int(offset, size)
+            try:
+                new_val = self._lookup[val]
+            except KeyError:
+                raise KeyError(f"0x{val:08X} at offset 0x{offset:08X}")
+            self[offset:offset+size] = new_val.to_bytes(size, "little")
 
 
 class DevicePatchMixin:

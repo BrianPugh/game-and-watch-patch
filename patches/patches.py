@@ -460,8 +460,10 @@ def apply_patches(args, device):
         offset -= total_image_length
 
 
-    if False:
+    if True:
         # Note sure what this is; doesn't seem important.
+        # Definitely at least contains part of the TIME graphic on startup screen.
+        # Probably not a good idea to delete until more investigation.
         move_ext(0xf4d18, 2880, 0x10960)
     else:
         offset -= 2880

@@ -59,6 +59,8 @@ def add_patch_args(parser):
                         help="Don't use up 2 pages (8192 bytes) of extflash for non-volatile saves.")
     parser.add_argument("--encrypt", action="store_true",
                         help="Enable OTFDEC for the main extflash binary.")
+    parser.add_argument("--no-smb2", action="store_true",
+                        help="Remove SMB2 rom.")
 
 
 def validate_patch_args(parser, args):
@@ -69,6 +71,9 @@ def validate_patch_args(parser, args):
 
     if args.clock_only:
         args.slim = True
+
+    if args.clock_only:
+        args.no_smb2 = True
 
 
 def _print_rwdata_ext_references(rwdata):
@@ -127,6 +132,7 @@ def apply_patches(args, device):
     def move_to_int(ext, size, reference):
         nonlocal int_pos
         device.move_to_int(ext, int_pos, size=size)
+        print(f"    move_to_int {hex(ext)} -> {hex(int_pos)}")
         if reference is not None:
             device.internal.lookup(reference)
         new_loc = int_pos
@@ -328,7 +334,7 @@ def apply_patches(args, device):
     ]
     move_ext(0xa_ebe4, 116, references)
 
-    if args.clock_only:
+    if args.no_smb2:
         printe("Erasing SMB2 ROM")
         device.external.replace(0xa_ec58, b"\x00" * 65536,)
         offset -= 65536

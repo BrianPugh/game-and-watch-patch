@@ -1,6 +1,6 @@
 from .compression import lzma_compress
 
-def sign_extend(value, bits):
+def twos_compliment(value, bits):
     if value >= 0:
         return value
     else:
@@ -74,8 +74,38 @@ class FirmwarePatchMixin:
         return self.replace(offset, rel_distance, size=4)
 
 
+    def b(self, offset : int, data : int) -> int:
+        """ Unconditional branch inserted at ``offset`` to offset ``data``
+
+        data should be the aboolute offset into the firmware (i.e. NOT in the
+        form 0x08XX_XXXX or 0x9XXX_XXXX)
+
+        2 byte command
+        """
+
+        pc = offset + 4
+        jump = data - pc
+
+        if abs(jump) > (2 * (1<<10)):
+            # Max +-2KB jump
+            raise ValueError(f"Too large of a jump {jump} specified.")
+
+        jump >>= 1
+        jump = twos_compliment(jump, 11)
+
+        byte_0 = 0b1110_0000 | ((jump >> 8) & 0x7)
+        byte_1 = jump & 0xFF
+
+        self[offset + 0] = byte_1
+        self[offset + 1] = byte_0
+
+        return 2
+
+
     def bl(self, offset : int, data : str) -> int:
         """ Replace a branch-link statement to a branch to one of our functions
+
+        4 byte command.
         """
 
         dst_address = self.address(data)
@@ -90,7 +120,7 @@ class FirmwarePatchMixin:
 
         # Where H=0
         offset_stage_1 = jump >> 12
-        offset_stage_1 = sign_extend(offset_stage_1, 11)
+        offset_stage_1 = twos_compliment(offset_stage_1, 11)
 
         stage_1_byte_0 = 0b1111_0000 | ((offset_stage_1 >> 8) & 0x7)
         stage_1_byte_1 = offset_stage_1 & 0xFF

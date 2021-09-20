@@ -1,5 +1,12 @@
 from .compression import lzma_compress
 
+def sign_extend(value, bits):
+    if value >= 0:
+        return value
+    else:
+        # Two's Compliment
+        return (1 << bits) + value
+
 
 class FirmwarePatchMixin:
     """ Patch commands that apply to a single firmware instance.
@@ -68,7 +75,7 @@ class FirmwarePatchMixin:
 
 
     def bl(self, offset : int, data : str) -> int:
-        """ Replace a branching statement to a branch to one of our functions
+        """ Replace a branch-link statement to a branch to one of our functions
         """
 
         dst_address = self.address(data)
@@ -77,21 +84,23 @@ class FirmwarePatchMixin:
 
         jump = dst_address - pc
 
-        if jump <= 0:
-            raise NotImplementedError("negative jump")
+        if abs(jump) > (4 * (1 << 20)):
+            # Max +-4MB jump
+            raise ValueError(f"Too large of a jump {jump} specified.")
 
+        # Where H=0
         offset_stage_1 = jump >> 12
-        if offset_stage_1 >> 11:
-            raise ValueError(f"bl jump 0x{jump:08X} too large!")
+        offset_stage_1 = sign_extend(offset_stage_1, 11)
 
-        stage_1_byte_0 = 0b11110000 | ((offset_stage_1 >> 8) & 0x7)
+        stage_1_byte_0 = 0b1111_0000 | ((offset_stage_1 >> 8) & 0x7)
         stage_1_byte_1 = offset_stage_1 & 0xFF
 
+        # Where H=1
         offset_stage_2 = (jump - (offset_stage_1 << 12)) >> 1
         if offset_stage_2 >> 11:
             raise ValueError(f"bl jump 0x{jump:08X} too large!")
 
-        stage_2_byte_0 = 0b11111000 | ((offset_stage_2 >> 8) & 0x7)
+        stage_2_byte_0 = 0b1111_1000 | ((offset_stage_2 >> 8) & 0x7)
         stage_2_byte_1 = offset_stage_2 & 0xFF
 
         # Store the instructions in little endian order

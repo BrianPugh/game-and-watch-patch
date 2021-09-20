@@ -184,6 +184,14 @@ erase_int:
 	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt; flash erase_address 0x08000000 131072; resume; exit"
 .PHONY: erase_int
 
+$(BUILD_DIR)/dummy.bin:
+	$(PYTHON) -c "with open('$@', 'wb') as f: f.write(b'\xFF'*256)"
+
+erase_ext: $(BUILD_DIR)/dummy.bin
+	$(FLASHAPP) $(ADAPTER) $<
+	make reset
+.PHONY: erase_ext
+
 flash_stock_int: internal_flash_backup.bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
 		-c "init; halt;" \

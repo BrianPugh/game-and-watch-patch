@@ -460,7 +460,11 @@ def apply_patches(args, device):
         offset -= total_image_length
 
 
-    move_ext(0xf4d18, 2880, 0x10960)
+    if False:
+        # Note sure what this is; doesn't seem important.
+        move_ext(0xf4d18, 2880, 0x10960)
+    else:
+        offset -= 2880
 
     # What is this data?
     # The memcpy to this address is all zero, so i guess its not used?

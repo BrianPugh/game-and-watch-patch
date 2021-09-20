@@ -223,7 +223,10 @@ class FirmwarePatchMixin:
         self.ENC_LEN -= data
         if self.ENC_LEN < 0:
             self.ENC_LEN = 0
-        self[:] = self[:-data]
+        if len(self) == data:
+            self[:] = bytearray()
+        else:
+            self[:] = self[:-data]
 
         return data
 

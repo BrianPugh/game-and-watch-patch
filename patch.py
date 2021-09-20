@@ -96,7 +96,8 @@ def main():
     internal_remaining_free = apply_patches(args, device)
 
     # Erase the extflash vram region
-    device.external[-8192:] = b"\x00" * 8192
+    if not args.no_save:
+        device.external[-8192:] = b"\x00" * 8192
 
     # Compress, insert, and reference the modified rwdata
     device.internal.compress_rwdata()

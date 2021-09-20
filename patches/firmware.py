@@ -240,10 +240,13 @@ class Device(DevicePatchMixin):
 
     def show(self, show=True):
         import matplotlib.pyplot as plt
-        plt.subplot(2, 1, 1)
-        self.internal.show(show=False)
-        plt.subplot(2, 1, 2)
-        self.external.show(show=False)
+        if len(self.external):
+            plt.subplot(2, 1, 1)
+            self.internal.show(show=False)
+            plt.subplot(2, 1, 2)
+            self.external.show(show=False)
+        else:
+            self.internal.show(show=False)
         if show:
             plt.show()
 

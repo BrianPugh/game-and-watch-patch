@@ -195,7 +195,7 @@ def apply_patches(args, device):
     offset -= (7772 - _round_down_word(compressed_len))
 
     # SMB1 looks hard to compress since there's so many references.
-    printd("Moving SMB1 ROM to internal firmware.")
+    printd(f"Moving SMB1 ROM to internal firmware {hex(int_pos)}-{hex(int_pos + 40960)}.")
     move_ext(0x1e60, 40960, [0x7368, 0x10954, 0x7218])
 
     # I think these are all scenes for the clock, but not 100% sure.
@@ -494,6 +494,8 @@ def apply_patches(args, device):
         # Disable nvram saving
         # This just skips the body of the nvram_write_bank function
         device.internal.b(0x48be, 0x4912)
+
+        offset -= 8192
     else:
         printi("Update NVRAM read addresses")
         device.internal.asm(0x4856,

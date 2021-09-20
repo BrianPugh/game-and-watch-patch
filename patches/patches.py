@@ -489,12 +489,16 @@ def apply_patches(args, device):
             f"moveq.w r4, #{hex(0xfe000 + offset)}",
     )
 
-    if True:
-        # TODO
+    if args.no_save:
         # Disable nvram loading
+        for nop in [0x495e, 0x49a6, 0x49b2]:
+            device.internal.nop(nop, 2)
+        device.internal.b(0x4988, 0x49c0)  # Skips Press TIME Button screen
+        #device.internal.b(0x4988, 0x49be)  # If you still want the first-startup "Press TIME Button" screen
+
         # Disable nvram saving
+        # TODO
         #patches.append("ks_thumb", 0x48ba, "bx lr", size=2)
-        pass
 
     # Finally, shorten the firmware
     printi("Updating end of OTFDEC pointer")

@@ -51,10 +51,12 @@ def add_patch_args(parser):
                          "screen to launch the mario drawing song easter egg."
                          )
 
-    parser.add_argument("--slim", action="store_true", default=False,
+    parser.add_argument("--slim", action="store_true",
                         help="Remove mario song and sleeping images from extflash. Perform other space-saving measures.")
-    parser.add_argument("--clock-only", action="store_true", default=False,
+    parser.add_argument("--clock-only", action="store_true",
                         help="Everything in --slim plus remove SMB2. TODO: remove Ball.")
+    parser.add_argument("--no-save", action="store_true",
+                        help="Don't use up 2 pages (8192 bytes) of extflash for non-volatile saves.")
 
 
 def validate_patch_args(parser, args):

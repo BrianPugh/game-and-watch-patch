@@ -14,6 +14,7 @@ functionality to the stock Game and Watch firmware. This is the only custom firm
 * Press button combination (`LEFT` + `GAME`) to launch retro-go from internal flash bank 2.
 * Configurable sleep timeout.
 * Configurable hard-reset timeout.
+* Ability to store the enitre firmware in internal flash! No external flash required!
 * Reduced external flash firmware size `--slim`; reduced from 1,048,576 bytes to just **180,224** bytes
     * Removed the "Mario Song" easter egg.
     * Removed the 5 sleeping illustrations.
@@ -22,6 +23,7 @@ functionality to the stock Game and Watch firmware. This is the only custom firm
 * An even further stripped version `--clock-only` that further reduces extflash size to just **139,264** bytes. Uses all the techniques described in `slim` plus:
     * Removed SMB2 ROM.
     * Set retro-go macro to just `GAME`.
+* Migrate the external firmware to internal firmware by utilizing an undocumented extra 128KB of internal flash with the option `--extended`.
 
 # Usage
 Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this
@@ -54,13 +56,12 @@ For additional configuration options, run `make help`.
 
 
 ### Retro Go
-Since most people are going to be using this with retro-go, here are the recommend commands:
+Since most people are going to be using this with retro-go, use the minimum amount of external storage, and don't care about the sleeping images or the mario song easter egg, here are the recommend commands:
 
 ```
 # in this repo
 make clean
-make PATCH_PARAMS="--slim" flash_patched_ext
-make PATCH_PARAMS="--slim" flash_patched_int
+make PATCH_PARAMS="--slim --extended --no-save" flash_patched_int
 
 # in the retro-go repo; this assumes you have the stock 1MB flashchip
 # NOTE: MUST have the patched openocd installed:
@@ -81,17 +82,11 @@ make flash_patch_int
 make flash_patch_ext
 ```
 
-# Known issues (--slim)
-* Some of the audio samples in BALL got deleted. Need to fix this.
-
-
 # TODO
-* Fix known issues.
 * Figure out safe place in RAM to store global/static variables. The current
   configuration described in the linker file is unsafe, but currently we have
   no global/static variables.
 * Custom sprites for clock.
-* Add option to move external flash assets to the extended region of bank 1.
 
 # Development
 Main stages to developing a feature:

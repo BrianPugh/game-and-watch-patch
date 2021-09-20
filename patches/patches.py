@@ -141,7 +141,7 @@ def apply_patches(args, device):
     def move_ext_extended(ext, size, reference):
         nonlocal offset
         new_loc = move_to_int(ext, size, reference)
-        offset -= size
+        offset -= _round_up_word(size)
         return new_loc
 
     move_ext = move_ext_extended if args.extended else move_ext_external
@@ -185,7 +185,7 @@ def apply_patches(args, device):
     compressed_len = device.external.compress(0x0, 7772)
     device.internal.bl(0x665c, "memcpy_inflate")
     move_ext(0x0, compressed_len, 0x7204)
-    offset -= (7772 - compressed_len)
+    offset -= (7772 - _round_down_word(compressed_len))
 
     # SMB1 looks hard to compress since there's so many references.
     printd("Moving SMB1 ROM to internal firmware.")
@@ -266,7 +266,8 @@ def apply_patches(args, device):
     move_ext(0x1_20e4, 21 * 96, 0x4574)
     move_ext(0x1_28c4, 192, 0x4578)
     move_ext(0x1_2984, 640, 0x457c)
-    move_ext(0x1_2c04, 320, 0x4538)  # I think this is a palette
+    move_ext(0x1_2c04, 320, 0x4538)  # This is a 320 byte palette, but the last 160 bytes are empty
+
 
     if args.slim:
         mario_song_len = 0x85e40  # 548,416 bytes
@@ -329,8 +330,7 @@ def apply_patches(args, device):
         compressed_len = device.external.compress(0xa_ec58, 0x1_0000)
         device.internal.bl(0x6a12, "memcpy_inflate")
         move_ext(0xa_ec58, compressed_len, 0x7374)
-        compressed_len = _round_up_word(compressed_len)
-        offset -= (65536 - compressed_len)  # Move by the space savings.
+        offset -= (65536 - _round_down_word(compressed_len))  # Move by the space savings.
 
         # Round to nearest page so that the length can be used as an imm
         compressed_len = _round_up_page(compressed_len)

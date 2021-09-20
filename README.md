@@ -41,7 +41,7 @@ Download STM32 Driver files:
 make download_sdk
 ```
 
-To just build and flash, you can just run `make flash`, however it's a bit finicky. You'll probably have better success running:
+To just build and flash, you can just run `make flash`, however it's a bit finicky. You'll probably have better success running the following command (but see the retro-go section for suggested usage).:
 
 ```
 make flash_patched_ext

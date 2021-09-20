@@ -141,6 +141,15 @@ class FirmwarePatchMixin:
 
         return 4
 
+    def bkpt(self, offset, size=2):
+        """ Insert software breakpoint(s) """
+        if size % 2:
+            raise ValueError("Size of breakpoints must be even.")
+
+        n_bkpts = size // 2
+        self[offset:offset+size] = b"\x00\xbe" * n_bkpts
+        return size
+
     @property
     def _ks(self):
         try:

@@ -483,29 +483,30 @@ def apply_patches(args, device):
     # Shorten the external firmware
     # This rounds the negative offset towards zero.
     offset = _round_up_page(offset)
-    printi("Update NVRAM read addresses")
-    device.internal.asm(0x4856,
-             "ite ne; "
-            f"movne.w r4, #{hex(0xff000 + offset)}; "
-            f"moveq.w r4, #{hex(0xfe000 + offset)}",
-    )
-    printi("Update NVRAM write addresses")
-    device.internal.asm(0x48c0,
-             "ite ne; "
-            f"movne.w r4, #{hex(0xff000 + offset)}; "
-            f"moveq.w r4, #{hex(0xfe000 + offset)}",
-    )
 
     if args.no_save:
         # Disable nvram loading
         for nop in [0x495e, 0x49a6, 0x49b2]:
             device.internal.nop(nop, 2)
-        device.internal.b(0x4988, 0x49c0)  # Skips Press TIME Button screen
         #device.internal.b(0x4988, 0x49be)  # If you still want the first-startup "Press TIME Button" screen
+        device.internal.b(0x4988, 0x49c0)  # Skips Press TIME Button screen
 
         # Disable nvram saving
-        # TODO
-        #patches.append("ks_thumb", 0x48ba, "bx lr", size=2)
+        # This just skips the body of the nvram_write_bank function
+        device.internal.b(0x48be, 0x4912)
+    else:
+        printi("Update NVRAM read addresses")
+        device.internal.asm(0x4856,
+                 "ite ne; "
+                f"movne.w r4, #{hex(0xff000 + offset)}; "
+                f"moveq.w r4, #{hex(0xfe000 + offset)}",
+        )
+        printi("Update NVRAM write addresses")
+        device.internal.asm(0x48c0,
+                 "ite ne; "
+                f"movne.w r4, #{hex(0xff000 + offset)}; "
+                f"moveq.w r4, #{hex(0xfe000 + offset)}",
+        )
 
     # Finally, shorten the firmware
     printi("Updating end of OTFDEC pointer")

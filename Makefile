@@ -185,7 +185,7 @@ erase_int:
 .PHONY: erase_int
 
 $(BUILD_DIR)/dummy.bin:
-	$(PYTHON) -c "with open('$@', 'wb') as f: f.write(b'\xFF'*256)"
+	$(PYTHON) -c "with open('$@', 'wb') as f: f.write(b'\xFF'*1048576)"
 
 erase_ext: $(BUILD_DIR)/dummy.bin
 	$(FLASHAPP) $(ADAPTER) $<

@@ -315,13 +315,13 @@ def apply_patches(args, device):
 
     # Note: UNKNOWN* represents a block of data that i haven't decoded
     # yet. If you know what the block of data is, please let me know!
-    move_ext(0xa_8c44, 8352, 0xbc44)
+    move_ext(0xa_8c44, 8352, 0xbc44)  # compressed 8352->928 bytes (saves 7424)
 
     printe("Moving GAME menu icons 1.")
-    move_ext(0xa_ace4, 9088, 0xcea8)
+    move_ext(0xa_ace4, 9088, 0xcea8)  # compressed 9088->1224 bytes (saves 7864)
 
     printe("Moving GAME menu icons 2.")
-    move_ext(0xa_d064, 7040, 0xd2f8)
+    move_ext(0xa_d064, 7040, 0xd2f8)  # compressed 7040->496 bytes (saves 6544)
 
     printe("Moving menu stuff (icons? meta?)")
     references = [

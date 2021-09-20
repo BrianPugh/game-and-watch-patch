@@ -250,7 +250,7 @@ class FirmwarePatchMixin:
         # Insert the compressed data
         self[offset:offset+len(compressed_data)] = compressed_data
 
-        print(f"    compressed {len(data)}->{len(compressed_data)} bytes")
+        print(f"    compressed {len(data)}->{len(compressed_data)} bytes (saves {len(data)-len(compressed_data)})")
 
         return len(compressed_data)
 

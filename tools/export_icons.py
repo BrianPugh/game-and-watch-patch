@@ -2,14 +2,15 @@ from pathlib import Path
 import numpy as np
 import matplotlib
 from PIL import Image
+from math import ceil
 
 
 data = Path("build/decrypt.bin").read_bytes()
 
 addr = 0xaace4
-iconset_bytes = data[addr:addr+6144 + 6144 + 4096]
+iconset_bytes = data[addr:addr+6144 + 6144 + 4096 - 256]
 
-h, w = int(len(iconset_bytes) / (256/2)), 256
+h, w = int(ceil(len(iconset_bytes) / (256/2) / 16) * 16), 256
 canvas = np.zeros((h, w), dtype=np.uint8)
 
 iconset_nibbles = bytearray()
@@ -27,7 +28,8 @@ for i in range(0, len(iconset_nibbles), pixel_count):
     x = i_sprite * block_size % w
     y = block_size * (i_sprite * block_size // w)
     view = canvas[y:y+block_size, x:x+block_size]
-    view[:] = np.frombuffer(sprite, dtype=np.uint8).reshape(block_size, block_size)
+    sprite_block = np.frombuffer(sprite, dtype=np.uint8).reshape(block_size, block_size)
+    view[:] = sprite_block
 
     i_sprite += 1
 

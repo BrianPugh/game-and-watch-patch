@@ -57,6 +57,8 @@ def add_patch_args(parser):
                         help="Everything in --slim plus remove SMB2. TODO: remove Ball.")
     parser.add_argument("--no-save", action="store_true",
                         help="Don't use up 2 pages (8192 bytes) of extflash for non-volatile saves.")
+    parser.add_argument("--encrypt", action="store_true",
+                        help="Enable OTFDEC for the main extflash binary.")
 
 
 def validate_patch_args(parser, args):
@@ -179,6 +181,11 @@ def apply_patches(args, device):
         printi(f"Setting Mario Song time to {args.mario_song_time} seconds.")
         mario_song_frames = _seconds_to_frames(args.mario_song_time)
         device.internal.asm(0x6fc4, f"cmp.w r0, #{mario_song_frames}")
+
+    if not args.encrypt:
+        # Disable OTFDEC
+        device.internal.nop(0x10688, 2)
+        device.internal.nop(0x1068e, 1)
 
 
     printd("Compressing and moving stuff stuff to internal firmware.")

@@ -107,7 +107,8 @@ def main():
 
     # Re-encrypt the external firmware
     Path("build/decrypt_flash_patched.bin").write_bytes(device.external)
-    device.external.crypt(device.internal.key, device.internal.nonce)
+    if args.encrypt:
+        device.external.crypt(device.internal.key, device.internal.nonce)
 
 
     # Save patched firmware

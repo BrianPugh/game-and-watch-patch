@@ -266,7 +266,9 @@ def apply_patches(args, device):
     move_ext(0x1_20e4, 21 * 96, 0x4574)
     move_ext(0x1_28c4, 192, 0x4578)
     move_ext(0x1_2984, 640, 0x457c)
-    move_ext(0x1_2c04, 320, 0x4538)  # This is a 320 byte palette, but the last 160 bytes are empty
+
+    # This is a 320 byte palette used for BALL, but the last 160 bytes are empty
+    move_ext(0x1_2c04, 320, 0x4538)
 
 
     if args.slim:
@@ -275,12 +277,10 @@ def apply_patches(args, device):
         printe("Erasing Mario Song")
         device.external.replace(0x1_2D44, b"\x00" * mario_song_len)
         rwdata_erase(0x1_2D44, mario_song_len)
-        # Note, bytes starting at 0x90012ca4 leading up to the mario song
-        # are also empty. TODO: maybe shift by that much as well.
         offset -= mario_song_len
 
     # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
-    # These index into a palette. TODO: where is the palette
+    # These index into one of the external palettes starting at 0xbec68.
     # Moving this to internal firmware for now as a PoC.
     printe("Compressing clock graphics")
     compressed_len = device.external.compress(0x9_8b84, 0x1_0000)

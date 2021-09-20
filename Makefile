@@ -192,6 +192,10 @@ erase_ext: $(BUILD_DIR)/dummy.bin
 	make reset
 .PHONY: erase_ext
 
+dump_ext:
+	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt; dump_image \"dump_ext.bin\" 0x90000000 0x100000; resume; exit;"
+.PHONY: dump_ext
+
 flash_stock_int: internal_flash_backup.bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
 		-c "init; halt;" \

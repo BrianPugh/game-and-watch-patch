@@ -373,8 +373,9 @@ class ExtFirmware(Firmware):
                 self[offset + i] ^= cipher_byte
 
 class SRAM3(Firmware):
-    FLASH_BASE = 0x240A_0000
-    FLASH_LEN = 384 * (1 << 10)
+    #FLASH_BASE = 0x240A_0000
+    FLASH_BASE = 0x240e2b38
+    FLASH_LEN = 0x24100000 - FLASH_BASE
 
     def __str__(self):
         return "sram3"
@@ -391,6 +392,10 @@ class Device(DevicePatchMixin):
         self.internal._lookup = self.lookup
         self.external._lookup = self.lookup
         self.sram3._lookup = self.lookup
+
+        # insert some noops so we can hijack some ram
+        # Gets us 120,008 bytes at 0x240e2b38
+        self.internal.nop(0x677a, 2)
 
 
     def crypt(self):

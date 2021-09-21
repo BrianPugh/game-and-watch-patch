@@ -210,20 +210,19 @@ def apply_patches(args, device):
     move_ext(0x0, compressed_len, 0x7204)
     offset -= (7772 - _round_down_word(compressed_len))
 
-    # SMB1 looks hard to compress since there's so many references.
-    printd(f"Moving SMB1 ROM to internal firmware {hex(int_pos)}-{hex(int_pos + 40960)}.")
-    move_ext(0x1e60, 40960, [0x7368, 0x10954, 0x7218])
+    # SMB1 ROM
+    printd(f"Compressing and moving SMB1 ROM to sram3.")
+    move_to_sram3(0x1e60, 40960, [0x7368, 0x10954, 0x7218])
 
     # I think these are all scenes for the clock, but not 100% sure.
-    # The giant lookup table references all these, we could maybe compress
-    # each individual scene.
-    move_ext(0xbe60, 11620, None)
+    # The giant lookup table references all these
+    move_to_sram3(0xbe60, 11620, None)
 
     # Starting here are BALL references
-    move_ext(0xebc4, 528, 0x4154)
+    move_to_sram3(0xebc4, 528, 0x4154)
     rwdata_lookup(0xebc4, 528)
 
-    move_ext(0xedd4, 100, 0x4570)
+    move_to_sram3(0xedd4, 100, 0x4570)
 
     references = {
         0xee38: 0x4514,
@@ -246,52 +245,52 @@ def apply_patches(args, device):
         0x2cc,
         0x2d0,
     ]
-    move_ext(0xef38, 128*10, references)
+    move_to_sram3(0xef38, 128*10, references)
 
     move_ext(0xf438, 96, 0x456c)
     move_ext(0xf498, 180, 0x43f8)
 
     # This is the first thing passed into the drawing engine.
-    move_ext(0xf54c, 1100, 0x43fc)
-    move_ext(0xf998, 180, 0x4400)
-    move_ext(0xfa4c, 1136, 0x4404)
-    move_ext(0xfebc, 864, 0x450c)
-    move_ext(0x1_021c, 384, 0x4510)
-    move_ext(0x1_039c, 384, 0x451c)
-    move_ext(0x1_051c, 384, 0x4410)
-    move_ext(0x1_069c, 384, 0x44f8)
-    move_ext(0x1_081c, 384, 0x4500)
-    move_ext(0x1_099c, 384, 0x4414)
-    move_ext(0x1_0b1c, 384, 0x44fc)
-    move_ext(0x1_0c9c, 384, 0x4504)
-    move_ext(0x1_0e1c, 384, 0x440c)
-    move_ext(0x1_0f9c, 384, 0x4408)
-    move_ext(0x1_111c, 192, 0x44f4)
-    move_ext(0x1_11dc, 192, 0x4508)
-    move_ext(0x1_129c, 304, 0x458c)
-    move_ext(0x1_13cc, 768, 0x4584)  # BALL logo tile idx tight
-    move_ext(0x1_16cc, 1144, 0x4588)
-    move_ext(0x1_1b44, 768, 0x4534)
-    move_ext(0x1_1e44, 32, 0x455c)
-    move_ext(0x1_1e64, 32, 0x4558)
-    move_ext(0x1_1e84, 32, 0x4554)
-    move_ext(0x1_1ea4, 32, 0x4560)
-    move_ext(0x1_1ec4, 32, 0x4564)
-    move_ext(0x1_1ee4, 64, 0x453c)
-    move_ext(0x1_1f24, 64, 0x4530)
-    move_ext(0x1_1f64, 64, 0x4540)
-    move_ext(0x1_1fa4, 64, 0x4544)
-    move_ext(0x1_1fe4, 64, 0x4548)
-    move_ext(0x1_2024, 64, 0x454c)
-    move_ext(0x1_2064, 64, 0x452c)
-    move_ext(0x1_20a4, 64, 0x4550)
+    move_to_sram3(0xf54c, 1100, 0x43fc)
+    move_to_sram3(0xf998, 180, 0x4400)
+    move_to_sram3(0xfa4c, 1136, 0x4404)
+    move_to_sram3(0xfebc, 864, 0x450c)
+    move_to_sram3(0x1_021c, 384, 0x4510)
+    move_to_sram3(0x1_039c, 384, 0x451c)
+    move_to_sram3(0x1_051c, 384, 0x4410)
+    move_to_sram3(0x1_069c, 384, 0x44f8)
+    move_to_sram3(0x1_081c, 384, 0x4500)
+    move_to_sram3(0x1_099c, 384, 0x4414)
+    move_to_sram3(0x1_0b1c, 384, 0x44fc)
+    move_to_sram3(0x1_0c9c, 384, 0x4504)
+    move_to_sram3(0x1_0e1c, 384, 0x440c)
+    move_to_sram3(0x1_0f9c, 384, 0x4408)
+    move_to_sram3(0x1_111c, 192, 0x44f4)
+    move_to_sram3(0x1_11dc, 192, 0x4508)
+    move_to_sram3(0x1_129c, 304, 0x458c)
+    move_to_sram3(0x1_13cc, 768, 0x4584)  # BALL logo tile idx tight
+    move_to_sram3(0x1_16cc, 1144, 0x4588)
+    move_to_sram3(0x1_1b44, 768, 0x4534)
+    move_to_sram3(0x1_1e44, 32, 0x455c)
+    move_to_sram3(0x1_1e64, 32, 0x4558)
+    move_to_sram3(0x1_1e84, 32, 0x4554)
+    move_to_sram3(0x1_1ea4, 32, 0x4560)
+    move_to_sram3(0x1_1ec4, 32, 0x4564)
+    move_to_sram3(0x1_1ee4, 64, 0x453c)
+    move_to_sram3(0x1_1f24, 64, 0x4530)
+    move_to_sram3(0x1_1f64, 64, 0x4540)
+    move_to_sram3(0x1_1fa4, 64, 0x4544)
+    move_to_sram3(0x1_1fe4, 64, 0x4548)
+    move_to_sram3(0x1_2024, 64, 0x454c)
+    move_to_sram3(0x1_2064, 64, 0x452c)
+    move_to_sram3(0x1_20a4, 64, 0x4550)
 
-    move_ext(0x1_20e4, 21 * 96, 0x4574)
-    move_ext(0x1_28c4, 192, 0x4578)
-    move_ext(0x1_2984, 640, 0x457c)
+    move_to_sram3(0x1_20e4, 21 * 96, 0x4574)
+    move_to_sram3(0x1_28c4, 192, 0x4578)
+    move_to_sram3(0x1_2984, 640, 0x457c)
 
     # This is a 320 byte palette used for BALL, but the last 160 bytes are empty
-    move_ext(0x1_2c04, 320, 0x4538)
+    move_to_sram3(0x1_2c04, 320, 0x4538)
 
 
     if args.slim:
@@ -316,17 +315,15 @@ def apply_patches(args, device):
     # Note: the clock uses a different palette; this palette only applies
     # to ingame Super Mario Bros 1 & 2
     printe("Moving NES emulator palette.")
-    move_ext(0xa_8b84, 192, 0xb720)
+    move_to_sram3(0xa_8b84, 192, 0xb720)
 
     # Note: UNKNOWN* represents a block of data that i haven't decoded
     # yet. If you know what the block of data is, please let me know!
-    move_ext(0xa_8c44, 8352, 0xbc44)  # compressed 8352->928 bytes (saves 7424)
+    move_to_sram3(0xa_8c44, 8352, 0xbc44)
 
-    printe("Moving GAME menu icons 1.")
-    move_ext(0xa_ace4, 9088, 0xcea8)  # compressed 9088->1224 bytes (saves 7864)
-
-    printe("Moving GAME menu icons 2.")
-    move_ext(0xa_d064, 7040, 0xd2f8)  # compressed 7040->496 bytes (saves 6544)
+    printe("Moving iconset.")
+    # MODIFY THESE IF WE WANT CUSTOM GAME ICONS
+    move_to_sram3(0xa_ace4, 16128, [0xcea8, 0xd2f8])
 
     printe("Moving menu stuff (icons? meta?)")
     references = [
@@ -363,19 +360,19 @@ def apply_patches(args, device):
     printe("Moving Palettes")
     # There are 80 colors, each in BGRA format, where A is always 0
     # These are referenced by the scene table.
-    move_ext(0xbec68, 320, None)  # Day palette [0600, 1700]
-    move_ext(0xbeda8, 320, None)  # Night palette [1800, 0400)
-    move_ext(0xbeee8, 320, None)  # Underwater palette (between 1200 and 2400 at XX:30)
-    move_ext(0xbf028, 320, None)  # Unknown palette. Maybe bowser castle? need to check...
-    move_ext(0xbf168, 320, None)  # Dawn palette [0500, 0600)
+    move_to_sram3(0xbec68, 320, None)  # Day palette [0600, 1700]
+    move_to_sram3(0xbeda8, 320, None)  # Night palette [1800, 0400)
+    move_to_sram3(0xbeee8, 320, None)  # Underwater palette (between 1200 and 2400 at XX:30)
+    move_to_sram3(0xbf028, 320, None)  # Unknown palette. Maybe bowser castle? need to check...
+    move_to_sram3(0xbf168, 320, None)  # Dawn palette [0500, 0600)
 
     # These are scene headers, each containing 2x uint32_t's.
     # They are MOSTLY [0x36, 0xF], but there are a few like [0x30, 0xF] and [0x20, 0xF],
     # Referenced by the scene table
-    move_ext(0xbf2a8, 45 * 8, None)
+    move_to_sram3(0xbf2a8, 45 * 8, None)
 
     # IDK what this is.
-    move_ext(0xbf410, 144, 0x1658c)
+    move_to_sram3(0xbf410, 144, 0x1658c)
 
     # SCENE TABLE
     # Goes in chunks of 20 bytes (5 addresses)
@@ -396,7 +393,7 @@ def apply_patches(args, device):
         device.external.lookup(addr)
 
     # Now move the table
-    move_ext(lookup_table_start, lookup_table_len, 0xdf88)
+    move_to_sram3(lookup_table_start, lookup_table_len, 0xdf88)
 
     # Not sure what this is
     references = [
@@ -406,9 +403,9 @@ def apply_patches(args, device):
         0x10098,
         0x105b0,
     ]
-    move_ext(0xbf838, 280, references)
+    move_to_sram3(0xbf838, 280, references)
 
-    move_ext(0xbf950, 180, [0xe2e4, 0xf4fc])
+    move_to_sram3(0xbf950, 180, [0xe2e4, 0xf4fc])
     move_ext(0xbfa04, 8, 0x1_6590)
     move_ext(0xbfa0c, 784, 0x1_0f9c)
 
@@ -450,7 +447,6 @@ def apply_patches(args, device):
     for reference in references:
         reference = reference - 0xb_fd1c + new_loc
         if args.extended:
-            #device.sram3.lookup(reference)
             device.internal.lookup(reference)
         else:
             device.external.lookup(reference)
@@ -478,14 +474,8 @@ def apply_patches(args, device):
         device.internal.replace(0x1097c, b"\x00"*4*5)  # Erase image references
         offset -= total_image_length
 
-
-    if True:
-        # Note sure what this is; doesn't seem important.
-        # Definitely at least contains part of the TIME graphic on startup screen.
-        # Probably not a good idea to delete until more investigation.
-        move_ext(0xf4d18, 2880, 0x10960)
-    else:
-        offset -= 2880
+    # Definitely at least contains part of the TIME graphic on startup screen.
+    move_to_sram3(0xf4d18, 2880, 0x10960)
 
     # What is this data?
     # The memcpy to this address is all zero, so i guess its not used?

@@ -267,6 +267,7 @@ class FirmwarePatchMixin:
             except KeyError:
                 raise KeyError(f"0x{val:08X} at offset 0x{offset:08X}")
             self[offset:offset+size] = new_val.to_bytes(size, "little")
+            #print(f"    lookup 0x{val:08X}->0x{new_val:08x}")
 
 
 class DevicePatchMixin:
@@ -292,3 +293,7 @@ class DevicePatchMixin:
 
     def copy_to_int(self, ext_offset:int, int_offset:int, size:int) -> int:
         return self.copy(self.internal, int_offset, self.external, ext_offset, size)
+
+    def move_to_sram3(self, ext_offset:int, sram_offset:int, size:int) -> int:
+        return self.move(self.sram3, sram_offset, self.external, ext_offset, size)
+

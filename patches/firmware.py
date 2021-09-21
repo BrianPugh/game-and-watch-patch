@@ -38,13 +38,16 @@ class Firmware(FirmwarePatchMixin, bytearray):
     RAM_LEN  = 0x00020000
     ENC_LEN  = 0
 
+    FLASH_BASE = 0x0000_0000
+    FLASH_LEN = 0
+
     def __init__(self, firmware=None):
         if firmware:
             with open(firmware, 'rb') as f:
                 firmware_data = f.read()
             super().__init__(firmware_data)
         else:
-            super().__init__()
+            super().__init__(self.FLASH_LEN)
 
         self._lookup = Lookup()
         self._verify()
@@ -253,8 +256,7 @@ class IntFirmware(Firmware):
     FLASH_BASE = 0x08000000
     FLASH_LEN  = 0x00020000
 
-    #STOCK_ROM_END = 0x00019300  # Actual stock rom end
-    STOCK_ROM_END = 0x000180c8  # We cut off the compressed rwdata since we relocate it
+    STOCK_ROM_END = 0x00019300  # Actual stock rom end
 
     def __init__(self, firmware, elf):
         super().__init__(firmware)
@@ -359,6 +361,7 @@ class Device(DevicePatchMixin):
         self.lookup = Lookup()
         self.internal._lookup = self.lookup
         self.external._lookup = self.lookup
+        self.sram3._lookup = self.lookup
 
 
     def crypt(self):
@@ -375,4 +378,3 @@ class Device(DevicePatchMixin):
             self.internal.show(show=False)
         if show:
             plt.show()
-

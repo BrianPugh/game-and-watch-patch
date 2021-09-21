@@ -102,9 +102,8 @@ def find_free_space(device):
 
 def apply_patches(args, device):
     offset = 0
-    int_addr_start = device.internal.FLASH_BASE
-    int_pos_start = find_free_space(device)
-    int_pos = int_pos_start
+    int_pos = find_free_space(device)
+    sram3_pos = 0
 
     def rwdata_lookup(lower, size):
         lower += 0x9000_0000

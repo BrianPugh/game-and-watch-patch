@@ -63,8 +63,8 @@ class FirmwarePatchMixin:
             if size is None:
                 raise ValueError("Must specify \"size\" when providing int data.")
             if data < self.FLASH_BASE:
-                raise ValueError("Data {hex(data)} below FLASH_BASE {hex(self.FLASH_BASE)}.")
-            dst = self.int(offset, size)
+                data += self.FLASH_BASE
+            dst = data
         rel_distance = dst - src
         if rel_distance < 0:
             rel_distance += 0x1_0000_0000

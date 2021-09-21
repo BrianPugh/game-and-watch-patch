@@ -200,12 +200,11 @@ class RWData:
         data_offset : int
             Where to write the compressed data
         """
-        table_len = 4 * len(self.datas) + 4
 
         # Write Compressed Data
         data_addrs, data_lens = [], []
         if data_offset is None:
-            index = self.table_start + table_len
+            index = self.table_end
         else:
             index = data_offset
 
@@ -241,10 +240,7 @@ class RWData:
             self.firmware.replace(index, data_dst, size=4)
             index += 4
 
-        rel_addr = self.last_fn - index
-        if rel_addr < 0:
-            rel_addr += 0x1_0000_0000
-        self.firmware.replace(index, rel_addr, size=4)
+        self.firmware.relative(index, self.last_fn, size=4)
 
         return total_len
 

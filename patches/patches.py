@@ -139,13 +139,14 @@ def apply_patches(args, device):
         return new_loc
 
     def move_to_sram3(ext, size, reference):
-        nonlocal sram3_pos
+        nonlocal sram3_pos, offset
         device.move_to_sram3(ext, sram3_pos, size=size)
         print(f"    move_to_sram3 {hex(ext)} -> {hex(sram3_pos)}")
         if reference is not None:
             device.internal.lookup(reference)
         new_loc = sram3_pos
         sram3_pos += _round_up_word(size)
+        offset -= _round_up_word(size)
         return new_loc
 
     def move_ext_external(ext, size, reference):
@@ -491,10 +492,9 @@ def apply_patches(args, device):
     device.external.replace(0xf5858, b"\x00" * 34728)  # refence at internal 0x7210
     offset -= 34728
 
-    if args.extended:
+    if args.extended and sram3_pos:
         # Compress and copy over SRAM3
-        #device.internal.rwdata.append(device.sram3[:sram3_pos].copy(), device.sram3.FLASH_BASE)
-        pass
+        device.internal.rwdata.append(device.sram3[:sram3_pos].copy(), device.sram3.FLASH_BASE)
 
     # Compress, insert, and reference the modified rwdata
     print("Writing rwdata")

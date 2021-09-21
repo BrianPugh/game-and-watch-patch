@@ -129,12 +129,13 @@ class RWData:
         2. We are only modifying the lz_decompress stuff.
     """
 
+    MAX_TABLE_ELEMENTS = 3
+
     def __init__(self, firmware, table_start, table_len):
         # We want to be able to extend the table.
 
         self.firmware = firmware
         self.table_start = table_start
-        self.table_len = table_len
 
         self.datas, self.dsts = [], []
 
@@ -158,8 +159,7 @@ class RWData:
             data = lz77_decompress(firmware[data_addr : data_addr + data_len])
             firmware.clear_range(data_addr, data_addr + data_len)
 
-            self.datas.append(data)
-            self.dsts.append(data_dst)
+            self.append(data, data_dst)
 
         last_element_offset = table_start + table_len - 4
         self.last_fn = firmware.int(last_element_offset)
@@ -167,15 +167,28 @@ class RWData:
             self.last_fn -= 0x1_0000_0000
         self.last_fn += last_element_offset
 
+        # Mark this area as reserved; there's nothing special about 0x77, its
+        # just not 0x00
+        firmware.set_range(table_start, table_start + 16 * self.MAX_TABLE_ELEMENTS + 4, b"\x77")
+
     def __getitem__(self, k):
         return self.datas[k]
+
+    @property
+    def table_end(self):
+        return self.table_start + 4 * len(self.datas) + 4
 
     def append(self, data, dst):
         """ Add a new element to the table
         """
 
+        if len(self.datas) >= self.MAX_TABLE_ELEMENTS:
+            raise NotEnoughSpaceError(f"MAX_TABLE_ELEMENTS exceeded; increase this value")
+
         self.datas.append(data)
         self.dsts.append(dst)
+
+        assert len(self.datas) == len(self.dsts)
 
     def write_table_and_data(self, data_offset=None):
         """
@@ -196,6 +209,7 @@ class RWData:
         total_len = 0
         for data in self.datas:
             compressed_data = lzma_compress(bytes(data))
+            print(f"    compressed {len(data)}->{len(compressed_data)} bytes (saves {len(data)-len(compressed_data)})")
             self.firmware[index:index+len(compressed_data)] = compressed_data
 
             data_addrs.append(index)
@@ -239,8 +253,8 @@ class IntFirmware(Firmware):
     FLASH_BASE = 0x08000000
     FLASH_LEN  = 0x00020000
 
-    #STOCK_ROM_END = 0x00019300
-    STOCK_ROM_END = 0x000191a0
+    #STOCK_ROM_END = 0x00019300  # Actual stock rom end
+    STOCK_ROM_END = 0x000180c8  # We cut off the compressed rwdata since we relocate it
 
     def __init__(self, firmware, elf):
         super().__init__(firmware)

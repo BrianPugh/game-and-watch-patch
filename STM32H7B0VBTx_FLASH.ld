@@ -89,12 +89,7 @@ SECTIONS
   /* The program code and other data goes into FLASH */
   .text :
   {
-    /*
-    . = 0x00019300;
-    This is the stock ROM end, but since we compress the rwdata we can encroach
-    onto it a little further.
-    */
-    . = 0x000191a0;
+    . = 0x000180c8;
     . = ALIGN(4);
     *(.text)           /* .text sections (code) */
     *(.text*)          /* .text* sections (code) */
@@ -163,9 +158,9 @@ SECTIONS
 
    .fill :
   {
-    FILL(0xFF);
+    FILL(0x00);
     . = ORIGIN(FLASH) + LENGTH(FLASH) - 1;
-    BYTE(0xFF)
+    BYTE(0x00)
   } >FLASH
  
   /* Uninitialized data section */

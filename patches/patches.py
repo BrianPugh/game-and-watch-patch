@@ -91,9 +91,9 @@ def _print_rwdata_ext_references(rwdata):
 
 
 def find_free_space(device):
-    # Detect a series of 0xFF to figure out the end of the patch.
-    for addr in range(0x1_AB00, device.internal.FLASH_LEN, 0x10):
-        if device.internal[addr:addr+256]  == b"\xFF" * 256:
+    # Detect a series of 0x00 to figure out the end of the patch.
+    for addr in range(device.internal.rwdata.table_end, device.internal.FLASH_LEN, 0x10):
+        if device.internal[addr:addr+256]  == b"\x00" * 256:
             int_pos_start = addr
             break
     else:
@@ -515,5 +515,12 @@ def apply_patches(args, device):
     device.internal.add(0x1_06ec, offset)
     device.external.shorten(offset)
 
+
+    # Compress, insert, and reference the modified rwdata
+    print("Writing rwdata")
+    int_pos += device.internal.rwdata.write_table_and_data(int_pos)
+
+
     internal_remaining_free = len(device.internal) - int_pos
+
     return internal_remaining_free

@@ -95,7 +95,7 @@ def main():
     print("#########################" + Style.RESET_ALL)
 
     # Perform all replacements in stock code.
-    internal_remaining_free = apply_patches(args, device)
+    internal_remaining_free, sram3_remaining_free = apply_patches(args, device)
 
     # Erase the extflash vram region
     if not args.no_save:
@@ -119,6 +119,8 @@ def main():
     print( "Binary Patching Complete!")
     print(f"    Internal Firmware Used: {len(device.internal) - internal_remaining_free} bytes")
     print(f"        Free: {internal_remaining_free} bytes")
+    print(f"    SRAM3 Used:             {len(device.sram3) - sram3_remaining_free} bytes")
+    print(f"        Free: {sram3_remaining_free} bytes")
     print(f"    External Firmware Used: {len(device.external)} bytes")
     print(Style.RESET_ALL)
 

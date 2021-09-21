@@ -536,5 +536,6 @@ def apply_patches(args, device):
     device.external.shorten(offset)
 
     internal_remaining_free = len(device.internal) - int_pos
+    sram3_free = len(device.sram3) - sram3_pos
 
-    return internal_remaining_free
+    return internal_remaining_free, sram3_free

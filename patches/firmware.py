@@ -176,6 +176,7 @@ class RWData:
         # just not 0x00
         firmware.set_range(table_start, table_start + 16 * self.MAX_TABLE_ELEMENTS + 4, b"\x77")
 
+
     def __getitem__(self, k):
         return self.datas[k]
 
@@ -213,7 +214,7 @@ class RWData:
         total_len = 0
         for data in self.datas:
             compressed_data = lzma_compress(bytes(data))
-            print(f"    compressed {len(data)}->{len(compressed_data)} bytes (saves {len(data)-len(compressed_data)})")
+            print(f"    compressed {len(data)}->{len(compressed_data)} bytes (saves {len(data)-len(compressed_data)}). Writing to 0x{index:05X}")
             self.firmware[index:index+len(compressed_data)] = compressed_data
 
             data_addrs.append(index)
@@ -246,6 +247,9 @@ class RWData:
         index += 4
 
         assert index == self.table_end
+
+        # Update the pointer to the end of table in the loader
+        self.firmware.relative(0x17db4, index, size=4)
 
         print(self)
 

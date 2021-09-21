@@ -38,13 +38,19 @@ class Firmware(FirmwarePatchMixin, bytearray):
     RAM_LEN  = 0x00020000
     ENC_LEN  = 0
 
-    def __init__(self, firmware, elf=None):
-        with open(firmware, 'rb') as f:
-            firmware_data = f.read()
+    def __init__(self, firmware=None):
+        if firmware:
+            with open(firmware, 'rb') as f:
+                firmware_data = f.read()
+            super().__init__(firmware_data)
+        else:
+            super().__init__()
 
-        super().__init__(firmware_data)
         self._lookup = Lookup()
         self._verify()
+
+    def _verify(self):
+        pass
 
     def __getitem__(self, key):
         """ Properly raises index error if trying to access oob regions.
@@ -225,10 +231,20 @@ class ExtFirmware(Firmware):
             for i, cipher_byte in enumerate(reversed(cipher_block)):
                 self[offset + i] ^= cipher_byte
 
+class SRAM3(Firmware):
+    FLASH_BASE = 0x240A_0000
+    FLASH_LEN = 384 * (1 << 10)
+
+    def __str__(self):
+        return "sram3"
+
+
 class Device(DevicePatchMixin):
     def __init__(self, internal, external):
         self.internal = internal
         self.external = external
+
+        self.sram3 = SRAM3()
 
         self.lookup = Lookup()
         self.internal._lookup = self.lookup

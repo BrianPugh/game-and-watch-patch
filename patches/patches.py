@@ -299,14 +299,8 @@ def apply_patches(args, device):
     compressed_len = device.external.compress(0x9_8b84, 0x1_0000)
     device.internal.bl(0x678e, "memcpy_inflate")
 
-    # Always move the clock graphics to internal firmware no matter what
     printe("Moving clock graphics to internal firmware")
-    device.move_to_int(0x9_8b84, int_pos, size=compressed_len)
-    device.internal.replace(0x7350, int_addr_start + int_pos, size=4)
-    compressed_len = _round_up_word(compressed_len)
-    int_pos += compressed_len
-    offset -= 0x1_0000
-
+    move_ext(0x9_8b84, compressed_len, 0x7350)
 
     # Note: the clock uses a different palette; this palette only applies
     # to ingame Super Mario Bros 1 & 2

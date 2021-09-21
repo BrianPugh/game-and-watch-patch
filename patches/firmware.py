@@ -373,8 +373,8 @@ class ExtFirmware(Firmware):
                 self[offset + i] ^= cipher_byte
 
 class SRAM3(Firmware):
-    #FLASH_BASE = 0x240A_0000
-    FLASH_BASE = 0x240e2b38
+    # This value was reached by trial and error until SMB2 would work.
+    FLASH_BASE = 0x240e7480
     FLASH_LEN = 0x24100000 - FLASH_BASE
 
     def __str__(self):
@@ -394,7 +394,6 @@ class Device(DevicePatchMixin):
         self.sram3._lookup = self.lookup
 
         # insert some noops so we can hijack some ram
-        # Gets us 120,008 bytes at 0x240e2b38
         self.internal.nop(0x677a, 1)
         self.internal.asm(0x677a+2, "add r0, r0, r1")
 

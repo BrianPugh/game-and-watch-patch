@@ -132,7 +132,8 @@ class RWData:
         2. We are only modifying the lz_decompress stuff.
     """
 
-    MAX_TABLE_ELEMENTS = 3
+    # THIS HAS TO AGREE WITH THE LINKER
+    MAX_TABLE_ELEMENTS = 5
 
     def __init__(self, firmware, table_start, table_len):
         # We want to be able to extend the table.
@@ -160,6 +161,7 @@ class RWData:
             i += 4
 
             data = lz77_decompress(firmware[data_addr : data_addr + data_len])
+            print(f"    lz77 decompressed data {data_len} -> {len(data)}")
             firmware.clear_range(data_addr, data_addr + data_len)
 
             self.append(data, data_dst)
@@ -179,7 +181,7 @@ class RWData:
 
     @property
     def table_end(self):
-        return self.table_start + 4 * len(self.datas) + 4
+        return self.table_start + 4 * 4 * len(self.datas) + 4
 
     def append(self, data, dst):
         """ Add a new element to the table
@@ -241,8 +243,35 @@ class RWData:
             index += 4
 
         self.firmware.relative(index, self.last_fn, size=4)
+        index += 4
+
+        assert index == self.table_end
+
+        print(self)
 
         return total_len
+
+    def __str__(self):
+        """ Returns the **written** table.
+
+        Doesn't show unstaged changes.
+        """
+        substrs = []
+        substrs.append("")
+        substrs.append("RWData Table")
+        substrs.append("------------")
+        for addr in range(self.table_start, self.table_end - 4, 16):
+            substrs.append(f"0x{addr:08X}:  "
+                   f"0x{self.firmware.int(addr + 0):08X}  "
+                  f"0x{self.firmware.int(addr + 4):08X}  "
+                  f"0x{self.firmware.int(addr + 8):08X}  "
+                  f"0x{self.firmware.int(addr + 12):08X}  "
+                  )
+        addr = self.table_end - 4
+        substrs.append(f"0x{addr:08X}:  0x{self.firmware.int(addr + 0):08X}")
+        substrs.append("")
+        return "\n".join(substrs)
+
 
 
 

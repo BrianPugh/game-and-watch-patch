@@ -81,9 +81,8 @@ def main():
     if len(device.internal) != len(patch):
         raise InvalidPatchError(f"Expected patch length {len(device.internal)}, got {len(patch)}")
 
-    # Note: this MUST be the same value in the linker script.
-    STOCK_ROM_END = 0x000180c8  # We cut off the compressed rwdata since we relocate it
-    device.internal[STOCK_ROM_END:] = patch[STOCK_ROM_END:]
+    novel_code_start = device.internal.address("__do_global_dtors_aux") & 0x00FF_FFF8
+    device.internal[novel_code_start:] = patch[novel_code_start:]
     del patch
 
     if args.extended:

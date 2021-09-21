@@ -110,12 +110,12 @@ def apply_patches(args, device):
         lower += 0x9000_0000
         upper = lower + size
 
-        for i in range(0, len(device.internal.rwdata), 4):
-            val = int.from_bytes(device.internal.rwdata[i:i+4], 'little')
+        for i in range(0, len(device.internal.rwdata[1]), 4):
+            val = int.from_bytes(device.internal.rwdata[1][i:i+4], 'little')
             if lower <= val < upper:
                 new_val = device.lookup[val]
                 print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
-                device.internal.rwdata[i:i+4] = new_val.to_bytes(4, "little")
+                device.internal.rwdata[1][i:i+4] = new_val.to_bytes(4, "little")
 
     def rwdata_erase(lower, size):
         """
@@ -124,10 +124,10 @@ def apply_patches(args, device):
         lower += 0x9000_0000
         upper = lower + size
 
-        for i in range(0, len(device.internal.rwdata), 4):
-            val = int.from_bytes(device.internal.rwdata[i:i+4], 'little')
+        for i in range(0, len(device.internal.rwdata[1]), 4):
+            val = int.from_bytes(device.internal.rwdata[1][i:i+4], 'little')
             if lower <= val < upper:
-                device.internal.rwdata[i:i+4] = b"\x00\x00\x00\x00"
+                device.internal.rwdata[1][i:i+4] = b"\x00\x00\x00\x00"
 
     def move_to_int(ext, size, reference):
         nonlocal int_pos

@@ -122,6 +122,116 @@ class Firmware(FirmwarePatchMixin, bytearray):
         if show:
             plt.show()
 
+class RWData:
+    """
+    Assumptions (which are valid for this firmware):
+        1. Only compressed rwdata is after this table
+        2. We are only modifying the lz_decompress stuff.
+    """
+
+    def __init__(self, firmware, table_start, table_len):
+        # We want to be able to extend the table.
+
+        self.firmware = firmware
+        self.table_start = table_start
+        self.table_len = table_len
+
+        self.datas, self.dsts = [], []
+
+        for i in range(table_start, table_start + table_len - 4, 16):
+            # First thing is pointer to executable, need to always replace this
+            # to our lzma
+            rel_offset_to_fn = firmware.int(i)
+            if rel_offset_to_fn > 0x8000_0000:
+                rel_offset_to_fn -= 0x1_0000_0000
+            fn_addr = i + rel_offset_to_fn
+            assert fn_addr == 0x18005  # lz_decompress function
+            i += 4
+
+            data_addr = i + firmware.int(i)
+            i += 4
+            data_len = firmware.int(i) >> 1
+            i += 4
+            data_dst = firmware.int(i)
+            i += 4
+
+            data = lz77_decompress(firmware[data_addr : data_addr + data_len])
+            firmware.clear_range(data_addr, data_addr + data_len)
+
+            self.datas.append(data)
+            self.dsts.append(data_dst)
+
+        last_element_offset = table_start + table_len - 4
+        self.last_fn = firmware.int(last_element_offset)
+        if self.last_fn > 0x8000_0000:
+            self.last_fn -= 0x1_0000_0000
+        self.last_fn += last_element_offset
+
+    def __getitem__(self, k):
+        return self.datas[k]
+
+    def append(self, data, dst):
+        """ Add a new element to the table
+        """
+
+        self.datas.append(data)
+        self.dsts.append(dst)
+
+    def write_table_and_data(self, data_offset=None):
+        """
+        Parameters
+        ----------
+        data_offset : int
+            Where to write the compressed data
+        """
+        table_len = 4 * len(self.datas) + 4
+
+        # Write Compressed Data
+        data_addrs, data_lens = [], []
+        if data_offset is None:
+            index = self.table_start + table_len
+        else:
+            index = data_offset
+
+        total_len = 0
+        for data in self.datas:
+            compressed_data = lzma_compress(bytes(data))
+            self.firmware[index:index+len(compressed_data)] = compressed_data
+
+            data_addrs.append(index)
+            data_lens.append(len(compressed_data))
+
+            index += len(compressed_data)
+            total_len += len(compressed_data)
+
+        # Write Table
+        index = self.table_start
+        assert len(data_addrs) == len(data_lens) == len(self.dsts)
+        for data_addr, data_len, data_dst in zip(data_addrs, data_lens, self.dsts):
+            self.firmware.relative(index, "rwdata_inflate")
+            index += 4
+
+            # Assumes that the data will be after the table.
+            rel_addr = data_addr - index
+            if rel_addr < 0:
+                rel_addr += 0x1_0000_0000
+            self.firmware.replace(index, rel_addr, size=4)
+            index += 4
+
+            self.firmware.replace(index, data_len, size=4)
+            index += 4
+
+            self.firmware.replace(index, data_dst, size=4)
+            index += 4
+
+        rel_addr = self.last_fn - index
+        if rel_addr < 0:
+            rel_addr += 0x1_0000_0000
+        self.firmware.replace(index, rel_addr, size=4)
+
+        return total_len
+
+
 
 class IntFirmware(Firmware):
     STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
@@ -138,9 +248,7 @@ class IntFirmware(Firmware):
         self.elf = ELFFile(self._elf_f)
         self.symtab = self.elf.get_section_by_name('.symtab')
 
-        self.rwdata_addr = 0x18e75
-        self.rwdata_len = 0x8fc >> 1
-        self.rwdata = lz77_decompress(self[self.rwdata_addr : self.rwdata_addr + self.rwdata_len])
+        self.rwdata = RWData(self, 0x1_80a4, 36)
 
     def __str__(self):
         return "internal"
@@ -149,18 +257,6 @@ class IntFirmware(Firmware):
         h = hashlib.sha1(self).hexdigest()
         if h != self.STOCK_ROM_SHA1_HASH:
             raise InvalidStockRomError
-
-    def compress_rwdata(self):
-        """ Compresses and hooks up the rwdata back into the firmware """
-        compressed_rwdata = lzma_compress(bytes(self.rwdata))
-        print(f"compressed rwdata {len(self.rwdata)} -> {len(compressed_rwdata)}")
-
-        self.replace(self.rwdata_addr, compressed_rwdata)
-
-        table_offset = 0x1_80b4
-        self.relative(table_offset, "rwdata_inflate")
-        self.replace(table_offset + 8, len(compressed_rwdata) << 1, size=4)
-
 
     def address(self, symbol_name):
         symbols = self.symtab.get_symbol_by_name(symbol_name)

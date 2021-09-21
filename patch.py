@@ -100,7 +100,7 @@ def main():
         device.external[-8192:] = b"\x00" * 8192
 
     # Compress, insert, and reference the modified rwdata
-    device.internal.compress_rwdata()
+    device.internal.rwdata.write_table_and_data()
 
     if args.show:
         # Debug visualization

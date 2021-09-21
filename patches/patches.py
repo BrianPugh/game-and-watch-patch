@@ -138,6 +138,16 @@ def apply_patches(args, device):
         int_pos += _round_up_word(size)
         return new_loc
 
+    def move_to_sram3(ext, size, reference):
+        nonlocal sram3_pos
+        device.move_to_sram3(ext, sram3_pos, size=size)
+        print(f"    move_to_sram3 {hex(ext)} -> {hex(sram3_pos)}")
+        if reference is not None:
+            device.internal.lookup(reference)
+        new_loc = sram3_pos
+        sram3_pos += _round_up_word(size)
+        return new_loc
+
     def move_ext_external(ext, size, reference):
         device.external.move(ext, offset, size=size)
         if reference is not None:
@@ -439,6 +449,7 @@ def apply_patches(args, device):
     for reference in references:
         reference = reference - 0xb_fd1c + new_loc
         if args.extended:
+            #device.sram3.lookup(reference)
             device.internal.lookup(reference)
         else:
             device.external.lookup(reference)
@@ -480,6 +491,15 @@ def apply_patches(args, device):
     device.external.replace(0xf5858, b"\x00" * 34728)  # refence at internal 0x7210
     offset -= 34728
 
+    if args.extended:
+        # Compress and copy over SRAM3
+        #device.internal.rwdata.append(device.sram3[:sram3_pos].copy(), device.sram3.FLASH_BASE)
+        pass
+
+    # Compress, insert, and reference the modified rwdata
+    print("Writing rwdata")
+    int_pos += device.internal.rwdata.write_table_and_data(int_pos)
+
     # Shorten the external firmware
     # This rounds the negative offset towards zero.
     offset = _round_up_page(offset)
@@ -514,12 +534,6 @@ def apply_patches(args, device):
     printi("Updating end of OTFDEC pointer")
     device.internal.add(0x1_06ec, offset)
     device.external.shorten(offset)
-
-
-    # Compress, insert, and reference the modified rwdata
-    print("Writing rwdata")
-    int_pos += device.internal.rwdata.write_table_and_data(int_pos)
-
 
     internal_remaining_free = len(device.internal) - int_pos
 

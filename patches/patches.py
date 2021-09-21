@@ -301,6 +301,7 @@ def apply_patches(args, device):
 
     printe("Moving clock graphics to internal firmware")
     move_ext(0x9_8b84, compressed_len, 0x7350)
+    offset -= (0x1_0000 - _round_down_word(compressed_len))
 
     # Note: the clock uses a different palette; this palette only applies
     # to ingame Super Mario Bros 1 & 2

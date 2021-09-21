@@ -395,7 +395,8 @@ class Device(DevicePatchMixin):
 
         # insert some noops so we can hijack some ram
         # Gets us 120,008 bytes at 0x240e2b38
-        self.internal.nop(0x677a, 2)
+        self.internal.nop(0x677a, 1)
+        self.internal.asm(0x677a+2, "add r0, r0, r1")
 
 
     def crypt(self):

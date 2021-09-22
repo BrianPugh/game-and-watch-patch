@@ -194,7 +194,8 @@ def apply_patches(args, device):
             device.internal.lookup(reference)
         new_loc = sram3_pos
         sram3_pos += _round_up_word(size)
-        offset -= _round_up_word(size)
+        offset    -= _round_down_word(size)
+
         return new_loc
 
     def move_ext_external(ext, size, reference):
@@ -208,7 +209,7 @@ def apply_patches(args, device):
         nonlocal offset
         try:
             new_loc = move_to_int(ext, size, reference)
-            offset -= _round_up_word(size)
+            offset -= _round_down_word(size)
             return new_loc
         except NotEnoughSpaceError:
             print(f"        {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}")
@@ -258,10 +259,10 @@ def apply_patches(args, device):
 
 
     printd("Compressing and moving stuff stuff to internal firmware.")
-    compressed_len = device.external.compress(0x0, 7772)
+    compressed_len = device.external.compress(0x0, 7776)
     device.internal.bl(0x665c, "memcpy_inflate")
     move_ext(0x0, compressed_len, 0x7204)
-    offset -= (7772 - _round_down_word(compressed_len))
+    offset -= (7776 - _round_down_word(compressed_len))
 
     # SMB1 ROM
     printd(f"Compressing and moving SMB1 ROM to sram3.")

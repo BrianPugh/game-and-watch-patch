@@ -15,7 +15,7 @@ ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
 endif
 
 ifneq (,$(findstring --debug, $(PATCH_PARAMS)))
-	DEBUG =1 
+	DEBUG = 1 
 	C_DEFS += -DDEBUG
 endif
 

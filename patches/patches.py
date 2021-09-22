@@ -180,11 +180,11 @@ def apply_patches(args, device):
         device.sram3[sram3_pos:sram3_pos + size] = device.external[ext:ext+size]
         new_len = sram3_compressed_len(size)
         compression_ratio = size / (new_len - current_len)
-        print(f"    {Fore.GREEN}compression_ratio: {compression_ratio}{Style.RESET_ALL}")
+        print(f"    {Fore.YELLOW}compression_ratio: {compression_ratio}{Style.RESET_ALL}")
 
         if compression_ratio < args.compression_ratio:
             # Revert putting this data into sram3 due to poor space_savings
-            print("        not putting in sram due to poor compression.")
+            print(f"        {Fore.RED}not putting in sram due to poor compression.{Style.RESET_ALL}")
             device.sram3.clear_range(sram3_pos, sram3_pos + size)
             return move_ext_extended(ext, size, reference)
         # Even though the data is already moved, this builds the reference lookup
@@ -207,9 +207,14 @@ def apply_patches(args, device):
 
     def move_ext_extended(ext, size, reference):
         nonlocal offset
-        new_loc = move_to_int(ext, size, reference)
-        offset -= _round_up_word(size)
-        return new_loc
+        try:
+            new_loc = move_to_int(ext, size, reference)
+            offset -= _round_up_word(size)
+            return new_loc
+        except NotEnoughSpaceError:
+            print(f"    {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}")
+            raise NotImplementedError
+            return move_ext_external(ext, size, reference)
 
     move_ext = move_ext_extended if args.extended else move_ext_external
 
@@ -494,6 +499,7 @@ def apply_patches(args, device):
     ]
     for reference in references:
         reference = reference - 0xb_fd1c + new_loc
+        # BUG: THIS IS PROBLEMATIC
         if args.extended:
             device.internal.lookup(reference)
         else:
@@ -530,12 +536,11 @@ def apply_patches(args, device):
     device.external.replace(0xf5858, b"\x00" * 34728)  # refence at internal 0x7210
     offset -= 34728
 
-    if args.extended and sram3_pos:
+    if sram3_pos:
         # Compress and copy over SRAM3
         device.internal.rwdata.append(device.sram3[:sram3_pos].copy(), device.sram3.FLASH_BASE)
 
     # Compress, insert, and reference the modified rwdata
-    print("Writing rwdata")
     int_pos += device.internal.rwdata.write_table_and_data(int_pos)
 
     # Shorten the external firmware

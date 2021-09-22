@@ -64,12 +64,12 @@ class Firmware(FirmwarePatchMixin, bytearray):
                 try:
                     self[key.start]
                 except IndexError:
-                    raise IndexError(f"Index {key.start} ({hex(key.start)}) out of range")
+                    raise IndexError(f"Index {key.start} ({hex(key.start)}) out of range") from None
             if key.stop is not None:
                 try:
                     self[key.stop - 1]
                 except IndexError:
-                    raise IndexError(f"Index {key.stop - 1} ({hex(key.stop - 1)}) out of range")
+                    raise IndexError(f"Index {key.stop - 1} ({hex(key.stop - 1)}) out of range") from None
 
         return super().__getitem__(key)
 
@@ -82,12 +82,12 @@ class Firmware(FirmwarePatchMixin, bytearray):
                 try:
                     self[key.start]
                 except IndexError:
-                    raise NotEnoughSpaceError(f"Starting index {key.start} ({hex(key.start)}) exceeds firmware length {len(self)} ({hex(len(self))})")
+                    raise NotEnoughSpaceError(f"Starting index {key.start} ({hex(key.start)}) exceeds firmware length {len(self)} ({hex(len(self))})") from None
             if key.stop is not None:
                 try:
                     self[key.stop - 1]
                 except IndexError:
-                    raise NotEnoughSpaceError(f"Ending index {key.stop - 1} ({hex(key.stop - 1)}) exceeds firmware length {len(self)} ({hex(len(self))})")
+                    raise NotEnoughSpaceError(f"Ending index {key.stop - 1} ({hex(key.stop - 1)}) exceeds firmware length {len(self)} ({hex(len(self))})") from None
 
         return super().__setitem__(key, new_val)
 

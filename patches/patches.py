@@ -119,10 +119,9 @@ def apply_patches(args, device):
             return 0
 
         data = bytes(device.sram3[:index])
-        try:
+        if data in sram3_compressed_len.memo:
             return sram3_compressed_len.memo[data]
-        except KeyError:
-            pass
+
         compressed_data = lzma_compress(data)
         sram3_compressed_len.memo[data] = len(compressed_data)
         return len(compressed_data)
@@ -212,8 +211,8 @@ def apply_patches(args, device):
             offset -= _round_up_word(size)
             return new_loc
         except NotEnoughSpaceError:
-            print(f"    {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}")
-            raise NotImplementedError
+            print(f"        {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}")
+            raise NotImplementedError from None
             return move_ext_external(ext, size, reference)
 
     move_ext = move_ext_extended if args.extended else move_ext_external

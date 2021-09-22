@@ -127,8 +127,8 @@ def apply_patches(args, device):
         return len(compressed_data)
     sram3_compressed_len.memo = {}
 
-    def int_free_space():
-        return len(device.internal) - int_pos - sram3_compressed_len()
+    def int_free_space(add_index=0):
+        return len(device.internal) - int_pos - sram3_compressed_len(add_index=add_index) - device.internal.rwdata.compressed_len
 
     def sram3_free_space():
         return len(device.sram3) - sram3_pos
@@ -158,6 +158,10 @@ def apply_patches(args, device):
 
     def move_to_int(ext, size, reference):
         nonlocal int_pos
+
+        if int_free_space() < size:
+            raise NotEnoughSpaceError
+
         device.move_to_int(ext, int_pos, size=size)
         print(f"    move_to_int {hex(ext)} -> {hex(int_pos)}")
         if reference is not None:
@@ -172,16 +176,22 @@ def apply_patches(args, device):
         current_len = sram3_compressed_len()
 
         if False:
-            # TODO: Call move_to_int if sram3 is full.
-            # TODO: Call device.external.move if internal is full
+            # TODO: try Call move_to_int if sram3 is full.
+            # TODO: except NotEnoughSpaceError Call device.external.move if internal is full
             raise NotImplementedError
 
         device.sram3[sram3_pos:sram3_pos + size] = device.external[ext:ext+size]
         new_len = sram3_compressed_len(size)
-        compression_ratio = size / (new_len - current_len)
+        diff = new_len - current_len
+        compression_ratio = size / diff
+
         print(f"    {Fore.YELLOW}compression_ratio: {compression_ratio}{Style.RESET_ALL}")
 
-        if compression_ratio < args.compression_ratio:
+        if diff > int_free_space():
+            print(f"        {Fore.RED}not putting in sram due not enough free internal storage for compressed data.{Style.RESET_ALL}")
+            device.sram3.clear_range(sram3_pos, sram3_pos + size)
+            return move_ext_external(ext, size, reference)
+        elif compression_ratio < args.compression_ratio:
             # Revert putting this data into sram3 due to poor space_savings
             print(f"        {Fore.RED}not putting in sram due to poor compression.{Style.RESET_ALL}")
             device.sram3.clear_range(sram3_pos, sram3_pos + size)
@@ -213,7 +223,6 @@ def apply_patches(args, device):
             return new_loc
         except NotEnoughSpaceError:
             print(f"        {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}")
-            raise NotImplementedError from None
             return move_ext_external(ext, size, reference)
 
     move_ext = move_ext_extended if args.extended else move_ext_external
@@ -500,9 +509,9 @@ def apply_patches(args, device):
     for reference in references:
         reference = reference - 0xb_fd1c + new_loc
         # BUG: THIS IS PROBLEMATIC
-        if args.extended:
+        try:
             device.internal.lookup(reference)
-        else:
+        except KeyError:
             device.external.lookup(reference)
 
     # BALL sound samples.

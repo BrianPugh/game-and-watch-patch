@@ -140,6 +140,7 @@ class RWData:
 
         self.firmware = firmware
         self.table_start = table_start
+        self.__compressed_len_memo = {}
 
         self.datas, self.dsts = [], []
 
@@ -200,8 +201,11 @@ class RWData:
     def compressed_len(self):
         compressed_len = 0
         for data in self.datas:
-            compressed_data = lzma_compress(bytes(data))
-            compressed_len += len(compressed_data)
+            data = bytes(data)
+            if data not in self.__compressed_len_memo:
+                compressed_data = lzma_compress(bytes(data))
+                self.__compressed_len_memo[data] = len(compressed_data)
+            compressed_len += self.__compressed_len_memo[data]
         return compressed_len
 
     def write_table_and_data(self, data_offset=None):

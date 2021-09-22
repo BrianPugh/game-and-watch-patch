@@ -382,7 +382,7 @@ class ExtFirmware(Firmware):
 
 class SRAM3(Firmware):
     # This value was reached by trial and error until SMB2 would work.
-    FLASH_BASE = 0x240e7480
+    FLASH_BASE = 0x240e7780
     FLASH_LEN = 0x24100000 - FLASH_BASE
 
     def __str__(self):

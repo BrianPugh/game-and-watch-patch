@@ -63,6 +63,13 @@ def add_patch_args(parser):
     parser.add_argument("--no-smb2", action="store_true",
                         help="Remove SMB2 rom.")
 
+    parser.add_argument("--compression-ratio", type=float, default=1.3,
+                        help="Data targeted for SRAM3 will only be put into "
+                        "SRAM3 if it's compression ratio is above this value. "
+                        "Otherwise, will fallback to internal flash, then external "
+                        "flash."
+                        )
+
 
 def validate_patch_args(parser, args):
     if args.sleep_time and (args.sleep_time < 1 or args.sleep_time > 1092):
@@ -170,14 +177,18 @@ def apply_patches(args, device):
             # TODO: Call device.external.move if internal is full
             raise NotImplementedError
 
-        device.move_to_sram3(ext, sram3_pos, size=size)
+        device.sram3[sram3_pos:sram3_pos + size] = device.external[ext:ext+size]
         new_len = sram3_compressed_len(size)
         compression_ratio = size / (new_len - current_len)
         print(f"    {Fore.GREEN}compression_ratio: {compression_ratio}{Style.RESET_ALL}")
 
-        if False:
+        if compression_ratio < args.compression_ratio:
             # Revert putting this data into sram3 due to poor space_savings
-            raise NotImplementedError
+            print("        not putting in sram due to poor compression.")
+            device.sram3.clear_range(sram3_pos, sram3_pos + size)
+            return move_ext_extended(ext, size, reference)
+        # Even though the data is already moved, this builds the reference lookup
+        device.move_to_sram3(ext, sram3_pos, size=size)
 
         print(f"    move_to_sram3 {hex(ext)} -> {hex(sram3_pos)}")
         if reference is not None:
@@ -340,8 +351,7 @@ def apply_patches(args, device):
         offset -= mario_song_len
 
     # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
-    # These index into one of the external palettes starting at 0xbec68.
-    # Moving this to internal firmware for now as a PoC.
+    # These index into one of the palettes starting at 0xbec68.
     printe("Compressing clock graphics")
     compressed_len = device.external.compress(0x9_8b84, 0x1_0000)
     device.internal.bl(0x678e, "memcpy_inflate")

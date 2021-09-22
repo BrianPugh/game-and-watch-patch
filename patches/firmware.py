@@ -196,6 +196,14 @@ class RWData:
 
         assert len(self.datas) == len(self.dsts)
 
+    @property
+    def compressed_len(self):
+        compressed_len = 0
+        for data in self.datas:
+            compressed_data = lzma_compress(bytes(data))
+            compressed_len += len(compressed_data)
+        return compressed_len
+
     def write_table_and_data(self, data_offset=None):
         """
         Parameters

@@ -1,7 +1,8 @@
 from math import ceil, floor
 from colorama import Fore, Back, Style
 
-from .exception import ParsingError
+from .exception import ParsingError, NotEnoughSpaceError
+from .compression import lzma_compress
 
 def printi(msg, *args):
     print(Fore.MAGENTA + msg + Style.RESET_ALL, *args)
@@ -105,6 +106,27 @@ def apply_patches(args, device):
     int_pos = find_free_space(device)
     sram3_pos = 0
 
+    def sram3_compressed_len(add_index=0):
+        index = sram3_pos + add_index
+        if not index:
+            return 0
+
+        data = bytes(device.sram3[:index])
+        try:
+            return sram3_compressed_len.memo[data]
+        except KeyError:
+            pass
+        compressed_data = lzma_compress(data)
+        sram3_compressed_len.memo[data] = len(compressed_data)
+        return len(compressed_data)
+    sram3_compressed_len.memo = {}
+
+    def int_free_space():
+        return len(device.internal) - int_pos - sram3_compressed_len()
+
+    def sram3_free_space():
+        return len(device.sram3) - sram3_pos
+
     def rwdata_lookup(lower, size):
         lower += 0x9000_0000
         upper = lower + size
@@ -140,7 +162,23 @@ def apply_patches(args, device):
 
     def move_to_sram3(ext, size, reference):
         nonlocal sram3_pos, offset
+
+        current_len = sram3_compressed_len()
+
+        if False:
+            # TODO: Call move_to_int if sram3 is full.
+            # TODO: Call device.external.move if internal is full
+            raise NotImplementedError
+
         device.move_to_sram3(ext, sram3_pos, size=size)
+        new_len = sram3_compressed_len(size)
+        compression_ratio = size / (new_len - current_len)
+        print(f"    {Fore.GREEN}compression_ratio: {compression_ratio}{Style.RESET_ALL}")
+
+        if False:
+            # Revert putting this data into sram3 due to poor space_savings
+            raise NotImplementedError
+
         print(f"    move_to_sram3 {hex(ext)} -> {hex(sram3_pos)}")
         if reference is not None:
             device.internal.lookup(reference)

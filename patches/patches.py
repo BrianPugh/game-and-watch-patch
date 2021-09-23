@@ -55,7 +55,7 @@ def add_patch_args(parser):
     parser.add_argument("--no-smb2", action="store_true",
                         help="Remove SMB2 rom.")
 
-    parser.add_argument("--compression-ratio", type=float, default=1.3,
+    parser.add_argument("--compression-ratio", type=float, default=1.35,
                         help="Data targeted for SRAM3 will only be put into "
                         "SRAM3 if it's compression ratio is above this value. "
                         "Otherwise, will fallback to internal flash, then external "
@@ -299,7 +299,7 @@ def apply_patches(args, device):
         0xeef8: 0x4524,
     }
     for external, internal in references.items():
-        move_ext(external, 64, internal)
+        move_to_sram3(external, 64, internal)
 
     references = [
         0x2ac,
@@ -315,8 +315,8 @@ def apply_patches(args, device):
     ]
     move_to_sram3(0xef38, 128*10, references)
 
-    move_ext(0xf438, 96, 0x456c)
-    move_ext(0xf498, 180, 0x43f8)
+    move_to_sram3(0xf438, 96, 0x456c)
+    move_to_sram3(0xf498, 180, 0x43f8)
 
     # This is the first thing passed into the drawing engine.
     move_to_sram3(0xf54c, 1100, 0x43fc)
@@ -375,7 +375,7 @@ def apply_patches(args, device):
     compressed_len = device.external.compress(0x9_8b84, 0x1_0000)
     device.internal.bl(0x678e, "memcpy_inflate")
 
-    printe("Moving clock graphics to internal firmware")
+    printe("Moving clock graphics")
     move_ext(0x9_8b84, compressed_len, 0x7350)
     offset -= (0x1_0000 - _round_down_word(compressed_len))
 
@@ -401,7 +401,7 @@ def apply_patches(args, device):
         0x0_d2f4,
         0x0_d2f0,
     ]
-    move_ext(0xa_ebe4, 116, references)
+    move_to_sram3(0xa_ebe4, 116, references)
 
     if args.no_smb2:
         printe("Erasing SMB2 ROM")
@@ -411,7 +411,7 @@ def apply_patches(args, device):
         printe("Compressing and moving SMB2 ROM.")
         compressed_len = device.external.compress(0xa_ec58, 0x1_0000)
         device.internal.bl(0x6a12, "memcpy_inflate")
-        move_ext(0xa_ec58, compressed_len, 0x7374)
+        move_to_sram3(0xa_ec58, compressed_len, 0x7374)
         offset -= (65536 - _round_down_word(compressed_len))  # Move by the space savings.
 
         # Round to nearest page so that the length can be used as an imm
@@ -422,7 +422,7 @@ def apply_patches(args, device):
         device.internal.asm(0x6a1e, f"mov.w r3, #{compressed_len}")
 
     # Not sure what this data is
-    move_ext(0xbec58, 8*2, 0x10964)
+    move_to_sram3(0xbec58, 8*2, 0x10964)
 
     printe("Moving Palettes")
     # There are 80 colors, each in BGRA format, where A is always 0
@@ -473,8 +473,8 @@ def apply_patches(args, device):
     move_to_sram3(0xbf838, 280, references)
 
     move_to_sram3(0xbf950, 180, [0xe2e4, 0xf4fc])
-    move_ext(0xbfa04, 8, 0x1_6590)
-    move_ext(0xbfa0c, 784, 0x1_0f9c)
+    move_to_sram3(0xbfa04, 8, 0x1_6590)
+    move_to_sram3(0xbfa0c, 784, 0x1_0f9c)
 
     # MOVE EXTERNAL FUNCTIONS
     new_loc = move_ext(0xb_fd1c, 14244, None)
@@ -519,10 +519,10 @@ def apply_patches(args, device):
             device.external.lookup(reference)
 
     # BALL sound samples.
-    move_ext(0xc34c0, 6168, 0x43ec)
+    move_to_sram3(0xc34c0, 6168, 0x43ec)
     rwdata_lookup(0xc34c0, 6168)
-    move_ext(0xc4cd8, 2984, 0x459c)
-    move_ext(0xc5880, 120, 0x4594)
+    move_to_sram3(0xc4cd8, 2984, 0x459c)
+    move_to_sram3(0xc5880, 120, 0x4594)
 
     if args.slim:
         # Images Notes:

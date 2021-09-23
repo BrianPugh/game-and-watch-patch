@@ -175,12 +175,12 @@ def apply_patches(args, device):
 
         current_len = sram3_compressed_len()
 
-        if False:
-            # TODO: try Call move_to_int if sram3 is full.
-            # TODO: except NotEnoughSpaceError Call device.external.move if internal is full
-            raise NotImplementedError
+        try:
+            device.sram3[sram3_pos:sram3_pos + size] = device.external[ext:ext+size]
+        except NotEnoughSpaceError:
+            print(f"        {Fore.RED}sram3 full. Attempting to put in internal{Style.RESET_ALL}")
+            return move_ext_extended(ext, size, reference)
 
-        device.sram3[sram3_pos:sram3_pos + size] = device.external[ext:ext+size]
         new_len = sram3_compressed_len(size)
         diff = new_len - current_len
         compression_ratio = size / diff

@@ -25,26 +25,33 @@ auto_int = partial(int, base=0)  # Auto detect input format
 ENTER = "\r"
 
 
-def _get_char(prompt=""):
+def get_char(prompt="", valid=None, echo=True, newline=True):
     """reads a single character"""
-    sys.stdout.write(prompt)
-    sys.stdout.flush()
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
-        tty.setraw(fd)
-        return sys.stdin.read(1)
+        while True:
+            sys.stdout.write(prompt)
+            sys.stdout.flush()
+
+            tty.setraw(fd)
+            char = sys.stdin.read(1)
+
+            if char == "\x03":  # CTRL + C
+                sys.exit(1)
+
+            if echo:
+                sys.stdout.write(char)
+                sys.stdout.flush()
+
+            if valid is None or char in valid:
+                return char
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        if newline:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
 
-def get_char(prompt, valid=None):
-    while True:
-        char = _get_char(prompt)
-        if char == "\x03":  # CTRL + C
-            sys.exit(1)
-        print("")
-        if valid is None or char in valid:
-            return char
 
 
 class Main:
@@ -79,7 +86,7 @@ class Main:
 
         args.output.parent.mkdir(parents=True, exist_ok=True)
         size = args.addr_end - args.addr_start
-        mem_original = random.randbytes(size) if args.random else b""
+        samples = []
 
         def read():
             return bytes(target.read_memory_block8(args.addr_start, size))
@@ -87,48 +94,51 @@ class Main:
         def write(data):
             return target.write_memory_block8(args.addr_start, data)
 
-        #######################
-        # Perform initial r/w #
-        #######################
-        if mem_original:
-            get_char("Press Enter to load initial memory values", ENTER)
-            target.halt()
-            write(mem_original)
-        else:
-            get_char("Press Enter to read initial memory values", ENTER)
-            target.halt()
-            mem_original = read()
-        target.resume()
+        if args.random:
+            random_data = random.randbytes(size)
+            write(random_data)
+            samples.append(random_data)
 
-        ##############################
-        # Collect additional samples #
-        ##############################
-        observations = [mem_original]
+        ###################
+        # Collect samples #
+        ###################
         while True:
-            char = get_char("Press Enter to capture memory values. \"q\" to quit", [ENTER, "q"])
-            if char == ENTER:
+            char = get_char("Enter command (h for help): ",
+                            [ENTER, " ", "h", "r", "q"])
+            if char == "h":
+                print("Help:")
+                print("    Enter or Space - Capture a memory screenshot")
+                print("    r - Reset Target")
+                print("    q - save and quit")
+            elif char == ENTER or char == " ":
+                print("Capturing... ", end="", flush=True)
                 target.halt()
                 data = read()
                 target.resume()
-                observations.append(data)
+                print("Captured!")
+                samples.append(data)
+            elif char == "r":
+                print("Reseting Target")
+                target.reset()
             elif char == "q":
+                print("Quitting")
                 break
             else:
                 raise ValueError(f"Unknown option \"{char}\"")
-
         # Serialize
         with open(args.output, "wb") as f:
-            pickle.dump(observations, f)
+            pickle.dump(samples, f)
+        print(f"Saved session to {args.output}")
+
 
     def analyze(self):
         parser = argparse.ArgumentParser(description="Analyze captured data.")
-        parser.add_argument("src", type=Path, help="Load a npz file for analysis.")
+        parser.add_argument("src", type=Path, help="Load a pkl file for analysis.")
 
         args = parser.parse_args(sys.argv[2:])
+
+        # TODO: perform some analysis
         raise NotImplementedError
-
-
-
 
 
 if __name__ == "__main__":

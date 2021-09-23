@@ -163,6 +163,14 @@ def apply_patches(args, device):
         return new_loc
 
     def move_to_sram3(ext, size, reference):
+        """ Attempt to relocate in priority order:
+        1. SRAM3
+        2. Internal
+        3. External
+
+        This is the primary moving method for any compressible data.
+        """
+
         nonlocal sram3_pos, offset
 
         current_len = sram3_compressed_len()
@@ -209,9 +217,11 @@ def apply_patches(args, device):
 
     def move_ext(ext, size, reference):
         """ Attempt to relocate in priority order:
-        1. SRAM3
-        2. Internal
-        3. External
+        1. Internal
+        2. External
+
+        This is the primary moving function for data that is already compressed
+        or is incompressible.
         """
         nonlocal offset
         try:
@@ -503,7 +513,6 @@ def apply_patches(args, device):
     ]
     for reference in references:
         reference = reference - 0xb_fd1c + new_loc
-        # BUG: THIS IS PROBLEMATIC
         try:
             device.internal.lookup(reference)
         except KeyError:

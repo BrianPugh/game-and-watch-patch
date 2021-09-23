@@ -176,8 +176,10 @@ $(BUILD_DIR):
 	mkdir -p $@
 
 # Rebuild if PATCH_PARAMS doesn't match the values when last ran
-$(BUILD_DIR)/env: $(BUILD_DIR) scripts/check_env_vars.py
+$(BUILD_DIR)/env: $(BUILD_DIR) scripts/check_env_vars.py FORCE
 	$(PYTHON) scripts/check_env_vars.py $@ $(PATCH_PARAMS)
+
+FORCE: ;
 
 
 .EXPORT_ALL_VARIABLES:

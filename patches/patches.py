@@ -515,7 +515,7 @@ def apply_patches(args, device):
         reference = reference - 0xb_fd1c + new_loc
         try:
             device.internal.lookup(reference)
-        except KeyError:
+        except (IndexError, KeyError):
             device.external.lookup(reference)
 
     # BALL sound samples.

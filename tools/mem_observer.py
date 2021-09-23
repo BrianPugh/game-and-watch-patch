@@ -74,7 +74,7 @@ class Main:
         parser.add_argument("addr_end", type=auto_int)
         parser.add_argument("--random", action="store_true",
                             help="Write random initial data to address range.")
-        parser.add_argument("--output", "-o", type=Path, default=Path(f"capture/{time_str}.pkl"))
+        parser.add_argument("--output", "-o", type=Path, default=Path(f"captures/{time_str}.pkl"))
         args = parser.parse_args(sys.argv[2:])
 
         args.output.parent.mkdir(parents=True, exist_ok=True)

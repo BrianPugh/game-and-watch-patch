@@ -26,14 +26,6 @@ def _round_up_page(val):
 def _seconds_to_frames(seconds):
     return int(round(60 * seconds))
 
-def _check_int_size(args, int_pos):
-    size = 0x20000
-    if args.extended:
-        size += 0x20000
-
-    if int_pos > size:
-        raise IndexError(f"Internal firmware pos {int_pos} exceeded internal firmware size {size}.")
-
 def add_patch_args(parser):
 
     group = parser.add_mutually_exclusive_group()
@@ -179,7 +171,7 @@ def apply_patches(args, device):
             device.sram3[sram3_pos:sram3_pos + size] = device.external[ext:ext+size]
         except NotEnoughSpaceError:
             print(f"        {Fore.RED}sram3 full. Attempting to put in internal{Style.RESET_ALL}")
-            return move_ext_extended(ext, size, reference)
+            return move_ext(ext, size, reference)
 
         new_len = sram3_compressed_len(size)
         diff = new_len - current_len
@@ -195,7 +187,7 @@ def apply_patches(args, device):
             # Revert putting this data into sram3 due to poor space_savings
             print(f"        {Fore.RED}not putting in sram due to poor compression.{Style.RESET_ALL}")
             device.sram3.clear_range(sram3_pos, sram3_pos + size)
-            return move_ext_extended(ext, size, reference)
+            return move_ext(ext, size, reference)
         # Even though the data is already moved, this builds the reference lookup
         device.move_to_sram3(ext, sram3_pos, size=size)
 
@@ -215,7 +207,12 @@ def apply_patches(args, device):
         new_loc = ext + offset
         return new_loc
 
-    def move_ext_extended(ext, size, reference):
+    def move_ext(ext, size, reference):
+        """ Attempt to relocate in priority order:
+        1. SRAM3
+        2. Internal
+        3. External
+        """
         nonlocal offset
         try:
             new_loc = move_to_int(ext, size, reference)
@@ -224,8 +221,6 @@ def apply_patches(args, device):
         except NotEnoughSpaceError:
             print(f"        {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}")
             return move_ext_external(ext, size, reference)
-
-    move_ext = move_ext_extended if args.extended else move_ext_external
 
     printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
     device.internal.replace(0x4, "bootloader")

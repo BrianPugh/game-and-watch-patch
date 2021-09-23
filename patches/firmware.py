@@ -64,12 +64,12 @@ class Firmware(FirmwarePatchMixin, bytearray):
                 try:
                     self[key.start]
                 except IndexError:
-                    raise IndexError(f"Index {key.start} ({hex(key.start)}) out of range")
+                    raise IndexError(f"Index {key.start} ({hex(key.start)}) out of range") from None
             if key.stop is not None:
                 try:
                     self[key.stop - 1]
                 except IndexError:
-                    raise IndexError(f"Index {key.stop - 1} ({hex(key.stop - 1)}) out of range")
+                    raise IndexError(f"Index {key.stop - 1} ({hex(key.stop - 1)}) out of range") from None
 
         return super().__getitem__(key)
 
@@ -82,12 +82,12 @@ class Firmware(FirmwarePatchMixin, bytearray):
                 try:
                     self[key.start]
                 except IndexError:
-                    raise NotEnoughSpaceError(f"Starting index {key.start} ({hex(key.start)}) exceeds firmware length {len(self)} ({hex(len(self))})")
+                    raise NotEnoughSpaceError(f"Starting index {key.start} ({hex(key.start)}) exceeds firmware length {len(self)} ({hex(len(self))})") from None
             if key.stop is not None:
                 try:
                     self[key.stop - 1]
                 except IndexError:
-                    raise NotEnoughSpaceError(f"Ending index {key.stop - 1} ({hex(key.stop - 1)}) exceeds firmware length {len(self)} ({hex(len(self))})")
+                    raise NotEnoughSpaceError(f"Ending index {key.stop - 1} ({hex(key.stop - 1)}) exceeds firmware length {len(self)} ({hex(len(self))})") from None
 
         return super().__setitem__(key, new_val)
 
@@ -140,6 +140,7 @@ class RWData:
 
         self.firmware = firmware
         self.table_start = table_start
+        self.__compressed_len_memo = {}
 
         self.datas, self.dsts = [], []
 
@@ -195,6 +196,17 @@ class RWData:
         self.dsts.append(dst)
 
         assert len(self.datas) == len(self.dsts)
+
+    @property
+    def compressed_len(self):
+        compressed_len = 0
+        for data in self.datas:
+            data = bytes(data)
+            if data not in self.__compressed_len_memo:
+                compressed_data = lzma_compress(bytes(data))
+                self.__compressed_len_memo[data] = len(compressed_data)
+            compressed_len += self.__compressed_len_memo[data]
+        return compressed_len
 
     def write_table_and_data(self, data_offset=None):
         """
@@ -373,8 +385,8 @@ class ExtFirmware(Firmware):
                 self[offset + i] ^= cipher_byte
 
 class SRAM3(Firmware):
-    #FLASH_BASE = 0x240A_0000
-    FLASH_BASE = 0x240e2b38
+    # This value was reached by trial and error until SMB2 would work.
+    FLASH_BASE = 0x240e7780
     FLASH_LEN = 0x24100000 - FLASH_BASE
 
     def __str__(self):
@@ -394,7 +406,6 @@ class Device(DevicePatchMixin):
         self.sram3._lookup = self.lookup
 
         # insert some noops so we can hijack some ram
-        # Gets us 120,008 bytes at 0x240e2b38
         self.internal.nop(0x677a, 1)
         self.internal.asm(0x677a+2, "add r0, r0, r1")
 

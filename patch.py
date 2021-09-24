@@ -103,7 +103,7 @@ def main():
     print("#########################" + Style.RESET_ALL)
 
     # Perform all replacements in stock code.
-    internal_remaining_free, sram3_remaining_free = apply_patches(args, device)
+    internal_remaining_free, sram3_remaining_free = apply_patches(args, device, Path("build"))
 
     # Erase the extflash vram region
     if not args.no_save:

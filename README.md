@@ -5,25 +5,24 @@ Custom firmware for the Game and Watch: Super Mario Bros. console.
 
 
 # What is this?
-This repo contains custom code as well as a patching utility to add additional
-functionality to the stock Game and Watch firmware. This is the only custom firmware that allows you to run both the stock firmware as well as retro-go without soldering a higher capacity flash chip!
+This repo contains custom code as well as a patching utility to add additional functionality to the stock Game and Watch firmware. This is the only custom firmware that allows you to run both the stock firmware as well as retro-go without soldering a higher capacity flash chip!
 
 
 # Features
 * Works correctly with [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) in internal flash bank 2.
+
 * Press button combination (`LEFT` + `GAME`) to launch retro-go from internal flash bank 2.
-* Configurable sleep timeout.
-* Configurable hard-reset timeout.
+
 * Ability to store the enitre firmware in internal flash! No external flash required!
-* Reduced external flash firmware size `--slim`; reduced from 1,048,576 bytes to just **180,224** bytes
-    * Removed the "Mario Song" easter egg.
+
+    * Option to remove the "Mario Song" easter egg.
     * Removed the 5 sleeping illustrations.
-    * LZMA compressed SMB2 ROM and Clock graphic tiles.
-    * Move Clock graphic tiles to internal flash. 
-* An even further stripped version `--clock-only` that further reduces extflash size to just **139,264** bytes. Uses all the techniques described in `slim` plus:
-    * Removed SMB2 ROM.
-    * Set retro-go macro to just `GAME`.
-* Migrate the external firmware to internal firmware by utilizing an undocumented extra 128KB of internal flash with the option `--extended`.
+
+    * LZMA compressed data.
+
+* Configurable timeouts.
+
+* Run `make help` to see all configuration options.
 
 # Usage
 Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this
@@ -41,7 +40,7 @@ Download STM32 Driver files:
 make download_sdk
 ```
 
-To just build and flash, you can just run `make flash`, however it's a bit finicky. You'll probably have better success running the following command (but see the retro-go section for suggested usage).:
+To just build and flash, you can just run `make flash`, however it's a bit finicky. You'll probably have better success running the following command (but see the [retro-go section](##retro-go) for suggested usage).:
 
 ```
 make flash_patched_ext
@@ -56,22 +55,19 @@ For additional configuration options, run `make help`.
 
 
 ### Retro Go
-Since most people are going to be using this with retro-go, use the minimum amount of external storage, and don't care about the sleeping images or the mario song easter egg, here are the recommend commands:
+Since most people are going to be using this with retro-go, want the minimum amount of external storage used, and don't care about the sleeping images or the mario song easter egg, here are the recommend commands. Note that this uses an undocumented 128KB of internal Bank 1 and requires a [patched version of openocd](https://github.com/kbeckmann/ubuntu-openocd-git-builder) installed.
 
 ```
 # in this repo
 make clean
-make PATCH_PARAMS="--slim --extended --no-save" flash_patched_int
+make PATCH_PARAMS="--internal-only" flash_patched_int
 
-# in the retro-go repo; this assumes you have the stock 1MB flashchip
-# NOTE: MUST have the patched openocd installed:
-#         https://github.com/kbeckmann/ubuntu-openocd-git-builder
 make clean
-make -j8 EXTFLASH_SIZE=868352 EXTFLASH_OFFSET=180224 INTFLASH_BANK=2 flash
+make -j8 INTFLASH_BANK=2 flash
 ```
 
 # Advanced usage
-Other potentially useful make targets:
+Other potentially useful make targets are listed below. Note that external flash only needs to be flashed if the patched external binary is greater than zero bytes.
 
 ```
 make clean
@@ -85,8 +81,8 @@ make flash_patch_ext
 # TODO
 * Figure out safe place in RAM to store global/static variables. The current
   configuration described in the linker file is unsafe, but currently we have
-  no global/static variables.
-* Custom sprites for clock.
+  no global/static variables, so this is low priority.
+* Custom sprites, icons, and other graphical mods.
 
 # Development
 Main stages to developing a feature:

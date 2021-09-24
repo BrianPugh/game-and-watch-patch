@@ -5,7 +5,7 @@ from colorama import Fore, Style
 
 from .compression import lzma_compress
 from .exception import NotEnoughSpaceError, ParsingError
-
+from .tileset import bytes_to_tilemap
 
 def printi(msg, *args):
     print(Fore.MAGENTA + msg + Style.RESET_ALL, *args)
@@ -385,6 +385,15 @@ def apply_patches(args, device, build):
         # Disable OTFDEC
         device.internal.nop(0x10688, 2)
         device.internal.nop(0x1068E, 1)
+
+    # Dump the tileset
+    tileset_addr, tileset_size = 0x9_8b84, 0x1_0000
+    palette_addr = 0xb_ec68
+    tileset = bytes_to_tilemap(
+        device.external[tileset_addr:tileset_addr + tileset_size],
+        palette=device.external[palette_addr:palette_addr+320]
+    )
+    tileset.save(build / "tileset.png")
 
     printd("Compressing and moving stuff stuff to internal firmware.")
     compressed_len = device.external.compress(

@@ -114,6 +114,44 @@ def find_free_space(device):
         raise ParsingError("Couldn't find end of internal code.")
     return int_pos_start
 
+
+def smb2_remove_crc_gaps(smb2):
+    """  Remove each block's CRC padding so it can be played by FDS
+    https://wiki.nesdev.org/w/index.php/FDS_disk_format
+    """
+    offset = 0x0
+
+    def get_block(size, crc_gap=2):
+        nonlocal offset
+        block = smb2[offset:offset+size]
+        offset += size + crc_gap
+        return block
+
+    disk_info_block = get_block(0x38)
+
+    file_amount_block = get_block(0x2)
+    assert file_amount_block[0] == 0x02
+    n_files = file_amount_block[1]
+
+    blocks = [disk_info_block, file_amount_block]
+    for i in range(n_files):
+        file_header_block = get_block(0x10)
+        assert file_header_block[0] == 3
+        blocks.append(file_header_block)
+
+        file_size = int.from_bytes(file_header_block[13:13+2], 'little')
+        file_data_block = get_block(file_size + 1)
+        blocks.append(file_data_block)
+
+    out = b"".join(blocks)
+
+    # Zero pad to be 65500 bytes long
+    padding = b"\x00" * (65500 - len(out))
+    out += padding
+
+    return out
+
+
 def apply_patches(args, device, build):
     offset = 0
     int_pos = find_free_space(device)
@@ -431,16 +469,23 @@ def apply_patches(args, device, build):
     ]
     move_to_sram3(0xa_ebe4, 116, references)
 
+    # Dump a playable version of SMB2
+    smb2_addr, smb2_size = 0xa_ec58, 0x1_0000
+    smb2_end = smb2_addr + smb2_size
+    smb2 = device.external[smb2_addr : smb2_end].copy()
+    smb2 = smb2_remove_crc_gaps(smb2)
+    (build / "smb2.fds").write_bytes(smb2)
+
     if args.no_smb2:
         printe("Erasing SMB2 ROM")
-        device.external.replace(0xa_ec58, b"\x00" * 65536,)
-        offset -= 65536
+        device.external.replace(smb2_addr, b"\x00" * smb2_size,)
+        offset -= smb2_size
     else:
         printe("Compressing and moving SMB2 ROM.")
-        compressed_len = device.external.compress(0xa_ec58, 0x1_0000)
+        compressed_len = device.external.compress(smb2_addr, smb2_size)
         device.internal.bl(0x6a12, "memcpy_inflate")
-        move_to_sram3(0xa_ec58, compressed_len, 0x7374)
-        offset -= (65536 - _round_down_word(compressed_len))  # Move by the space savings.
+        move_to_sram3(smb2_addr, compressed_len, 0x7374)
+        offset -= (smb2_size - _round_down_word(compressed_len))  # Move by the space savings.
 
         # Round to nearest page so that the length can be used as an imm
         compressed_len = _round_up_page(compressed_len)

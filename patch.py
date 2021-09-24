@@ -41,8 +41,17 @@ def parse_args():
 
     parser.add_argument("--extended", action="store_true", default=False,
                         help="256KB internal flash image instead of 128KB.")
+    parser.add_argument("--encrypt", action="store_true",
+                        help="Enable OTFDEC for the main extflash binary.")
+    parser.add_argument("--compression-ratio", type=float, default=1.4,
+                        help="Data targeted for SRAM3 will only be put into "
+                        "SRAM3 if it's compression ratio is above this value. "
+                        "Otherwise, will fallback to internal flash, then external "
+                        "flash."
+                        )
 
-    debugging = parser.add_argument_group("debugging")
+
+    debugging = parser.add_argument_group("Debugging")
     debugging.add_argument("--show", action="store_true",
                            help="Show a picture representation of the external patched binary.")
     debugging.add_argument("--debug", action="store_true",
@@ -52,8 +61,7 @@ def parse_args():
     ########################
     # Patch configurations #
     ########################
-    patches = parser.add_argument_group('patches')
-    add_patch_args(patches)
+    add_patch_args(parser)
 
     # Final Validation
     args = parser.parse_args()

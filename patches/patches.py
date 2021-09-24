@@ -27,40 +27,42 @@ def _seconds_to_frames(seconds):
     return int(round(60 * seconds))
 
 def add_patch_args(parser):
+    group = parser.add_argument_group("Timeout patches")
 
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--disable-sleep", action="store_true",
+    mgroup = group.add_mutually_exclusive_group()
+    mgroup.add_argument("--disable-sleep", action="store_true",
                         help="Disables sleep timer")
-    group.add_argument("--sleep-time", type=float, default=None,
+    mgroup.add_argument("--sleep-time", type=float, default=None,
                         help="Go to sleep after this many seconds of inactivity.. "
                          "Valid range: [1, 1092]"
                         )
 
-    parser.add_argument("--hard-reset-time", type=float, default=None,
+    group.add_argument("--hard-reset-time", type=float, default=None,
                          help="Hold power button for this many seconds to perform hard reset."
                          )
-    parser.add_argument("--mario-song-time", type=float, default=None,
+    group.add_argument("--mario-song-time", type=float, default=None,
                          help="Hold the A button for this many seconds on the time "
                          "screen to launch the mario drawing song easter egg."
                          )
 
-    parser.add_argument("--slim", action="store_true",
-                        help="Remove mario song and sleeping images from extflash. Perform other space-saving measures.")
-    parser.add_argument("--clock-only", action="store_true",
-                        help="Everything in --slim plus remove SMB2. TODO: remove Ball.")
-    parser.add_argument("--no-save", action="store_true",
-                        help="Don't use up 2 pages (8192 bytes) of extflash for non-volatile saves.")
-    parser.add_argument("--encrypt", action="store_true",
-                        help="Enable OTFDEC for the main extflash binary.")
-    parser.add_argument("--no-smb2", action="store_true",
+    group = parser.add_argument_group("Low level flash savings flags")
+    group.add_argument("--no-save", action="store_true",
+                        help="Don't use up 2 pages (8192 bytes) of extflash for non-volatile saves. High scores and brightness/volume configurations will NOT survive homebrew launches.")
+    group.add_argument("--no-smb2", action="store_true",
                         help="Remove SMB2 rom.")
+    group.add_argument("--no-mario-song", action="store_true",
+                        help="Remove the mario song easter egg.")
+    group.add_argument("--no-sleep-images", action="store_true",
+                        help="Remove the 5 sleeping images.")
 
-    parser.add_argument("--compression-ratio", type=float, default=1.4,
-                        help="Data targeted for SRAM3 will only be put into "
-                        "SRAM3 if it's compression ratio is above this value. "
-                        "Otherwise, will fallback to internal flash, then external "
-                        "flash."
-                        )
+    group = parser.add_argument_group("High level flash savings flags")
+    group.add_argument("--slim", action="store_true",
+                        help="Remove mario song and sleeping images from extflash.")
+    group.add_argument("--clock-only", action="store_true",
+                        help="Everything in --slim plus remove SMB2.")
+    group.add_argument("--internal-only", action="store_true",
+                       help="Configuration so no external flash is used.")
+
 
 
 def validate_patch_args(parser, args):
@@ -69,11 +71,18 @@ def validate_patch_args(parser, args):
     if args.mario_song_time and (args.mario_song_time < 1 or args.mario_song_time > 1092):
         parser.error("--mario_song-time must be in range [1, 1092]")
 
-    if args.clock_only:
+    if args.internal_only:
         args.slim = True
+        args.extended = True
+        args.no_save = True
 
     if args.clock_only:
+        args.slim = True
         args.no_smb2 = True
+
+    if args.slim:
+        args.no_mario_song = True
+        args.no_sleep_images = True
 
 
 def _print_rwdata_ext_references(rwdata):
@@ -362,7 +371,7 @@ def apply_patches(args, device):
     move_to_sram3(0x1_2c04, 320, 0x4538)
 
 
-    if args.slim:
+    if args.no_mario_song:
         mario_song_len = 0x85e40  # 548,416 bytes
         # This isn't really necessary, but we keep it here because its more explicit.
         printe("Erasing Mario Song")
@@ -525,7 +534,7 @@ def apply_patches(args, device):
     move_to_sram3(0xc4cd8, 2984, 0x459c)
     move_to_sram3(0xc5880, 120, 0x4594)
 
-    if args.slim:
+    if args.no_sleep_images:
         # Images Notes:
         #    * In-between images are just zeros.
         #

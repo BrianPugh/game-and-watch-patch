@@ -273,9 +273,10 @@ def apply_patches(args, device):
 
 
     printd("Compressing and moving stuff stuff to internal firmware.")
-    compressed_len = device.external.compress(0x0, 7776)
+    compressed_len = device.external.compress(0x0, 7772)  # Dst expects only 7772 bytes, not 7776
     device.internal.bl(0x665c, "memcpy_inflate")
     move_ext(0x0, compressed_len, 0x7204)
+    # Note: the 4 bytes between 7772 and 7776 is padding.
     offset -= (7776 - _round_down_word(compressed_len))
 
     # SMB1 ROM

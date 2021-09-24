@@ -395,6 +395,16 @@ def apply_patches(args, device, build):
     )
     tileset.save(build / "tileset.png")
 
+    # Dump the iconset
+    iconset_addr, iconset_size = 0xaace4, 0x3f00
+    palette_addr = 0xb_ec68
+    iconset = bytes_to_tilemap(
+        device.external[iconset_addr:iconset_addr + iconset_size],
+        palette=device.external[palette_addr:palette_addr+320],
+        bpp=4
+    )
+    iconset.save(build / "iconset.png")
+
     printd("Compressing and moving stuff stuff to internal firmware.")
     compressed_len = device.external.compress(
         0x0, 7772

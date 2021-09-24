@@ -30,7 +30,7 @@ def bytes_to_tilemap(data, palette, bpp=8, width=256):
 
     assert bpp in [4, 8]
 
-    if bpp != 8:
+    if bpp == 4:
         nibbles = bytearray()
         offset = 0x0
         for b in data:

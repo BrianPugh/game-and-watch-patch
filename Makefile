@@ -269,7 +269,7 @@ start_bank_2:
 .PHONY: start_bank_2
 
 help:
-	@python patch.py --help
+	@$(PYTHON) patch.py --help
 	@echo ""
 	@echo "Commandline arguments:"
 	@echo "    PATCH_PARAMS - Options to pass to the python patching utility."

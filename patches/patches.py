@@ -55,7 +55,7 @@ def add_patch_args(parser):
     parser.add_argument("--no-smb2", action="store_true",
                         help="Remove SMB2 rom.")
 
-    parser.add_argument("--compression-ratio", type=float, default=1.35,
+    parser.add_argument("--compression-ratio", type=float, default=1.4,
                         help="Data targeted for SRAM3 will only be put into "
                         "SRAM3 if it's compression ratio is above this value. "
                         "Otherwise, will fallback to internal flash, then external "

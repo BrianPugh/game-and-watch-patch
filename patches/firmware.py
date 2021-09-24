@@ -385,8 +385,8 @@ class ExtFirmware(Firmware):
                 self[offset + i] ^= cipher_byte
 
 class SRAM3(Firmware):
-    # This value was reached by trial and error until SMB2 would work.
-    FLASH_BASE = 0x240e7780
+    # This address of unused ram was found via tools/mem_observer.py
+    FLASH_BASE = 0x240f2124
     FLASH_LEN = 0x24100000 - FLASH_BASE
 
     def __str__(self):
@@ -405,9 +405,6 @@ class Device(DevicePatchMixin):
         self.external._lookup = self.lookup
         self.sram3._lookup = self.lookup
 
-        # insert some noops so we can hijack some ram
-        self.internal.nop(0x677a, 1)
-        self.internal.asm(0x677a+2, "add r0, r0, r1")
 
 
     def crypt(self):

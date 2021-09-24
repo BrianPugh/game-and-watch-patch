@@ -91,8 +91,13 @@ class Main:
         parser = argparse.ArgumentParser(description="Capture memory data from device.")
         parser.add_argument("addr_start", type=auto_int)
         parser.add_argument("addr_end", type=auto_int)
-        parser.add_argument("--random", action="store_true",
+
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument("--random", action="store_true",
                             help="Write random initial data to address range.")
+        group.add_argument("--zero", action="store_true",
+                            help="Write zeros initial data to address range.")
+
         parser.add_argument("--output", "-o", type=Path, default=Path(f"captures/{time_str}.pkl"))
         args = parser.parse_args(sys.argv[2:])
 
@@ -110,6 +115,10 @@ class Main:
             random_data = random.randbytes(size)
             write(random_data)
             samples.append(random_data)
+        elif args.zero:
+            zero_data = b"\x00" * size
+            write(zero_data)
+            samples.append(zero_data)
 
         ###################
         # Collect samples #

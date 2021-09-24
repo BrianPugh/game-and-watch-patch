@@ -92,6 +92,7 @@ const ISzAlloc g_Alloc = { SzAlloc, SzFree };
 
 /**
  * Dropin replacement for memcpy for loading compressed assets.
+ * @param n Compressed data length
  */
 void *memcpy_inflate(uint8_t *dst, uint8_t *src, size_t n){
     unsigned char lzma_heap[LZMA_BUF_SIZE];
@@ -108,6 +109,19 @@ void *memcpy_inflate(uint8_t *dst, uint8_t *src, size_t n){
     return dst;
 }
 
+int32_t *rwdata_inflate(int32_t *table){
+    uint8_t *data = (uint8_t *)table + table[0];
+    int32_t len = table[1];
+    uint8_t *ram = table[2];
+    memcpy_inflate(ram, data, len);
+    return table + 3;
+}
 
 
-void Error_Handler(){}
+void NMI_Handler(void) {
+    __BKPT(0);
+}
+
+void HardFault_Handler(void) {
+    __BKPT(0);
+}

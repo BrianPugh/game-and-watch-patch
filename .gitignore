@@ -4,3 +4,6 @@
 Drivers/
 build/
 dump.txt
+tileset_palette_*.png
+iconset_palette_*.png
+capture/

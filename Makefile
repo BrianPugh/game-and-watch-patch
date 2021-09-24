@@ -7,12 +7,17 @@ TARGET = gw_patch
 ######################################
 # building variables
 ######################################
-# debug build?
-DEBUG = 1
-# optimization
-OPT = -Og
 
 PATCH_PARAMS ?=
+
+ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
+	C_DEFS += -DCLOCK_ONLY
+endif
+
+ifneq (,$(findstring --debug, $(PATCH_PARAMS)))
+	DEBUG = 1 
+	C_DEFS += -DDEBUG
+endif
 
 ADAPTER ?= stlink
 #######################################
@@ -109,6 +114,8 @@ CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-
 
 ifeq ($(DEBUG), 1)
 CFLAGS += -g -gdwarf-2 -O0
+else
+CFLAGS += -Os
 endif
 
 # Generate dependency information
@@ -128,12 +135,16 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=bootloader \
 		  -Wl,--undefined=read_buttons \
 		  -Wl,--undefined=memcpy_inflate \
+		  -Wl,--undefined=rwdata_inflate \
+		  -Wl,--undefined=NMI_Handler \
+		  -Wl,--undefined=HardFault_Handler \
 
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/internal_flash_patched.bin
 
 
 include Makefile.sdk
+
 
 #######################################
 # build the application
@@ -145,10 +156,10 @@ vpath %.c $(sort $(dir $(C_SOURCES)))
 OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
 vpath %.s $(sort $(dir $(ASM_SOURCES)))
 
-$(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR) 
+$(BUILD_DIR)/%.o: %.c Makefile $(BUILD_DIR)/env | $(BUILD_DIR) 
 	$(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
 
-$(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: %.s Makefile $(BUILD_DIR)/env | $(BUILD_DIR)
 	$(AS) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile
@@ -162,7 +173,14 @@ $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	$(BIN) $< $@	
 	
 $(BUILD_DIR):
-	mkdir $@		
+	mkdir -p $@
+
+# Rebuild if PATCH_PARAMS doesn't match the values when last ran
+$(BUILD_DIR)/env: $(BUILD_DIR) scripts/check_env_vars.py FORCE
+	$(PYTHON) scripts/check_env_vars.py $@ $(PATCH_PARAMS)
+
+FORCE: ;
+
 
 .EXPORT_ALL_VARIABLES:
 
@@ -173,6 +191,18 @@ reset:
 erase_int:
 	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt; flash erase_address 0x08000000 131072; resume; exit"
 .PHONY: erase_int
+
+$(BUILD_DIR)/dummy.bin:
+	$(PYTHON) -c "with open('$@', 'wb') as f: f.write(b'\xFF'*1048576)"
+
+erase_ext: $(BUILD_DIR)/dummy.bin
+	$(FLASHAPP) $(ADAPTER) $<
+	make reset
+.PHONY: erase_ext
+
+dump_ext:
+	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt; dump_image \"dump_ext.bin\" 0x90000000 0x100000; resume; exit;"
+.PHONY: dump_ext
 
 flash_stock_int: internal_flash_backup.bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
@@ -189,7 +219,7 @@ flash_stock_ext: flash_backup.bin
 flash_stock: flash_stock_int flash_stock_ext reset
 .PHONY: flash_stock
 
-$(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin &: $(BUILD_DIR)/$(TARGET).bin patch.py patches/patches.py patches/patch.py
+$(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin &: $(BUILD_DIR)/$(TARGET).bin patch.py $(shell find patches -type f)
 	$(PYTHON) patch.py $(PATCH_PARAMS)
 
 patch: $(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin
@@ -213,6 +243,9 @@ flash_patched: flash_patched_int flash_patched_ext reset
 flash: flash_patched
 .PHONY: flash
 
+dump:
+	arm-none-eabi-objdump -xDSs build/gw_patch.elf > dump.txt && vim dump.txt
+.PHONY: dump
 
 # Starts openocd and attaches to the target. To be used with 'flash_intflash_nc' and 'gdb'
 openocd:

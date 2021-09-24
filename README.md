@@ -16,9 +16,9 @@ This repo contains custom code as well as a patching utility to add additional f
 * Ability to store the enitre firmware in internal flash! No external flash required!
 
     * Option to remove the "Mario Song" easter egg.
-    * Removed the 5 sleeping illustrations.
-
+    * Option to remove the 5 sleeping illustrations.
     * LZMA compressed data.
+    * Inteligently move as much data to internal firmware as possible.
 
 * Configurable timeouts.
 

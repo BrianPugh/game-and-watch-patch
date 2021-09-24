@@ -22,7 +22,12 @@ This repo contains custom code as well as a patching utility to add additional f
 
 * Configurable timeouts.
 
+* Ability to play SMB1 ROM hacks via `--smb1=path-to-patched-smb1-rom`
+
+* Dumps SMB1 and SMB2 ROMs that are playable by other emulators.
+
 * Run `make help` to see all configuration options.
+
 
 # Usage
 Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this

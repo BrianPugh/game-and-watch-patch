@@ -4,13 +4,14 @@ Goal: try and find unused regions of RAM.
 """
 
 import argparse
+import pickle
 import random
 import sys
-import tty
 import termios
-import pickle
+import tty
 
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 
 from functools import partial
@@ -52,6 +53,17 @@ def get_char(prompt="", valid=None, echo=True, newline=True):
             sys.stdout.write("\n")
             sys.stdout.flush()
 
+
+def zero_runs(a):
+    """
+    Source: https://stackoverflow.com/a/24892274
+    """
+    # Create an array that is 1 where a is 0, and pad each end with an extra 0.
+    iszero = np.concatenate(([0], np.equal(a, 0).view(np.int8), [0]))
+    absdiff = np.abs(np.diff(iszero))
+    # Runs start and end where absdiff is 1.
+    ranges = np.where(absdiff == 1)[0].reshape(-1, 2)
+    return ranges
 
 
 class Main:
@@ -134,11 +146,51 @@ class Main:
     def analyze(self):
         parser = argparse.ArgumentParser(description="Analyze captured data.")
         parser.add_argument("src", type=Path, help="Load a pkl file for analysis.")
+        parser.add_argument("--show", action="store_true", help="Show matplotlib plot")
 
         args = parser.parse_args(sys.argv[2:])
 
-        # TODO: perform some analysis
-        raise NotImplementedError
+        with open(args.src, "rb") as f:
+            samples = pickle.load(f)
+
+        samples = [np.frombuffer(sample, dtype=np.uint8) for sample in samples]
+
+        COLOR_SAME = np.array([0x71, 0xc4, 0x94], dtype=np.uint8)
+        COLOR_DIFF = np.array([0x8a, 0x58, 0x17], dtype=np.uint8)
+        COLOR_PAD = np.array([0xFF, 0xFF, 0xFF], dtype=np.uint8)
+
+        start = samples[0]
+        width = 1024
+        new_len = int(width * np.ceil(len(start) / width))
+        padding = np.full(new_len - len(start), -1)
+        n_comparisons = len(samples) - 1
+        for i, sample in enumerate(samples[1:]):
+            i += 1
+            diff = start != sample
+
+            free_segs = zero_runs(diff)
+            free_segs_lens = free_segs[:,1] - free_segs[:, 0]
+            free_segs_max_idx = free_segs_lens.argmax()
+
+            if args.show:
+                diff_padded = np.concatenate((diff, padding))
+                diff_padded = diff_padded.reshape(-1, width)
+                h, w = diff_padded.shape
+
+                canvas = np.zeros((h, w, 3), dtype=np.uint8)
+                canvas[diff_padded == 0] = COLOR_SAME
+                canvas[diff_padded == 1] = COLOR_DIFF
+                canvas[diff_padded == -1] = COLOR_PAD
+
+                plt.subplot(n_comparisons, 1, i)
+                plt.imshow(canvas)
+                plt.title(f"Comparison from {i} to 0")
+
+        free_seg_max = free_segs[free_segs_max_idx, :]
+        print(f"The longest untouched memory segment is inclusive offset {free_seg_max}")
+
+        if args.show:
+            plt.show()
 
 
 if __name__ == "__main__":

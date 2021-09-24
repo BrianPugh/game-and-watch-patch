@@ -296,7 +296,11 @@ def apply_patches(args, device, build):
     # SMB1 ROM (plus loading custom ROM)
     printd(f"Compressing and moving SMB1 ROM to sram3.")
     smb1_addr, smb1_size = 0x1e60, 40960
-    (build / "smb1.nes").write_bytes(device.external[smb1_addr:smb1_addr+smb1_size])
+    # Adding the header for patching convenience.
+    (build / "smb1.nes").write_bytes(
+        b'NES\x1a\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00' +
+        device.external[smb1_addr:smb1_addr+smb1_size]
+    )
     smb1 = args.smb1.read_bytes()
     if len(smb1) == 40976:
         # Remove the NES header

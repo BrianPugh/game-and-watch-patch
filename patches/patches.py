@@ -1,5 +1,6 @@
 from math import ceil, floor
 from colorama import Fore, Back, Style
+from pathlib import Path
 
 from .exception import ParsingError, NotEnoughSpaceError
 from .compression import lzma_compress
@@ -44,6 +45,10 @@ def add_patch_args(parser):
                          help="Hold the A button for this many seconds on the time "
                          "screen to launch the mario drawing song easter egg."
                          )
+
+    group = parser.add_argument_group("ROM Hacks")
+    group.add_argument("--smb1", type=Path, default="build/smb1.nes",
+                       help="Override SMB1 ROM with your own file.")
 
     group = parser.add_argument_group("Low level flash savings flags")
     group.add_argument("--no-save", action="store_true",
@@ -109,7 +114,7 @@ def find_free_space(device):
         raise ParsingError("Couldn't find end of internal code.")
     return int_pos_start
 
-def apply_patches(args, device):
+def apply_patches(args, device, build):
     offset = 0
     int_pos = find_free_space(device)
     sram3_pos = 0
@@ -288,9 +293,22 @@ def apply_patches(args, device):
     # Note: the 4 bytes between 7772 and 7776 is padding.
     offset -= (7776 - _round_down_word(compressed_len))
 
-    # SMB1 ROM
+    # SMB1 ROM (plus loading custom ROM)
     printd(f"Compressing and moving SMB1 ROM to sram3.")
-    move_to_sram3(0x1e60, 40960, [0x7368, 0x10954, 0x7218])
+    smb1_addr, smb1_size = 0x1e60, 40960
+    # Adding the header for patching convenience.
+    (build / "smb1.nes").write_bytes(
+        b'NES\x1a\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00' +
+        device.external[smb1_addr:smb1_addr+smb1_size]
+    )
+    smb1 = args.smb1.read_bytes()
+    if len(smb1) == 40976:
+        # Remove the NES header
+        smb1 = smb1[16:]
+    if len(smb1) != smb1_size:
+        raise ValueError(f"Unknown length {len(smb1)} of file {args.smb1}")
+    device.external[smb1_addr:smb1_addr+smb1_size] = smb1
+    move_to_sram3(smb1_addr, smb1_size, [0x7368, 0x10954, 0x7218])
 
     # I think these are all scenes for the clock, but not 100% sure.
     # The giant lookup table references all these

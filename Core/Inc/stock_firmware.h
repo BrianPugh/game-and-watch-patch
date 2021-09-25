@@ -1,6 +1,6 @@
 #pragma once
 
-#pragma GCC diagnostic push 
+#pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wint-conversion"
 
 #include <stdint.h>
@@ -17,7 +17,7 @@ void (* const stock_Reset_Handler)(void) = 0x08017a45;
 /**
  *
  * Mapping
- * Note: 
+ * Note:
  *   * if UP is pressed, it explicitly disables DOWN (UP gets priority)
  *   * if RIGHT is pressed, it explicitly disables LEFT (RIGHT gets priority)
  *

@@ -1,3 +1,3 @@
-from .firmware import Device, Firmware, IntFirmware, ExtFirmware
-from .patches import apply_patches, add_patch_args, validate_patch_args
-from .compression import lzma_compress, lz77_decompress
+from .compression import lz77_decompress, lzma_compress
+from .firmware import Device, ExtFirmware, Firmware, IntFirmware
+from .patches import add_patch_args, apply_patches, validate_patch_args

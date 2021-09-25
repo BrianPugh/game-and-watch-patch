@@ -1,20 +1,28 @@
-import struct
 import lzma
+import struct
 
 
 def lzma_compress(data):
     # https://svn.python.org/projects/external/xz-5.0.3/doc/lzma-file-format.txt
-    compressed_data = lzma.compress(data, format=lzma.FORMAT_ALONE, filters=[{
-        "id": lzma.FILTER_LZMA1,
-        "preset": 6,
-        "dict_size": 16 * 1024,
-    }])
-    compressed_data = compressed_data[:5] + struct.pack('<Q', len(data)) + compressed_data[13:]
+    compressed_data = lzma.compress(
+        data,
+        format=lzma.FORMAT_ALONE,
+        filters=[
+            {
+                "id": lzma.FILTER_LZMA1,
+                "preset": 6,
+                "dict_size": 16 * 1024,
+            }
+        ],
+    )
+    compressed_data = (
+        compressed_data[:5] + struct.pack("<Q", len(data)) + compressed_data[13:]
+    )
     return compressed_data
 
 
 def lz77_decompress(data):
-    """ Decompresses rwdata used to initialize variables.
+    """Decompresses rwdata used to initialize variables.
 
     The table at address 0x0801807c has format:
         0-3    Relative offset to this elements location to the initialization function.
@@ -39,13 +47,13 @@ def lz77_decompress(data):
     index = 0
     out = bytearray()
 
-    while(index < len(data)):
+    while index < len(data):
         opcode = data[index]
         index += 1
 
         # Opcode parsing
         direct_len = opcode & 0x03
-        offset_256 = ((opcode >> 2) & 0x03)
+        offset_256 = (opcode >> 2) & 0x03
         pattern_len = opcode >> 4
 
         if direct_len == 0:
@@ -81,5 +89,3 @@ def lz77_decompress(data):
                 out.append(out[-offset])
 
     return out
-
-

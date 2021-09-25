@@ -9,17 +9,13 @@ import random
 import sys
 import termios
 import tty
-
-import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-
 from functools import partial
 from pathlib import Path
-from pyocd.core.helpers import ConnectHelper
-from pyocd.flash.file_programmer import FileProgrammer
 from time import strftime
 
+import matplotlib.pyplot as plt
+import numpy as np
+from pyocd.core.helpers import ConnectHelper
 
 time_str = strftime("%Y%m%d-%H%M%S")
 auto_int = partial(int, base=0)  # Auto detect input format
@@ -93,12 +89,20 @@ class Main:
         parser.add_argument("addr_end", type=auto_int)
 
         group = parser.add_mutually_exclusive_group()
-        group.add_argument("--random", action="store_true",
-                            help="Write random initial data to address range.")
-        group.add_argument("--zero", action="store_true",
-                            help="Write zeros initial data to address range.")
+        group.add_argument(
+            "--random",
+            action="store_true",
+            help="Write random initial data to address range.",
+        )
+        group.add_argument(
+            "--zero",
+            action="store_true",
+            help="Write zeros initial data to address range.",
+        )
 
-        parser.add_argument("--output", "-o", type=Path, default=Path(f"captures/{time_str}.pkl"))
+        parser.add_argument(
+            "--output", "-o", type=Path, default=Path(f"captures/{time_str}.pkl")
+        )
         args = parser.parse_args(sys.argv[2:])
 
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -124,8 +128,7 @@ class Main:
         # Collect samples #
         ###################
         while True:
-            char = get_char("Enter command (h for help): ",
-                            [ENTER, " ", "h", "r", "q"])
+            char = get_char("Enter command (h for help): ", [ENTER, " ", "h", "r", "q"])
             if char == "h":
                 print("Help:")
                 print("    Enter or Space - Capture a memory screenshot")
@@ -145,12 +148,11 @@ class Main:
                 print("Quitting")
                 break
             else:
-                raise ValueError(f"Unknown option \"{char}\"")
+                raise ValueError(f'Unknown option "{char}"')
         # Serialize
         with open(args.output, "wb") as f:
             pickle.dump(samples, f)
         print(f"Saved session to {args.output}")
-
 
     def analyze(self):
         parser = argparse.ArgumentParser(description="Analyze captured data.")
@@ -164,8 +166,8 @@ class Main:
 
         samples = [np.frombuffer(sample, dtype=np.uint8) for sample in samples]
 
-        COLOR_SAME = np.array([0x71, 0xc4, 0x94], dtype=np.uint8)
-        COLOR_DIFF = np.array([0x8a, 0x58, 0x17], dtype=np.uint8)
+        COLOR_SAME = np.array([0x71, 0xC4, 0x94], dtype=np.uint8)
+        COLOR_DIFF = np.array([0x8A, 0x58, 0x17], dtype=np.uint8)
         COLOR_PAD = np.array([0xFF, 0xFF, 0xFF], dtype=np.uint8)
 
         start = samples[0]
@@ -178,7 +180,7 @@ class Main:
             diff = start != sample
 
             free_segs = zero_runs(diff)
-            free_segs_lens = free_segs[:,1] - free_segs[:, 0]
+            free_segs_lens = free_segs[:, 1] - free_segs[:, 0]
             free_segs_max_idx = free_segs_lens.argmax()
 
             if args.show:
@@ -196,7 +198,9 @@ class Main:
                 plt.title(f"Comparison from {i} to 0")
 
         free_seg_max = free_segs[free_segs_max_idx, :]
-        print(f"The longest untouched memory segment is inclusive offset {free_seg_max}")
+        print(
+            f"The longest untouched memory segment is inclusive offset {free_seg_max}"
+        )
 
         if args.show:
             plt.show()

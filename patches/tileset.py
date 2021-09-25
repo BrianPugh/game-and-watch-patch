@@ -67,5 +67,40 @@ def bytes_to_tilemap(data, palette, bpp=8, width=256):
     return im
 
 
-def tilemap_to_bytes(tilemap):
-    raise NotImplementedError
+def tilemap_to_bytes(tilemap, palette, dithering=False):
+    """
+    Parameters
+    ----------
+    tilemap : PIL.Image
+    palette : bytes
+       320 long RGBA (80 colors). Alpha is ignored.
+
+    Returns
+    -------
+    bytes
+        Bytes representation of index image
+    """
+
+    tilemap = tilemap.convert("RGB")
+
+    p = np.frombuffer(palette, dtype=np.uint8).reshape((80, 4))
+    p = p[:, :3]
+    p = np.fliplr(p)  # BGR->RGB
+    p = np.ascontiguousarray(p)
+
+    imp = Image.new("P", (1, 1))
+    imp.putpalette(p)
+
+    im = tilemap.quantize(palette=imp, dither=int(dithering))
+    data = np.array(im, dtype=np.uint8)
+
+    # Need to undo the tiling now.
+    out = []
+    for i in range(0, data.shape[0], _BLOCK_SIZE):
+        for j in range(0, data.shape[1], _BLOCK_SIZE):
+            sprite = data[i : i + _BLOCK_SIZE, j : j + _BLOCK_SIZE]
+            sprite_bytes = sprite.tobytes()
+            out.append(sprite_bytes)
+    out = b"".join(out)
+
+    return out

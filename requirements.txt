@@ -1,4 +1,7 @@
+Pillow
 colorama
 keystone-engine
-pyelftools
+matplotlib
+numpy
 pycrypto
+pyelftools

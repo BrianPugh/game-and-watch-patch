@@ -67,6 +67,7 @@ Since most people are going to be using this with retro-go, want the minimum amo
 make clean
 make PATCH_PARAMS="--internal-only" flash_patched_int
 
+# in the retro-go repo
 make clean
 make -j8 INTFLASH_BANK=2 flash
 ```

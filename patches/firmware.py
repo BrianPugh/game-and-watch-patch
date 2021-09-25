@@ -1,12 +1,13 @@
 import hashlib
 
+from colorama import Back, Fore, Style
 from Crypto.Cipher import AES
 from elftools.elf.elffile import ELFFile
-from colorama import Fore, Back, Style
 
-from .patch import DevicePatchMixin, FirmwarePatchMixin
-from .exception import InvalidStockRomError, MissingSymbolError, NotEnoughSpaceError
 from .compression import lz77_decompress, lzma_compress
+from .exception import (InvalidStockRomError, MissingSymbolError,
+                        NotEnoughSpaceError)
+from .patch import DevicePatchMixin, FirmwarePatchMixin
 
 
 def _val_to_color(val):
@@ -17,6 +18,7 @@ def _val_to_color(val):
     else:
         return ""
 
+
 class Lookup(dict):
     def __repr__(self):
         substrs = []
@@ -25,9 +27,10 @@ class Lookup(dict):
             k_color = _val_to_color(k)
             v_color = _val_to_color(v)
 
-            substrs.append(f"    {k_color}0x{k:08X}{Style.RESET_ALL}: "
-                           f"{v_color}0x{v:08X}{Style.RESET_ALL},"
-                           )
+            substrs.append(
+                f"    {k_color}0x{k:08X}{Style.RESET_ALL}: "
+                f"{v_color}0x{v:08X}{Style.RESET_ALL},"
+            )
         substrs.append("}")
         return "\n".join(substrs)
 
@@ -35,15 +38,15 @@ class Lookup(dict):
 class Firmware(FirmwarePatchMixin, bytearray):
 
     RAM_BASE = 0x02000000
-    RAM_LEN  = 0x00020000
-    ENC_LEN  = 0
+    RAM_LEN = 0x00020000
+    ENC_LEN = 0
 
     FLASH_BASE = 0x0000_0000
     FLASH_LEN = 0
 
     def __init__(self, firmware=None):
         if firmware:
-            with open(firmware, 'rb') as f:
+            with open(firmware, "rb") as f:
                 firmware_data = f.read()
             super().__init__(firmware_data)
         else:
@@ -56,55 +59,61 @@ class Firmware(FirmwarePatchMixin, bytearray):
         pass
 
     def __getitem__(self, key):
-        """ Properly raises index error if trying to access oob regions.
-        """
+        """Properly raises index error if trying to access oob regions."""
 
         if isinstance(key, slice):
             if key.start is not None:
                 try:
                     self[key.start]
                 except IndexError:
-                    raise IndexError(f"Index {key.start} ({hex(key.start)}) out of range") from None
+                    raise IndexError(
+                        f"Index {key.start} ({hex(key.start)}) out of range"
+                    ) from None
             if key.stop is not None:
                 try:
                     self[key.stop - 1]
                 except IndexError:
-                    raise IndexError(f"Index {key.stop - 1} ({hex(key.stop - 1)}) out of range") from None
+                    raise IndexError(
+                        f"Index {key.stop - 1} ({hex(key.stop - 1)}) out of range"
+                    ) from None
 
         return super().__getitem__(key)
 
     def __setitem__(self, key, new_val):
-        """ Properly raises index error if trying to access oob regions.
-        """
+        """Properly raises index error if trying to access oob regions."""
 
         if isinstance(key, slice):
             if key.start is not None:
                 try:
                     self[key.start]
                 except IndexError:
-                    raise NotEnoughSpaceError(f"Starting index {key.start} ({hex(key.start)}) exceeds firmware length {len(self)} ({hex(len(self))})") from None
+                    raise NotEnoughSpaceError(
+                        f"Starting index {key.start} ({hex(key.start)}) exceeds firmware length {len(self)} ({hex(len(self))})"
+                    ) from None
             if key.stop is not None:
                 try:
                     self[key.stop - 1]
                 except IndexError:
-                    raise NotEnoughSpaceError(f"Ending index {key.stop - 1} ({hex(key.stop - 1)}) exceeds firmware length {len(self)} ({hex(len(self))})") from None
+                    raise NotEnoughSpaceError(
+                        f"Ending index {key.stop - 1} ({hex(key.stop - 1)}) exceeds firmware length {len(self)} ({hex(len(self))})"
+                    ) from None
 
         return super().__setitem__(key, new_val)
 
-    def int(self, offset : int, size=4):
-        return int.from_bytes(self[offset:offset+size], 'little')
+    def int(self, offset: int, size=4):
+        return int.from_bytes(self[offset : offset + size], "little")
 
-    def set_range(self, start : int, end : int, val : bytes):
+    def set_range(self, start: int, end: int, val: bytes):
         self[start:end] = val * (end - start)
         return end - start
 
-    def clear_range(self, start : int, end : int):
+    def clear_range(self, start: int, end: int):
         return self.set_range(start, end, val=b"\x00")
 
     def show(self, wrap=1024, show=True):
-        import numpy as  np
         import matplotlib.pyplot as plt
         import matplotlib.ticker as ticker
+        import numpy as np
 
         def to_hex(x, pos):
             return f"0x{int(x):06X}"
@@ -124,6 +133,7 @@ class Firmware(FirmwarePatchMixin, bytearray):
         axes.get_yaxis().set_major_formatter(ticker.FuncFormatter(to_hex_wrap))
         if show:
             plt.show()
+
 
 class RWData:
     """
@@ -175,8 +185,9 @@ class RWData:
 
         # Mark this area as reserved; there's nothing special about 0x77, its
         # just not 0x00
-        firmware.set_range(table_start, table_start + 16 * self.MAX_TABLE_ELEMENTS + 4, b"\x77")
-
+        firmware.set_range(
+            table_start, table_start + 16 * self.MAX_TABLE_ELEMENTS + 4, b"\x77"
+        )
 
     def __getitem__(self, k):
         return self.datas[k]
@@ -186,11 +197,12 @@ class RWData:
         return self.table_start + 4 * 4 * len(self.datas) + 4
 
     def append(self, data, dst):
-        """ Add a new element to the table
-        """
+        """Add a new element to the table"""
 
         if len(self.datas) >= self.MAX_TABLE_ELEMENTS:
-            raise NotEnoughSpaceError(f"MAX_TABLE_ELEMENTS exceeded; increase this value")
+            raise NotEnoughSpaceError(
+                f"MAX_TABLE_ELEMENTS exceeded; increase this value"
+            )
 
         self.datas.append(data)
         self.dsts.append(dst)
@@ -226,8 +238,10 @@ class RWData:
         total_len = 0
         for data in self.datas:
             compressed_data = lzma_compress(bytes(data))
-            print(f"    compressed {len(data)}->{len(compressed_data)} bytes (saves {len(data)-len(compressed_data)}). Writing to 0x{index:05X}")
-            self.firmware[index:index+len(compressed_data)] = compressed_data
+            print(
+                f"    compressed {len(data)}->{len(compressed_data)} bytes (saves {len(data)-len(compressed_data)}). Writing to 0x{index:05X}"
+            )
+            self.firmware[index : index + len(compressed_data)] = compressed_data
 
             data_addrs.append(index)
             data_lens.append(len(compressed_data))
@@ -261,14 +275,14 @@ class RWData:
         assert index == self.table_end
 
         # Update the pointer to the end of table in the loader
-        self.firmware.relative(0x17db4, index, size=4)
+        self.firmware.relative(0x17DB4, index, size=4)
 
         print(self)
 
         return total_len
 
     def __str__(self):
-        """ Returns the **written** table.
+        """Returns the **written** table.
 
         Doesn't show unstaged changes.
         """
@@ -277,35 +291,34 @@ class RWData:
         substrs.append("RWData Table")
         substrs.append("------------")
         for addr in range(self.table_start, self.table_end - 4, 16):
-            substrs.append(f"0x{addr:08X}:  "
-                   f"0x{self.firmware.int(addr + 0):08X}  "
-                  f"0x{self.firmware.int(addr + 4):08X}  "
-                  f"0x{self.firmware.int(addr + 8):08X}  "
-                  f"0x{self.firmware.int(addr + 12):08X}  "
-                  )
+            substrs.append(
+                f"0x{addr:08X}:  "
+                f"0x{self.firmware.int(addr + 0):08X}  "
+                f"0x{self.firmware.int(addr + 4):08X}  "
+                f"0x{self.firmware.int(addr + 8):08X}  "
+                f"0x{self.firmware.int(addr + 12):08X}  "
+            )
         addr = self.table_end - 4
         substrs.append(f"0x{addr:08X}:  0x{self.firmware.int(addr + 0):08X}")
         substrs.append("")
         return "\n".join(substrs)
 
 
-
-
 class IntFirmware(Firmware):
     STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
 
     FLASH_BASE = 0x08000000
-    FLASH_LEN  = 0x00020000
+    FLASH_LEN = 0x00020000
 
     STOCK_ROM_END = 0x00019300  # Actual stock rom end
 
     def __init__(self, firmware, elf):
         super().__init__(firmware)
-        self._elf_f = open(elf, 'rb')
+        self._elf_f = open(elf, "rb")
         self.elf = ELFFile(self._elf_f)
-        self.symtab = self.elf.get_section_by_name('.symtab')
+        self.symtab = self.elf.get_section_by_name(".symtab")
 
-        self.rwdata = RWData(self, 0x1_80a4, 36)
+        self.rwdata = RWData(self, 0x1_80A4, 36)
 
     def __str__(self):
         return "internal"
@@ -318,25 +331,27 @@ class IntFirmware(Firmware):
     def address(self, symbol_name):
         symbols = self.symtab.get_symbol_by_name(symbol_name)
         if not symbols:
-            raise MissingSymbolError(f"Cannot find symbol \"{symbol_name}\"")
-        address = symbols[0]['st_value']
+            raise MissingSymbolError(f'Cannot find symbol "{symbol_name}"')
+        address = symbols[0]["st_value"]
         if not address or not (
-                (self.RAM_BASE <= address <= self.RAM_BASE + self.RAM_LEN) or
-                (self.FLASH_BASE <= address <= self.FLASH_BASE + self.FLASH_LEN)
+            (self.RAM_BASE <= address <= self.RAM_BASE + self.RAM_LEN)
+            or (self.FLASH_BASE <= address <= self.FLASH_BASE + self.FLASH_LEN)
         ):
-            raise MissingSymbolError(f"Symbol \"{symbol_name}\" has invalid address 0x{address:08X}")
+            raise MissingSymbolError(
+                f'Symbol "{symbol_name}" has invalid address 0x{address:08X}'
+            )
         print(f"    found {symbol_name} at 0x{address:08X}")
         return address
 
     @property
     def key(self):
-        offset = 0x106f4
-        return self[offset: offset+16]
+        offset = 0x106F4
+        return self[offset : offset + 16]
 
     @property
     def nonce(self):
-        offset = 0x106e4
-        return self[offset:offset+8]
+        offset = 0x106E4
+        return self[offset : offset + 8]
 
 
 def _nonce_to_iv(nonce):
@@ -351,9 +366,9 @@ class ExtFirmware(Firmware):
     STOCK_ROM_SHA1_HASH = "eea70bb171afece163fb4b293c5364ddb90637ae"
 
     FLASH_BASE = 0x9000_0000
-    FLASH_LEN  = 0x0010_0000
-    ENC_LEN    = 0xF_E000  # end address at 0x080106ec
-    STOCK_ROM_END  = 0x0010_0000
+    FLASH_LEN = 0x0010_0000
+    ENC_LEN = 0xF_E000  # end address at 0x080106ec
+    STOCK_ROM_END = 0x0010_0000
 
     def __str__(self):
         return "external"
@@ -364,8 +379,7 @@ class ExtFirmware(Firmware):
             raise InvalidStockRomError
 
     def crypt(self, key, nonce):
-        """ Decrypts if encrypted; encrypts if in plain text.
-        """
+        """Decrypts if encrypted; encrypts if in plain text."""
         key = bytes(key[::-1])
         iv = bytearray(_nonce_to_iv(nonce))
 
@@ -384,9 +398,10 @@ class ExtFirmware(Firmware):
             for i, cipher_byte in enumerate(reversed(cipher_block)):
                 self[offset + i] ^= cipher_byte
 
+
 class SRAM3(Firmware):
     # This address of unused ram was found via tools/mem_observer.py
-    FLASH_BASE = 0x240f2124
+    FLASH_BASE = 0x240F2124
     FLASH_LEN = 0x24100000 - FLASH_BASE
 
     def __str__(self):
@@ -405,13 +420,12 @@ class Device(DevicePatchMixin):
         self.external._lookup = self.lookup
         self.sram3._lookup = self.lookup
 
-
-
     def crypt(self):
         self.external.crypt(self.internal.key, self.internal.nonce)
 
     def show(self, show=True):
         import matplotlib.pyplot as plt
+
         if len(self.external):
             plt.subplot(2, 1, 1)
             self.internal.show(show=False)

@@ -96,4 +96,3 @@ $(SDK_DIR)/%:
 
 download_sdk: $(SDK_HEADERS) $(SDK_C_SOURCES) $(SDK_ASM_SOURCES)
 .PHONY: download_sdk
-

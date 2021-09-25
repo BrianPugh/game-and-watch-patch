@@ -1,5 +1,6 @@
 from .compression import lzma_compress
 
+
 def twos_compliment(value, bits):
     if value >= 0:
         return value
@@ -9,41 +10,43 @@ def twos_compliment(value, bits):
 
 
 class FirmwarePatchMixin:
-    """ Patch commands that apply to a single firmware instance.
-    """
+    """Patch commands that apply to a single firmware instance."""
 
-    def replace(self, offset : int, data, size=None) -> int:
-        """
-        """
+    def replace(self, offset: int, data, size=None) -> int:
+        """ """
 
         if offset >= len(self):
-            raise IndexError(f"Patch offset {offset} exceeds firmware length {len(self)}")
+            raise IndexError(
+                f"Patch offset {offset} exceeds firmware length {len(self)}"
+            )
 
         if offset >= self.STOCK_ROM_END:
-            raise IndexError(f"Patch offset {offset} exceeds stock firmware region {self.STOCK_ROM_END}")
+            raise IndexError(
+                f"Patch offset {offset} exceeds stock firmware region {self.STOCK_ROM_END}"
+            )
 
         n_bytes_patched = 0
 
         if isinstance(data, bytes):
             # Write the bytes at that address as is.
-            self[offset:offset + len(data)] = data
+            self[offset : offset + len(data)] = data
             n_bytes_patched = len(data)
         elif isinstance(data, str):
             if size:
                 raise ValueError("Don't specify size when providing a symbol name.")
             data = self.address(data)
-            self[offset:offset+4] = data.to_bytes(4, 'little')
+            self[offset : offset + 4] = data.to_bytes(4, "little")
             n_bytes_patched = 4
         elif isinstance(data, int):
             # must be 1, 2, or 4 bytes
             if size is None:
-                raise ValueError("Must specify \"size\" when providing int data")
+                raise ValueError('Must specify "size" when providing int data')
             if size not in (1, 2, 4):
                 raise ValueError(f"Size must be one of {1, 2, 4}; got {size}")
-            self[offset:offset+size] = data.to_bytes(size, 'little')
+            self[offset : offset + size] = data.to_bytes(size, "little")
             n_bytes_patched = size
         else:
-            raise ValueError(f"Don't know how to parse data type \"{data}\"")
+            raise ValueError(f'Don\'t know how to parse data type "{data}"')
 
         return n_bytes_patched
 
@@ -61,7 +64,7 @@ class FirmwarePatchMixin:
         elif isinstance(data, int):
             # must be 1, 2, or 4 bytes
             if size is None:
-                raise ValueError("Must specify \"size\" when providing int data.")
+                raise ValueError('Must specify "size" when providing int data.')
             if data < self.FLASH_BASE:
                 data += self.FLASH_BASE
             dst = data
@@ -73,9 +76,8 @@ class FirmwarePatchMixin:
 
         return self.replace(offset, rel_distance, size=4)
 
-
-    def b(self, offset : int, data : int) -> int:
-        """ Unconditional branch inserted at ``offset`` to offset ``data``
+    def b(self, offset: int, data: int) -> int:
+        """Unconditional branch inserted at ``offset`` to offset ``data``
 
         data should be the aboolute offset into the firmware (i.e. NOT in the
         form 0x08XX_XXXX or 0x9XXX_XXXX)
@@ -86,7 +88,7 @@ class FirmwarePatchMixin:
         pc = offset + 4
         jump = data - pc
 
-        if abs(jump) > (2 * (1<<10)):
+        if abs(jump) > (2 * (1 << 10)):
             # Max +-2KB jump
             raise ValueError(f"Too large of a jump {jump} specified.")
 
@@ -101,9 +103,8 @@ class FirmwarePatchMixin:
 
         return 2
 
-
-    def bl(self, offset : int, data : str) -> int:
-        """ Replace a branch-link statement to a branch to one of our functions
+    def bl(self, offset: int, data: str) -> int:
+        """Replace a branch-link statement to a branch to one of our functions
 
         4 byte command.
         """
@@ -142,12 +143,12 @@ class FirmwarePatchMixin:
         return 4
 
     def bkpt(self, offset, size=2):
-        """ Insert software breakpoint(s) """
+        """Insert software breakpoint(s)"""
         if size % 2:
             raise ValueError("Size of breakpoints must be even.")
 
         n_bkpts = size // 2
-        self[offset:offset+size] = b"\x00\xbe" * n_bkpts
+        self[offset : offset + size] = b"\x00\xbe" * n_bkpts
         return size
 
     @property
@@ -155,11 +156,12 @@ class FirmwarePatchMixin:
         try:
             return self._ks_inst
         except AttributeError:
-            from keystone import Ks, KS_ARCH_ARM, KS_MODE_THUMB
+            from keystone import KS_ARCH_ARM, KS_MODE_THUMB, Ks
+
             self._ks_inst = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
         return self._ks_inst
 
-    def asm(self, offset : int, data : str, size=None) -> int:
+    def asm(self, offset: int, data: str, size=None) -> int:
         """
         Parameters
         ----------
@@ -167,21 +169,21 @@ class FirmwarePatchMixin:
             Assembly instructions
         """
         encoding, _ = self._ks.asm(data)
-        print(f"    \"{data}\" -> {[hex(x) for x in encoding]}")
+        print(f'    "{data}" -> {[hex(x) for x in encoding]}')
         if size:
             assert len(encoding) == size
         for i, val in enumerate(encoding):
             self[offset + i] = val
         return len(encoding)
 
-    def nop(self, offset : int, data : int) -> int:
+    def nop(self, offset: int, data: int) -> int:
         """Insert N NOP operations (each 2 bytes long)."""
         size = data * 2
-        self[offset:offset+size] = b"\x00\xbf" * data
+        self[offset : offset + size] = b"\x00\xbf" * data
         return size
 
-    def _move_copy(self, offset : int, data : int, size : int, delete : bool) -> int:
-        """ Move from offset -> data """
+    def _move_copy(self, offset: int, data: int, size: int, delete: bool) -> int:
+        """Move from offset -> data"""
 
         if not isinstance(data, int):
             raise ValueError(f"Data must be int, got {type(data)}")
@@ -207,24 +209,26 @@ class FirmwarePatchMixin:
                     self.clear_range(old_start, old_end)
 
         for i in range(size):
-            self._lookup[self.FLASH_BASE + old_start + i] = self.FLASH_BASE + new_start + i
+            self._lookup[self.FLASH_BASE + old_start + i] = (
+                self.FLASH_BASE + new_start + i
+            )
 
         return size
 
-    def move(self, offset : int, data : int, size : int) -> int:
+    def move(self, offset: int, data: int, size: int) -> int:
         return self._move_copy(offset, data, size, True)
 
-    def copy(self, offset : int, data : int, size : int) -> int:
+    def copy(self, offset: int, data: int, size: int) -> int:
         return self._move_copy(offset, data, size, False)
 
-    def add(self, offset : int, data : int, size : int = 4) -> int:
+    def add(self, offset: int, data: int, size: int = 4) -> int:
         val = self.int(offset, size)
         val += data
-        self[offset:offset+size] = val.to_bytes(size, "little")
+        self[offset : offset + size] = val.to_bytes(size, "little")
 
         return size
 
-    def shorten(self, data : int) -> int:
+    def shorten(self, data: int) -> int:
         data = abs(data)
         if data == 0:
             return
@@ -239,18 +243,20 @@ class FirmwarePatchMixin:
 
         return data
 
-    def compress(self, offset : int, size : int) -> int:
-        """ Apply in-place LZMA compression. """
-        data = self[offset:offset+size]
+    def compress(self, offset: int, size: int) -> int:
+        """Apply in-place LZMA compression."""
+        data = self[offset : offset + size]
 
         compressed_data = lzma_compress(data)
 
         # Clear the original data
-        self.clear_range(offset, offset+size)
+        self.clear_range(offset, offset + size)
         # Insert the compressed data
-        self[offset:offset+len(compressed_data)] = compressed_data
+        self[offset : offset + len(compressed_data)] = compressed_data
 
-        print(f"    compressed {len(data)}->{len(compressed_data)} bytes (saves {len(data)-len(compressed_data)})")
+        print(
+            f"    compressed {len(data)}->{len(compressed_data)} bytes (saves {len(data)-len(compressed_data)})"
+        )
 
         return len(compressed_data)
 
@@ -266,34 +272,37 @@ class FirmwarePatchMixin:
                 new_val = self._lookup[val]
             except KeyError:
                 raise KeyError(f"0x{val:08X} at offset 0x{offset:08X}")
-            self[offset:offset+size] = new_val.to_bytes(size, "little")
-            #print(f"    lookup 0x{val:08X}->0x{new_val:08x}")
+            self[offset : offset + size] = new_val.to_bytes(size, "little")
+            # print(f"    lookup 0x{val:08X}->0x{new_val:08x}")
 
 
 class DevicePatchMixin:
-    def _move_copy(self, dst, dst_offset : int, src, src_offset : int, size : int, delete : bool) -> int:
-        dst[dst_offset:dst_offset+size] = src[src_offset:src_offset+size]
+    def _move_copy(
+        self, dst, dst_offset: int, src, src_offset: int, size: int, delete: bool
+    ) -> int:
+        dst[dst_offset : dst_offset + size] = src[src_offset : src_offset + size]
         if delete:
             src.clear_range(src_offset, src_offset + size)
 
         for i in range(size):
-            self.lookup[src.FLASH_BASE + src_offset + i] = dst.FLASH_BASE + dst_offset + i
+            self.lookup[src.FLASH_BASE + src_offset + i] = (
+                dst.FLASH_BASE + dst_offset + i
+            )
 
         return size
 
-    def move(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
+    def move(self, dst, dst_offset: int, src, src_offset: int, size: int) -> int:
         return self._move_copy(dst, dst_offset, src, src_offset, size, True)
 
-    def copy(self, dst, dst_offset : int, src, src_offset : int, size : int) -> int:
+    def copy(self, dst, dst_offset: int, src, src_offset: int, size: int) -> int:
         return self._move_copy(dst, dst_offset, src, src_offset, size, False)
 
     # Convenience methods for move and copy
-    def move_to_int(self, ext_offset:int, int_offset:int, size:int) -> int:
+    def move_to_int(self, ext_offset: int, int_offset: int, size: int) -> int:
         return self.move(self.internal, int_offset, self.external, ext_offset, size)
 
-    def copy_to_int(self, ext_offset:int, int_offset:int, size:int) -> int:
+    def copy_to_int(self, ext_offset: int, int_offset: int, size: int) -> int:
         return self.copy(self.internal, int_offset, self.external, ext_offset, size)
 
-    def move_to_sram3(self, ext_offset:int, sram_offset:int, size:int) -> int:
+    def move_to_sram3(self, ext_offset: int, sram_offset: int, size: int) -> int:
         return self.move(self.sram3, sram_offset, self.external, ext_offset, size)
-

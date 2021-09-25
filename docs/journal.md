@@ -29,7 +29,7 @@ Addresses of note that we know right off the bat:
    * `0x0` contains the 4-byte initial Main Stack Pointer (MSP) `0x20011330`. I'll set my MSP to be the same in the linker script, but I'm not sure if this is aboslutely necessary.
    * `0x4` contains the 4-byte address of the Reset Handlers  `0x0801a001`. The flash gets mapped in starting at address `0x08000000`, so this is really pointing to offset `0x1a001` of the binary. Note that the least-significant-bit (LSb) must be `1`. We are going to overwrite this later with  a pointer to our function.
 
-Our first goal is to just get some of our own code running. The easiest way to to overwrite the reset handler address to run our own reset handler. We're going to be inserting our custom code into the empty space of the firmware `0x019300`. 
+Our first goal is to just get some of our own code running. The easiest way to to overwrite the reset handler address to run our own reset handler. We're going to be inserting our custom code into the empty space of the firmware `0x019300`.
 
 
 

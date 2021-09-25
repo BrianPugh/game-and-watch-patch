@@ -67,7 +67,7 @@ def bytes_to_tilemap(data, palette, bpp=8, width=256):
     return im
 
 
-def tilemap_to_bytes(tilemap, palette, dithering=False):
+def tilemap_to_bytes(tilemap, palette, bpp=8):
     """
     Parameters
     ----------
@@ -108,5 +108,15 @@ def tilemap_to_bytes(tilemap, palette, dithering=False):
             sprite_bytes = sprite.tobytes()
             out.append(sprite_bytes)
     out = b"".join(out)
+
+    if bpp == 4:
+        out_packed = bytearray()
+        assert len(out) % 2 == 0
+        for i in range(0, len(out), 2):
+            b1, b2 = out[i], out[i + 1]
+            b1 &= 0xF
+            b2 &= 0xF
+            out_packed.append((b1 << 4) | b2)
+        out = bytes(out_packed)
 
     return out

@@ -71,6 +71,18 @@ make clean
 make -j8 INTFLASH_BANK=2 flash
 ```
 
+# Graphical mods
+
+## SMB1 Rom Hacks
+The clock uses the SMB1 ROM for game logic and most graphics. Changing the SMB1 ROM with a ROM Hack that changes these graphics will also influence the clock.
+
+Run `make` to dump the SMB1 ROM to `build/smb1.nes`. Most ROM hacks are provided as an IPS patch file and need to be applied to the ROM via a [ROM patcher](https://www.marcrobledo.com/RomPatcher.js/).
+
+Pass in the path to your patched SMB1 ROM file using the `--smb1` argument.
+
+## Other Clock Graphics Mods
+Run `make` to dump the clock tileset to `build/tileset.png`. You can copy and edit this file using any image editng tool. To use your modified tileset, pass in the path via the `--clock-tileset` argument.
+
 # Advanced usage
 Other potentially useful make targets are listed below. Note that external flash only needs to be flashed if the patched external binary is greater than zero bytes.
 
@@ -87,7 +99,7 @@ make flash_patch_ext
 * Figure out safe place in RAM to store global/static variables. The current
   configuration described in the linker file is unsafe, but currently we have
   no global/static variables, so this is low priority.
-* Custom sprites, icons, and other graphical mods.
+* More custom sprites, icons, and other graphical mods.
 
 # Development
 Main stages to developing a feature:

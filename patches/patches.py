@@ -2,10 +2,11 @@ from math import ceil
 from pathlib import Path
 
 from colorama import Fore, Style
+from PIL import Image
 
 from .compression import lzma_compress
-from .exception import NotEnoughSpaceError, ParsingError
-from .tileset import bytes_to_tilemap
+from .exception import BadImageError, NotEnoughSpaceError, ParsingError
+from .tileset import bytes_to_tilemap, tilemap_to_bytes
 
 
 def printi(msg, *args):
@@ -69,13 +70,25 @@ def add_patch_args(parser):
         "screen to launch the mario drawing song easter egg.",
     )
 
-    group = parser.add_argument_group("ROM Hacks")
+    group = parser.add_argument_group("ROM Hacks and Graphical Mods")
     group.add_argument(
         "--smb1",
         type=Path,
         default="build/smb1.nes",
         help="Override SMB1 ROM with your own file.",
     )
+    group.add_argument(
+        "--clock-tileset",
+        type=Path,
+        default=Path("build/tileset.png"),
+        help="Override the clock tileset",
+    )
+    # group.add_argument(
+    #    "--iconset",
+    #    type=Path,
+    #    default=Path("build/iconset.png"),
+    #    help="Override the iconset",
+    # )
 
     group = parser.add_argument_group("Low level flash savings flags")
     group.add_argument(
@@ -390,21 +403,46 @@ def apply_patches(args, device, build):
     # Dump the tileset
     tileset_addr, tileset_size = 0x9_8B84, 0x1_0000
     palette_addr = 0xB_EC68
+    palette = device.external[palette_addr : palette_addr + 320]
     tileset = bytes_to_tilemap(
         device.external[tileset_addr : tileset_addr + tileset_size],
-        palette=device.external[palette_addr : palette_addr + 320],
+        palette=palette,
     )
     tileset.save(build / "tileset.png")
+
+    # Override tileset
+    with Image.open(args.clock_tileset) as tileset:
+        if tileset.height != 256 or tileset.width != 256:
+            raise BadImageError("Clock tileset image must have height=256, width=256")
+        tileset = tileset.convert("RGB")
+        if tileset.getpixel((255, 255))[:3] != (95, 115, 255):
+            raise BadImageError(
+                "Clock tileset image color is corrupt. Possibly due to some gamma issue."
+            )
+        device.external[tileset_addr : tileset_addr + tileset_size] = tilemap_to_bytes(
+            tileset, palette
+        )
 
     # Dump the iconset
     iconset_addr, iconset_size = 0xAACE4, 0x3F00
     palette_addr = 0xB_EC68
+    palette = device.external[palette_addr : palette_addr + 320]
     iconset = bytes_to_tilemap(
         device.external[iconset_addr : iconset_addr + iconset_size],
-        palette=device.external[palette_addr : palette_addr + 320],
+        palette=palette,
         bpp=4,
     )
     iconset.save(build / "iconset.png")
+
+    # Override iconset
+    # with Image.open(args.iconset) as iconset:
+    #    if iconset.height != 128 or iconset.width !=256:
+    #        raise BadImageError("Iconset image must have height=128, width=256")
+    #    iconset = iconset.convert("RGB")
+    #    if iconset.getpixel((255, 127))[:3] != (95, 115, 255):
+    #        raise BadImageError("Iconset image color is corrupt. Possibly due to some gamma issue.")
+    #    device.external[iconset_addr : iconset_addr + iconset_size] = \
+    #        tilemap_to_bytes(iconset, palette, bpp=4)[:iconset_size]
 
     printd("Compressing and moving stuff stuff to internal firmware.")
     compressed_len = device.external.compress(

@@ -1,7 +1,6 @@
 Pillow
 colorama
 keystone-engine
-matplotlib
 numpy
 pycrypto
 pyelftools

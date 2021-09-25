@@ -1,6 +1,5 @@
 from math import ceil
 
-import matplotlib
 import numpy as np
 from PIL import Image
 
@@ -20,6 +19,8 @@ def bytes_to_tilemap(data, palette, bpp=8, width=256):
     """
     Parameters
     ----------
+    palette : bytes
+       320 long RGBA (80 colors). Alpha is ignored.
 
     Returns
     -------
@@ -57,13 +58,11 @@ def bytes_to_tilemap(data, palette, bpp=8, width=256):
 
     # Apply palette to index-image
     p = np.frombuffer(palette, dtype=np.uint8).reshape((80, 4))
-    p = p.astype(np.float32)[:, :3] / 255
+    p = p[:, :3]
     p = np.fliplr(p)  # BGR->RGB
-    cmap = matplotlib.colors.ListedColormap(p)
-    color_canvas = np.round(255 * cmap(canvas)[..., :3])
-    color_canvas = color_canvas.astype(np.uint8)
 
-    im = Image.fromarray(color_canvas)
+    im = Image.fromarray(canvas, "P")
+    im.putpalette(p)
 
     return im
 

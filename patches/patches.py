@@ -7,6 +7,7 @@ from .compression import lzma_compress
 from .exception import NotEnoughSpaceError, ParsingError
 from .tileset import bytes_to_tilemap
 
+
 def printi(msg, *args):
     print(Fore.MAGENTA + msg + Style.RESET_ALL, *args)
 
@@ -387,21 +388,21 @@ def apply_patches(args, device, build):
         device.internal.nop(0x1068E, 1)
 
     # Dump the tileset
-    tileset_addr, tileset_size = 0x9_8b84, 0x1_0000
-    palette_addr = 0xb_ec68
+    tileset_addr, tileset_size = 0x9_8B84, 0x1_0000
+    palette_addr = 0xB_EC68
     tileset = bytes_to_tilemap(
-        device.external[tileset_addr:tileset_addr + tileset_size],
-        palette=device.external[palette_addr:palette_addr+320]
+        device.external[tileset_addr : tileset_addr + tileset_size],
+        palette=device.external[palette_addr : palette_addr + 320],
     )
     tileset.save(build / "tileset.png")
 
     # Dump the iconset
-    iconset_addr, iconset_size = 0xaace4, 0x3f00
-    palette_addr = 0xb_ec68
+    iconset_addr, iconset_size = 0xAACE4, 0x3F00
+    palette_addr = 0xB_EC68
     iconset = bytes_to_tilemap(
-        device.external[iconset_addr:iconset_addr + iconset_size],
-        palette=device.external[palette_addr:palette_addr+320],
-        bpp=4
+        device.external[iconset_addr : iconset_addr + iconset_size],
+        palette=device.external[palette_addr : palette_addr + 320],
+        bpp=4,
     )
     iconset.save(build / "iconset.png")
 

@@ -71,7 +71,8 @@ def tilemap_to_bytes(tilemap, palette, dithering=False):
     """
     Parameters
     ----------
-    tilemap : PIL.Image
+    tilemap : PIL.Image.Image or numpy.ndarray
+        RGB data
     palette : bytes
        320 long RGBA (80 colors). Alpha is ignored.
 
@@ -81,24 +82,29 @@ def tilemap_to_bytes(tilemap, palette, dithering=False):
         Bytes representation of index image
     """
 
-    tilemap = tilemap.convert("RGB")
+    if isinstance(tilemap, Image.Image):
+        tilemap = tilemap.convert("RGB")
+        tilemap = np.array(tilemap)
+    elif isinstance(tilemap, np.ndarray):
+        pass
+    else:
+        raise TypeError(f"Don't know how to handle tilemap type {type(tilemap)}")
 
     p = np.frombuffer(palette, dtype=np.uint8).reshape((80, 4))
     p = p[:, :3]
     p = np.fliplr(p)  # BGR->RGB
-    p = np.ascontiguousarray(p)
+    p = p[None, None].transpose(0, 1, 3, 2)  # (1, 1, 3, 80)
 
-    imp = Image.new("P", (1, 1))
-    imp.putpalette(p)
-
-    im = tilemap.quantize(palette=imp, dither=int(dithering))
-    data = np.array(im, dtype=np.uint8)
+    # Find closest color
+    diff = tilemap[..., None] - p
+    dist = np.linalg.norm(diff, axis=2)
+    index_image = np.argmin(dist, axis=-1).astype(np.uint8)
 
     # Need to undo the tiling now.
     out = []
-    for i in range(0, data.shape[0], _BLOCK_SIZE):
-        for j in range(0, data.shape[1], _BLOCK_SIZE):
-            sprite = data[i : i + _BLOCK_SIZE, j : j + _BLOCK_SIZE]
+    for i in range(0, index_image.shape[0], _BLOCK_SIZE):
+        for j in range(0, index_image.shape[1], _BLOCK_SIZE):
+            sprite = index_image[i : i + _BLOCK_SIZE, j : j + _BLOCK_SIZE]
             sprite_bytes = sprite.tobytes()
             out.append(sprite_bytes)
     out = b"".join(out)

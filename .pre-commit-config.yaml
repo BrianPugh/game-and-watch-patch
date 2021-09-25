@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/psf/black
-    rev: 21.6b0
+    rev: 21.9b0
     hooks:
       - id: black
 
@@ -10,9 +10,10 @@ repos:
       - id: flake8
 
   - repo: https://github.com/PyCQA/isort
-    rev: 5.9.1
+    rev: 5.9.3
     hooks:
       - id: isort
+        args: ["--profile", "black"]
         additional_dependencies: [toml]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks

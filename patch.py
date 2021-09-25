@@ -13,10 +13,16 @@ import argparse
 from pathlib import Path
 
 import colorama
-from colorama import Back, Fore, Style
+from colorama import Fore, Style
 
-from patches import (Device, ExtFirmware, IntFirmware, add_patch_args,
-                     apply_patches, validate_patch_args)
+from patches import (
+    Device,
+    ExtFirmware,
+    IntFirmware,
+    add_patch_args,
+    apply_patches,
+    validate_patch_args,
+)
 from patches.exception import InvalidPatchError
 
 colorama.init()

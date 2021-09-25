@@ -1,12 +1,11 @@
 import hashlib
 
-from colorama import Back, Fore, Style
+from colorama import Fore, Style
 from Crypto.Cipher import AES
 from elftools.elf.elffile import ELFFile
 
 from .compression import lz77_decompress, lzma_compress
-from .exception import (InvalidStockRomError, MissingSymbolError,
-                        NotEnoughSpaceError)
+from .exception import InvalidStockRomError, MissingSymbolError, NotEnoughSpaceError
 from .patch import DevicePatchMixin, FirmwarePatchMixin
 
 
@@ -88,14 +87,16 @@ class Firmware(FirmwarePatchMixin, bytearray):
                     self[key.start]
                 except IndexError:
                     raise NotEnoughSpaceError(
-                        f"Starting index {key.start} ({hex(key.start)}) exceeds firmware length {len(self)} ({hex(len(self))})"
+                        f"Starting index {key.start} ({hex(key.start)}) exceeds "
+                        f"firmware length {len(self)} ({hex(len(self))})"
                     ) from None
             if key.stop is not None:
                 try:
                     self[key.stop - 1]
                 except IndexError:
                     raise NotEnoughSpaceError(
-                        f"Ending index {key.stop - 1} ({hex(key.stop - 1)}) exceeds firmware length {len(self)} ({hex(len(self))})"
+                        f"Ending index {key.stop - 1} ({hex(key.stop - 1)}) exceeds "
+                        f"firmware length {len(self)} ({hex(len(self))})"
                     ) from None
 
         return super().__setitem__(key, new_val)
@@ -201,7 +202,7 @@ class RWData:
 
         if len(self.datas) >= self.MAX_TABLE_ELEMENTS:
             raise NotEnoughSpaceError(
-                f"MAX_TABLE_ELEMENTS exceeded; increase this value"
+                f"MAX_TABLE_ELEMENTS value {self.MAX_TABLE_ELEMENTS} exceeded"
             )
 
         self.datas.append(data)
@@ -239,7 +240,9 @@ class RWData:
         for data in self.datas:
             compressed_data = lzma_compress(bytes(data))
             print(
-                f"    compressed {len(data)}->{len(compressed_data)} bytes (saves {len(data)-len(compressed_data)}). Writing to 0x{index:05X}"
+                f"    compressed {len(data)}->{len(compressed_data)} bytes "
+                f"(saves {len(data)-len(compressed_data)}). "
+                f"Writing to 0x{index:05X}"
             )
             self.firmware[index : index + len(compressed_data)] = compressed_data
 

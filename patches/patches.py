@@ -1,7 +1,7 @@
-from math import ceil, floor
+from math import ceil
 from pathlib import Path
 
-from colorama import Back, Fore, Style
+from colorama import Fore, Style
 
 from .compression import lzma_compress
 from .exception import NotEnoughSpaceError, ParsingError
@@ -80,7 +80,8 @@ def add_patch_args(parser):
     group.add_argument(
         "--no-save",
         action="store_true",
-        help="Don't use up 2 pages (8192 bytes) of extflash for non-volatile saves. High scores and brightness/volume configurations will NOT survive homebrew launches.",
+        help="Don't use up 2 pages (8192 bytes) of extflash for non-volatile saves. "
+        "High scores and brightness/volume configurations will NOT survive homebrew launches.",
     )
     group.add_argument("--no-smb2", action="store_true", help="Remove SMB2 rom.")
     group.add_argument(
@@ -294,7 +295,8 @@ def apply_patches(args, device, build):
 
         if diff > int_free_space():
             print(
-                f"        {Fore.RED}not putting in sram due not enough free internal storage for compressed data.{Style.RESET_ALL}"
+                f"        {Fore.RED}not putting in sram due not enough free "
+                f"internal storage for compressed data.{Style.RESET_ALL}"
             )
             device.sram3.clear_range(sram3_pos, sram3_pos + size)
             return move_ext_external(ext, size, reference)
@@ -371,7 +373,7 @@ def apply_patches(args, device, build):
         device.internal.asm(0x6C3C, f"movw r2, #{sleep_time_frames}")
 
     if args.disable_sleep:
-        printi(f"Disable sleep timer")
+        printi("Disable sleep timer")
         device.internal.replace(0x6C40, 0x91, size=1)
 
     if args.mario_song_time:
@@ -394,7 +396,7 @@ def apply_patches(args, device, build):
     offset -= 7776 - _round_down_word(compressed_len)
 
     # SMB1 ROM (plus loading custom ROM)
-    printd(f"Compressing and moving SMB1 ROM to sram3.")
+    printd("Compressing and moving SMB1 ROM to sram3.")
     smb1_addr, smb1_size = 0x1E60, 40960
     # Adding the header for patching convenience.
     (build / "smb1.nes").write_bytes(

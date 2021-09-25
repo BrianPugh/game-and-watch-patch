@@ -13,11 +13,9 @@ from functools import partial
 from pathlib import Path
 from time import strftime
 
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from pyocd.core.helpers import ConnectHelper
-from pyocd.flash.file_programmer import FileProgrammer
 
 time_str = strftime("%Y%m%d-%H%M%S")
 auto_int = partial(int, base=0)  # Auto detect input format

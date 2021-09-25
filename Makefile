@@ -38,8 +38,6 @@ Core/lzma/LzmaDec.c \
 # ASM sources
 ASM_SOURCES =  \
 
-#startup_stm32h7b0xx.s
-
 
 #######################################
 # binaries

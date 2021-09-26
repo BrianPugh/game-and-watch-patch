@@ -73,7 +73,7 @@ class Main:
             parser.print_help()
             exit(1)
 
-        if args.command in set(["analyze", "dump"]):
+        if args.command in set(["analyze"]):
             # Commands that don't want an ocd session
             getattr(self, args.command)()
         else:
@@ -92,6 +92,9 @@ class Main:
             "--dump",
             action="store_true",
             help="Make a single observation and directly save it as a binary.",
+        )
+        parser.add_argument(
+            "--show", action="store_true", help="Print the byte(s) as they're captured."
         )
 
         group = parser.add_mutually_exclusive_group()
@@ -147,6 +150,17 @@ class Main:
                 self.target.resume()
                 print("Captured!")
                 samples.append(data)
+
+                if args.show:
+                    for i in range(0, size, 16):
+                        print(f"0x{args.addr_start + i:08x}:  ", end="")
+                        try:
+                            for j in range(16):
+                                print(f"0x{data[i+j]:02X} ", end="")
+                        except IndexError:
+                            print("")
+                            break
+                        print("")
 
                 if args.dump:
                     args.output.with_suffix(".bin").write_binary(data)

@@ -578,6 +578,8 @@ def apply_patches(args, device, build):
         rwdata_erase(0x1_2D44, mario_song_len)
         offset -= mario_song_len
 
+        device.internal.asm(0x6FC8, "b 0x1c")
+
     # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
     # These index into one of the palettes starting at 0xbec68.
     printe("Compressing clock graphics")

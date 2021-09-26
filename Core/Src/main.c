@@ -49,8 +49,6 @@ static inline void start_bank_2() {
 }
 
 gamepad_t read_buttons() {
-    static volatile int meow = 0x1234;
-
     gamepad_t gamepad = 0;
     gamepad = stock_read_buttons();
 
@@ -66,9 +64,6 @@ gamepad_t read_buttons() {
 
     if(mode == GNW_MODE_CLOCK){
         // Actions to only perform on the clock screen
-        if(gamepad & GAMEPAD_A){
-            meow++;
-        }
     }
 
     return gamepad;

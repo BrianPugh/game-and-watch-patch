@@ -83,13 +83,16 @@ class Main:
                 self.target.resume()
                 getattr(self, args.command)()
 
-    def dump(self):
-        raise NotImplementedError
-
     def capture(self):
         parser = argparse.ArgumentParser(description="Capture memory data from device.")
         parser.add_argument("addr_start", type=auto_int)
         parser.add_argument("addr_end", type=auto_int)
+
+        parser.add_argument(
+            "--dump",
+            action="store_true",
+            help="Make a single observation and directly save it as a binary.",
+        )
 
         group = parser.add_mutually_exclusive_group()
         group.add_argument(
@@ -144,6 +147,10 @@ class Main:
                 self.target.resume()
                 print("Captured!")
                 samples.append(data)
+
+                if args.dump:
+                    args.output.with_suffix(".bin").write_binary(data)
+                    return
             elif char == "r":
                 print("Reseting Target")
                 self.target.reset()

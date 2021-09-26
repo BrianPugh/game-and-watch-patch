@@ -97,9 +97,6 @@ make flash_patch_ext
 ```
 
 # TODO
-* Figure out safe place in RAM to store global/static variables. The current
-  configuration described in the linker file is unsafe, but currently we have
-  no global/static variables, so this is low priority.
 * More custom sprites, icons, and other graphical mods.
 
 # Development

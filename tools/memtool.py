@@ -73,20 +73,26 @@ class Main:
             parser.print_help()
             exit(1)
 
-        if args.command in set(["analyze"]):
+        if args.command in set(["analyze", "dump"]):
             # Commands that don't want an ocd session
             getattr(self, args.command)()
         else:
             with ConnectHelper.session_with_chosen_probe() as session:
-                board = session.board
-                target = board.target
-                target.resume()
-                getattr(self, args.command)(board, target)
+                self.board = session.board
+                self.target = self.board.target
+                self.target.resume()
+                getattr(self, args.command)()
 
-    def capture(self, board, target):
+    def capture(self):
         parser = argparse.ArgumentParser(description="Capture memory data from device.")
         parser.add_argument("addr_start", type=auto_int)
         parser.add_argument("addr_end", type=auto_int)
+
+        parser.add_argument(
+            "--dump",
+            action="store_true",
+            help="Make a single observation and directly save it as a binary.",
+        )
 
         group = parser.add_mutually_exclusive_group()
         group.add_argument(
@@ -110,10 +116,10 @@ class Main:
         samples = []
 
         def read():
-            return bytes(target.read_memory_block8(args.addr_start, size))
+            return bytes(self.target.read_memory_block8(args.addr_start, size))
 
         def write(data):
-            return target.write_memory_block8(args.addr_start, data)
+            return self.target.write_memory_block8(args.addr_start, data)
 
         if args.random:
             random_data = random.randbytes(size)
@@ -136,14 +142,18 @@ class Main:
                 print("    q - save and quit")
             elif char == ENTER or char == " ":
                 print("Capturing... ", end="", flush=True)
-                target.halt()
+                self.target.halt()
                 data = read()
-                target.resume()
+                self.target.resume()
                 print("Captured!")
                 samples.append(data)
+
+                if args.dump:
+                    args.output.with_suffix(".bin").write_binary(data)
+                    return
             elif char == "r":
                 print("Reseting Target")
-                target.reset()
+                self.target.reset()
             elif char == "q":
                 print("Quitting")
                 break

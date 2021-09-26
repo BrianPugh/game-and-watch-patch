@@ -133,6 +133,7 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=HardFault_Handler \
 		  -Wl,--undefined=NMI_Handler \
 		  -Wl,--undefined=bootloader \
+		  -Wl,--undefined=bss_rwdata_init \
 		  -Wl,--undefined=memcpy_inflate \
 		  -Wl,--undefined=read_buttons \
 		  -Wl,--undefined=rwdata_inflate \

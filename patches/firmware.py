@@ -195,7 +195,7 @@ class RWData:
 
     @property
     def table_end(self):
-        return self.table_start + 4 * 4 * len(self.datas) + 4
+        return self.table_start + 4 * 4 * len(self.datas) + 4 + 4
 
     def append(self, data, dst):
         """Add a new element to the table"""
@@ -272,6 +272,9 @@ class RWData:
             self.firmware.replace(index, data_dst, size=4)
             index += 4
 
+        self.firmware.relative(index, "bss_rwdata_init")
+        index += 4
+
         self.firmware.relative(index, self.last_fn, size=4)
         index += 4
 
@@ -293,7 +296,7 @@ class RWData:
         substrs.append("")
         substrs.append("RWData Table")
         substrs.append("------------")
-        for addr in range(self.table_start, self.table_end - 4, 16):
+        for addr in range(self.table_start, self.table_end - 4 - 4, 16):
             substrs.append(
                 f"0x{addr:08X}:  "
                 f"0x{self.firmware.int(addr + 0):08X}  "
@@ -301,8 +304,11 @@ class RWData:
                 f"0x{self.firmware.int(addr + 8):08X}  "
                 f"0x{self.firmware.int(addr + 12):08X}  "
             )
+        addr = self.table_end - 8
+        substrs.append(f"0x{addr:08X}:  0x{self.firmware.int(addr + 0):08X}")
         addr = self.table_end - 4
         substrs.append(f"0x{addr:08X}:  0x{self.firmware.int(addr + 0):08X}")
+
         substrs.append("")
         return "\n".join(substrs)
 

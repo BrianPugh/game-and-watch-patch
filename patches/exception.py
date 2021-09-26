@@ -16,3 +16,7 @@ class ParsingError(Exception):
 
 class NotEnoughSpaceError(Exception):
     """Not enough storage space in dst to perform the operation."""
+
+
+class BadImageError(Exception):
+    """Provided image is corrupt/wrong dimensions/wrong format"""

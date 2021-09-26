@@ -130,12 +130,13 @@ LIBS = -lc -lm -lnosys
 LIBDIR =
 LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref \
 		  -Wl,--gc-sections \
-		  -Wl,--undefined=bootloader \
-		  -Wl,--undefined=read_buttons \
-		  -Wl,--undefined=memcpy_inflate \
-		  -Wl,--undefined=rwdata_inflate \
-		  -Wl,--undefined=NMI_Handler \
 		  -Wl,--undefined=HardFault_Handler \
+		  -Wl,--undefined=NMI_Handler \
+		  -Wl,--undefined=bootloader \
+		  -Wl,--undefined=bss_rwdata_init \
+		  -Wl,--undefined=memcpy_inflate \
+		  -Wl,--undefined=read_buttons \
+		  -Wl,--undefined=rwdata_inflate \
 
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/internal_flash_patched.bin
@@ -175,7 +176,7 @@ $(BUILD_DIR):
 
 # Rebuild if PATCH_PARAMS doesn't match the values when last ran
 $(BUILD_DIR)/env: $(BUILD_DIR) scripts/check_env_vars.py FORCE
-	$(PYTHON) scripts/check_env_vars.py $@ $(PATCH_PARAMS)
+	$(PYTHON) scripts/check_env_vars.py "$(MAKECMDGOALS)" $@ "$(PATCH_PARAMS)"
 
 FORCE: ;
 

@@ -32,22 +32,6 @@ static inline void set_bootloader(uint32_t address){
  * So to run that app, set those values and execute a reset.
  */
 void bootloader(){
-    /* Copy init values from text to data */
-    uint32_t *init_values_ptr = &_sidata;
-    uint32_t *data_ptr = &_sdata;
-
-    /* Initialize non-constant static variable with initial values */
-    if (init_values_ptr != data_ptr) {
-        for (; data_ptr < &_edata;) {
-            *data_ptr++ = *init_values_ptr++;
-        }
-    }
-
-    /* Clear the zero segment */
-    for (uint32_t *bss_ptr = &_sbss; bss_ptr < &_ebss;) {
-        *bss_ptr++ = 0;
-    }
-
     if(*BOOTLOADER_MAGIC_ADDRESS == BOOTLOADER_MAGIC) {
         *BOOTLOADER_MAGIC_ADDRESS = 0;
         uint32_t sp = (*BOOTLOADER_JUMP_ADDRESS)[0];
@@ -67,6 +51,9 @@ static inline void start_bank_2() {
 gamepad_t read_buttons() {
     gamepad_t gamepad = 0;
     gamepad = stock_read_buttons();
+
+    gnw_mode_t mode = get_gnw_mode();
+
 #if CLOCK_ONLY
     if(gamepad & GAMEPAD_GAME){
 #else
@@ -74,10 +61,15 @@ gamepad_t read_buttons() {
 #endif
         start_bank_2();
     }
+
+    if(mode == GNW_MODE_CLOCK){
+        // Actions to only perform on the clock screen
+    }
+
     return gamepad;
 }
 
-#define LZMA_BUF_SIZE            (1 << 15)
+#define LZMA_BUF_SIZE            (1<<15)
 
 static void *SzAlloc(ISzAllocPtr p, size_t size) {
     void* res = p->Mem;
@@ -109,12 +101,46 @@ void *memcpy_inflate(uint8_t *dst, uint8_t *src, size_t n){
     return dst;
 }
 
+/**
+ * This gets hooked into the rwdata/bss init table.
+ */
 int32_t *rwdata_inflate(int32_t *table){
     uint8_t *data = (uint8_t *)table + table[0];
     int32_t len = table[1];
     uint8_t *ram = (uint8_t *) table[2];
     memcpy_inflate(ram, data, len);
     return table + 3;
+}
+
+
+/**
+ * This gets hooked into the rwdata/bss init table.
+ */
+int32_t bss_rwdata_init(int32_t *table){
+    /* Copy init values from text to data */
+    uint32_t *init_values_ptr = &_sidata;
+    uint32_t *data_ptr = &_sdata;
+
+    if (init_values_ptr != data_ptr) {
+        for (; data_ptr < &_edata;) {
+            *data_ptr++ = *init_values_ptr++;
+        }
+    }
+
+    /* Clear the zero segment */
+    for (uint32_t *bss_ptr = &_sbss; bss_ptr < &_ebss;) {
+        *bss_ptr++ = 0;
+    }
+    return table;
+}
+
+
+gnw_mode_t get_gnw_mode(){
+    uint8_t val = *gnw_mode_addr;
+    if(val == 0x20) return GNW_MODE_SMB2;
+    else if(val == 0x10) return GNW_MODE_SMB1;
+    else if(val == 0x08) return GNW_MODE_BALL;
+    else return GNW_MODE_CLOCK;
 }
 
 

@@ -82,6 +82,16 @@ void Error_Handler(void);
 
 /* USER CODE END Private defines */
 
+enum {
+    GNW_MODE_CLOCK,
+    GNW_MODE_BALL,
+    GNW_MODE_SMB1,
+    GNW_MODE_SMB2,
+};
+typedef uint8_t gnw_mode_t;
+
+gnw_mode_t get_gnw_mode();
+
 #ifdef __cplusplus
 }
 #endif

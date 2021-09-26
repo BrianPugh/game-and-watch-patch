@@ -88,15 +88,15 @@ class Main:
 
         if args.command in set(["analyze"]):
             # Commands that don't want an ocd session
-            getattr(self, args.command)()
+            getattr(self, args.command)(sys.argv[2:])
         else:
             with ConnectHelper.session_with_chosen_probe() as session:
                 self.board = session.board
                 self.target = self.board.target
                 self.target.resume()
-                getattr(self, args.command)()
+                getattr(self, args.command)(sys.argv[2:])
 
-    def clear(self):
+    def clear(self, argv):
         self.target.halt()
         for name, (start, size) in MEM_ADDR.items():
             print(f"Erasing {name}")
@@ -104,10 +104,13 @@ class Main:
         self.target.reset()
         self.target.resume()
 
-    def capture(self):
+    def capture(self, argv):
         parser = argparse.ArgumentParser(description="Capture memory data from device.")
-        parser.add_argument("addr_start", type=auto_int)
-        parser.add_argument("addr_end", type=auto_int)
+        parser.add_argument("addr_start")
+        args = parser.parse_args(sys.argv[2:3])
+
+        if args.addr_start not in MEM_ADDR:
+            parser.add_argument("addr_end", type=auto_int)
 
         parser.add_argument(
             "--dump",
@@ -115,7 +118,12 @@ class Main:
             help="Make a single observation and directly save it as a binary.",
         )
         parser.add_argument(
-            "--show", action="store_true", help="Print the byte(s) as they're captured."
+            "--print",
+            action="store_true",
+            help="Print the byte(s) as they're captured.",
+        )
+        parser.add_argument(
+            "--analyze", action="store_true", help="Analyze results afterwards."
         )
 
         group = parser.add_mutually_exclusive_group()
@@ -133,7 +141,13 @@ class Main:
         parser.add_argument(
             "--output", "-o", type=Path, default=Path(f"captures/{time_str}.pkl")
         )
-        args = parser.parse_args(sys.argv[2:])
+        args = parser.parse_args(argv)
+
+        if args.addr_start in MEM_ADDR:
+            args.addr_end = MEM_ADDR[args.addr_start][0] + MEM_ADDR[args.addr_start][1]
+            args.addr_start = MEM_ADDR[args.addr_start][0]
+        else:
+            args.addr_start = auto_int(args.addr_start)
 
         args.output.parent.mkdir(parents=True, exist_ok=True)
         size = args.addr_end - args.addr_start
@@ -172,7 +186,7 @@ class Main:
                 print("Captured!")
                 samples.append(data)
 
-                if args.show:
+                if args.print:
                     for i in range(0, size, 16):
                         print(f"0x{args.addr_start + i:08x}:  ", end="")
                         try:
@@ -199,12 +213,15 @@ class Main:
             pickle.dump(samples, f)
         print(f"Saved session to {args.output}")
 
-    def analyze(self):
+        if args.analyze:
+            self.analyze([str(args.output), "--show"])
+
+    def analyze(self, argv):
         parser = argparse.ArgumentParser(description="Analyze captured data.")
         parser.add_argument("src", type=Path, help="Load a pkl file for analysis.")
         parser.add_argument("--show", action="store_true", help="Show matplotlib plot")
 
-        args = parser.parse_args(sys.argv[2:])
+        args = parser.parse_args(argv)
 
         with open(args.src, "rb") as f:
             samples = pickle.load(f)

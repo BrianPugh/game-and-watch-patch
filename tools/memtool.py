@@ -204,7 +204,7 @@ class Main:
                         print("")
 
                 if args.dump:
-                    args.output.with_suffix(".bin").write_binary(data)
+                    args.output.with_suffix(".bin").write_bytes(data)
                     return
             elif char == "r":
                 print("Reseting Target")

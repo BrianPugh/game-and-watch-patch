@@ -175,7 +175,7 @@ $(BUILD_DIR):
 
 # Rebuild if PATCH_PARAMS doesn't match the values when last ran
 $(BUILD_DIR)/env: $(BUILD_DIR) scripts/check_env_vars.py FORCE
-	$(PYTHON) scripts/check_env_vars.py $@ $(PATCH_PARAMS)
+	$(PYTHON) scripts/check_env_vars.py "$(MAKECMDGOALS)" $@ "$(PATCH_PARAMS)"
 
 FORCE: ;
 

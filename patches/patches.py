@@ -77,10 +77,17 @@ def add_patch_args(parser):
         default="build/smb1.nes",
         help="Override SMB1 ROM with your own file.",
     )
-    group.add_argument(
+    mgroup = group.add_mutually_exclusive_group()
+    mgroup.add_argument(
         "--clock-tileset",
         type=Path,
-        default=Path("build/tileset.png"),
+        default=None,
+        help="Override the clock tileset",
+    )
+    mgroup.add_argument(
+        "--clock-tileset-index",
+        type=Path,
+        default=None,
         help="Override the clock tileset",
     )
     # group.add_argument(
@@ -404,24 +411,27 @@ def apply_patches(args, device, build):
     tileset_addr, tileset_size = 0x9_8B84, 0x1_0000
     palette_addr = 0xB_EC68
     palette = device.external[palette_addr : palette_addr + 320]
-    tileset = bytes_to_tilemap(
-        device.external[tileset_addr : tileset_addr + tileset_size],
-        palette=palette,
-    )
+    tileset_bytes = device.external[tileset_addr : tileset_addr + tileset_size]
+    tileset = bytes_to_tilemap(tileset_bytes, palette=palette)
     tileset.save(build / "tileset.png")
+    tileset_index = bytes_to_tilemap(tileset_bytes)
+    tileset_index.save(build / "tileset_index.png")
 
     # Override tileset
-    with Image.open(args.clock_tileset) as tileset:
-        if tileset.height != 256 or tileset.width != 256:
-            raise BadImageError("Clock tileset image must have height=256, width=256")
-        tileset = tileset.convert("RGB")
-        if tileset.getpixel((255, 255))[:3] != (95, 115, 255):
-            raise BadImageError(
-                "Clock tileset image color is corrupt. Possibly due to some gamma issue."
-            )
-        device.external[tileset_addr : tileset_addr + tileset_size] = tilemap_to_bytes(
-            tileset, palette
-        )
+    if args.clock_tileset:
+        with Image.open(args.clock_tileset) as tileset:
+            if tileset.height != 256 or tileset.width != 256:
+                raise BadImageError(
+                    "Clock tileset image must have height=256, width=256"
+                )
+            tileset = tileset.convert("RGB")
+            if tileset.getpixel((255, 255))[:3] != (95, 115, 255):
+                raise BadImageError(
+                    "Clock tileset image color is corrupt. Possibly due to some gamma issue."
+                )
+            device.external[
+                tileset_addr : tileset_addr + tileset_size
+            ] = tilemap_to_bytes(tileset, palette)
 
     # Dump the iconset
     iconset_addr, iconset_size = 0xAACE4, 0x3F00
@@ -443,6 +453,18 @@ def apply_patches(args, device, build):
     #        raise BadImageError("Iconset image color is corrupt. Possibly due to some gamma issue.")
     #    device.external[iconset_addr : iconset_addr + iconset_size] = \
     #        tilemap_to_bytes(iconset, palette, bpp=4)[:iconset_size]
+
+    # Dump BALL logo
+    ball_logo_addr, ball_logo_size = 0x1_13CC, 768
+    palette_addr = 0xB_EC68
+    palette = device.external[palette_addr : palette_addr + 320]
+    ball_logo = bytes_to_tilemap(
+        device.external[ball_logo_addr : ball_logo_addr + ball_logo_size],
+        palette=palette,
+        width=128,
+        bpp=2,
+    )
+    ball_logo.save(build / "ball_logo.png")
 
     printd("Compressing and moving stuff stuff to internal firmware.")
     compressed_len = device.external.compress(

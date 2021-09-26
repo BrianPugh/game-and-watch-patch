@@ -15,6 +15,7 @@ from time import strftime
 
 import matplotlib.pyplot as plt
 import numpy as np
+from pyocd.core.exceptions import TransferFaultError
 from pyocd.core.helpers import ConnectHelper
 
 time_str = strftime("%Y%m%d-%H%M%S")
@@ -181,7 +182,12 @@ class Main:
             elif char == ENTER or char == " ":
                 print("Capturing... ", end="", flush=True)
                 self.target.halt()
-                data = read()
+                try:
+                    data = read()
+                except TransferFaultError as e:
+                    print(e)
+                    self.target.resume()
+                    continue
                 self.target.resume()
                 print("Captured!")
                 samples.append(data)

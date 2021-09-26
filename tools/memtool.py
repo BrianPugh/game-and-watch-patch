@@ -21,6 +21,19 @@ time_str = strftime("%Y%m%d-%H%M%S")
 auto_int = partial(int, base=0)  # Auto detect input format
 ENTER = "\r"
 
+MEM_ADDR = {
+    # name: start_addr, size
+    "axi_sram_1": (0x2400_0000, 256 << 10),
+    "axi_sram_2": (0x2404_0000, 384 << 10),
+    "axi_sram_3": (0x240A_0000, 384 << 10),
+    "ahb_sram_1": (0x3000_0000, 64 << 10),
+    "ahb_sram_2": (0x3000_0001, 64 << 10),
+    "srd_sram_1": (0x3800_0000, 32 << 10),
+    "dtcm_ram_1": (0x2000_0000, 128 << 10),
+    "itcm_ram_1": (0x0000_0000, 64 << 10),
+    "backup_ram_1": (0x3880_0000, 4 << 10),
+}
+
 
 def get_char(prompt="", valid=None, echo=True, newline=True):
     """reads a single character"""
@@ -82,6 +95,14 @@ class Main:
                 self.target = self.board.target
                 self.target.resume()
                 getattr(self, args.command)()
+
+    def clear(self):
+        self.target.halt()
+        for name, (start, size) in MEM_ADDR.items():
+            print(f"Erasing {name}")
+            self.target.write_memory_block8(start, b"\x00" * size)
+        self.target.reset()
+        self.target.resume()
 
     def capture(self):
         parser = argparse.ArgumentParser(description="Capture memory data from device.")

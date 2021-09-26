@@ -63,4 +63,10 @@ bool (* const is_usb_connected)(void) = 0x08010dc2 | THUMB;
  */
 void (* const sleep)(void) = 0x080063a0 | THUMB;
 
+/**
+ * Address for checking to see if we are in {Clock, BALL, SMB1, SMB2}.
+ * See `get_gnw_mode()`
+ */
+volatile uint8_t * const gnw_mode_addr = 0x20001044;
+
 #pragma GCC diagnostic pop

@@ -86,6 +86,7 @@ gamepad_t read_buttons() {
             }
             else{
                 // load original SMB1 graphics
+                // TODO: This is broken
                 smb1_graphics_idx = 0;
                 memcpy(smb1_clock_graphics_working, SMB1_ROM + 0x8000, 0x1ec0);
             }

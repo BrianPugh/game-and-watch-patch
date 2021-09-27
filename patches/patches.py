@@ -286,12 +286,18 @@ def apply_patches(args, device, build):
         if int_free_space() < size:
             raise NotEnoughSpaceError
 
-        device.move_to_int(ext, int_pos, size=size)
-        print(f"    move_to_int {hex(ext)} -> {hex(int_pos)}")
+        new_loc = int_pos
+
+        if isinstance(ext, (bytes, bytearray)):
+            device.internal[int_pos : int_pos + size] = ext
+        else:
+            device.move_to_int(ext, int_pos, size=size)
+            print(f"    move_to_int {hex(ext)} -> {hex(int_pos)}")
+        int_pos += _round_up_word(size)
+
         if reference is not None:
             device.internal.lookup(reference)
-        new_loc = int_pos
-        int_pos += _round_up_word(size)
+
         return new_loc
 
     def move_to_sram3(ext, size, reference):
@@ -352,10 +358,16 @@ def apply_patches(args, device, build):
         return new_loc
 
     def move_ext_external(ext, size, reference):
-        device.external.move(ext, offset, size=size)
+        if isinstance(ext, (bytes, bytearray)):
+            device.external[offset : offset + size] = ext
+        else:
+            device.external.move(ext, offset, size=size)
+
         if reference is not None:
             device.internal.lookup(reference)
+
         new_loc = ext + offset
+
         return new_loc
 
     def move_ext(ext, size, reference):
@@ -369,7 +381,8 @@ def apply_patches(args, device, build):
         nonlocal offset
         try:
             new_loc = move_to_int(ext, size, reference)
-            offset -= _round_down_word(size)
+            if isinstance(ext, int):
+                offset -= _round_down_word(size)
             return new_loc
         except NotEnoughSpaceError:
             print(
@@ -466,16 +479,28 @@ def apply_patches(args, device, build):
     #        tilemap_to_bytes(iconset, palette, bpp=4)[:iconset_size]
 
     # Dump BALL logo
-    ball_logo_addr, ball_logo_size = 0x1_13CC, 768
-    palette_addr = 0xB_EC68
-    palette = device.external[palette_addr : palette_addr + 320]
-    ball_logo = bytes_to_tilemap(
-        device.external[ball_logo_addr : ball_logo_addr + ball_logo_size],
-        palette=palette,
-        width=128,
-        bpp=2,
-    )
-    ball_logo.save(build / "ball_logo.png")
+    # ball_logo_addr, ball_logo_size = 0x1_13CC, 768
+    # palette_addr = 0xB_EC68
+    # palette = device.external[palette_addr : palette_addr + 320]
+    # ball_logo = bytes_to_tilemap(
+    #    device.external[ball_logo_addr : ball_logo_addr + ball_logo_size],
+    #    palette=palette,
+    #    width=128,
+    #    bpp=2,
+    # )
+    # ball_logo.save(build / "ball_logo.png")
+
+    # Add all the rom hack graphics
+    for rom_path in args.smb1_graphics:
+        rom = rom_path.read_bytes()
+        if len(rom) == 40976:
+            # Remove the NES header
+            rom = rom[16:]
+        assert len(rom) == 40960
+        graphics = rom[0x8000:0x9EC0]
+        graphics_compressed = lzma_compress(graphics)
+        move_ext(graphics_compressed, len(graphics_compressed), None)
+        # TODO: update the ROM table
 
     printd("Compressing and moving stuff stuff to internal firmware.")
     compressed_len = device.external.compress(

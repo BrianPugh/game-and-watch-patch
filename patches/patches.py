@@ -77,6 +77,14 @@ def add_patch_args(parser):
         default="build/smb1.nes",
         help="Override SMB1 ROM with your own file.",
     )
+    group.add_argument(
+        "--smb1-graphics",
+        action="extend",
+        nargs="+",
+        default=[],
+        type=Path,
+        help="ROM hacks where just the graphical assets will be used.",
+    )
     mgroup = group.add_mutually_exclusive_group()
     mgroup.add_argument(
         "--clock-tileset",
@@ -137,6 +145,9 @@ def validate_patch_args(parser, args):
         args.mario_song_time < 1 or args.mario_song_time > 1092
     ):
         parser.error("--mario_song-time must be in range [1, 1092]")
+
+    if len(args.smb1_graphics) > 8:
+        parser.error("A maximum of 8 SMB1 graphics mods can be specified.")
 
     if args.internal_only:
         args.slim = True
@@ -490,7 +501,8 @@ def apply_patches(args, device, build):
     if len(smb1) != smb1_size:
         raise ValueError(f"Unknown length {len(smb1)} of file {args.smb1}")
     device.external[smb1_addr : smb1_addr + smb1_size] = smb1
-    move_to_sram3(smb1_addr, smb1_size, [0x7368, 0x10954, 0x7218])
+    patch_smb1_refr = device.internal.address("SMB1_ROM", sub_base=True)
+    move_to_sram3(smb1_addr, smb1_size, [0x7368, 0x10954, 0x7218, patch_smb1_refr])
 
     # I think these are all scenes for the clock, but not 100% sure.
     # The giant lookup table references all these

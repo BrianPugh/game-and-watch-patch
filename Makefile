@@ -137,6 +137,8 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=memcpy_inflate \
 		  -Wl,--undefined=read_buttons \
 		  -Wl,--undefined=rwdata_inflate \
+		  -Wl,--undefined=SMB1_GRAPHIC_MODS \
+		  -Wl,--undefined=SMB1_ROM \
 
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/internal_flash_patched.bin

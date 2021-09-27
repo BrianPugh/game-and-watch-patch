@@ -2,7 +2,9 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wint-conversion"
+#pragma GCC diagnostic ignored "-Wbuiltin-declaration-mismatch"
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -53,6 +55,8 @@ gamepad_t (* const stock_read_buttons)(void) = 0x08010d48 | THUMB;
 #define GAMEPAD_PAUSE ((gamepad_t) ( 1 <<  9 ))
 #define GAMEPAD_GAME  ((gamepad_t) ( 1 << 10 ))
 
+void (* const memcpy)(uint8_t *, const uint8_t *, size_t) = 0x08004b60 | THUMB;
+
 /**
  * Returns `true` if USB power is connected, `false` otherwise.
  */
@@ -68,5 +72,13 @@ void (* const sleep)(void) = 0x080063a0 | THUMB;
  * See `get_gnw_mode()`
  */
 volatile uint8_t * const gnw_mode_addr = 0x20001044;
+
+/**
+ * This will most likely be overriden by the patcher.
+ */
+const uint8_t * const SMB1_ROM = 0x90001e60;
+
+const uint8_t * const smb1_clock_working = 0x24000000;
+const uint8_t * const smb1_clock_graphics_working = smb1_clock_working + 0x8000;
 
 #pragma GCC diagnostic pop

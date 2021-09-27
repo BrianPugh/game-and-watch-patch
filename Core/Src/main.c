@@ -24,6 +24,9 @@ static inline void set_bootloader(uint32_t address){
     *BOOTLOADER_JUMP_ADDRESS = (uint32_t *)address;
 }
 
+#define SMB1_GRAPHIC_MODS_MAX 8
+const uint8_t * const SMB1_GRAPHIC_MODS[SMB1_GRAPHIC_MODS_MAX] = { 0 };
+
 /**
  * Executed on boot; will jump to a non-default program if:
  *     1. the value at `BOOTLOADER_MAGIC_ADDRESS` is `BOOTLOADER_MAGIC`
@@ -49,6 +52,9 @@ static inline void start_bank_2() {
 }
 
 gamepad_t read_buttons() {
+    static uint8_t smb1_graphics_idx = 0;
+    static gamepad_t gamepad_last = 0;
+
     gamepad_t gamepad = 0;
     gamepad = stock_read_buttons();
 
@@ -64,7 +70,29 @@ gamepad_t read_buttons() {
 
     if(mode == GNW_MODE_CLOCK){
         // Actions to only perform on the clock screen
+        if((gamepad & GAMEPAD_DOWN) && !(gamepad_last &GAMEPAD_DOWN)){
+            smb1_graphics_idx++;
+            const uint8_t *compressed_src = NULL;
+            if(smb1_graphics_idx > SMB1_GRAPHIC_MODS_MAX) {
+                smb1_graphics_idx = 0;
+            }
+            else {
+                compressed_src = SMB1_GRAPHIC_MODS[smb1_graphics_idx - 1];
+            }
+
+            if(compressed_src) {
+                // Load custom graphics
+                memcpy_inflate(smb1_clock_graphics_working, compressed_src, 0x1ec0);
+            }
+            else{
+                // load original SMB1 graphics
+                smb1_graphics_idx = 0;
+                memcpy(smb1_clock_graphics_working, SMB1_ROM + 0x8000, 0x1ec0);
+            }
+        }
     }
+
+    gamepad_last = gamepad;
 
     return gamepad;
 }
@@ -84,9 +112,9 @@ const ISzAlloc g_Alloc = { SzAlloc, SzFree };
 
 /**
  * Dropin replacement for memcpy for loading compressed assets.
- * @param n Compressed data length
+ * @param n Compressed data length. Can be larger than necessary.
  */
-void *memcpy_inflate(uint8_t *dst, uint8_t *src, size_t n){
+void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n){
     unsigned char lzma_heap[LZMA_BUF_SIZE];
     ISzAlloc allocs = {
         .Alloc=SzAlloc,
@@ -116,7 +144,7 @@ int32_t *rwdata_inflate(int32_t *table){
 /**
  * This gets hooked into the rwdata/bss init table.
  */
-int32_t bss_rwdata_init(int32_t *table){
+int32_t *bss_rwdata_init(int32_t *table){
     /* Copy init values from text to data */
     uint32_t *init_values_ptr = &_sidata;
     uint32_t *data_ptr = &_sdata;

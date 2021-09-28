@@ -399,6 +399,10 @@ def apply_patches(args, device, build):
     printi("Mute clock audio on first boot.")
     device.internal.asm(0x49E0, "mov.w r1, #0x00000")
 
+    printi("Intercept prepare_clock_rom")
+    device.internal.bl(0x690E, "prepare_clock_rom")
+    device.internal.nop(0x1_0EF0, 2)
+
     if args.debug:
         # Override fault handlers for easier debugging via gdb.
         printi("Overriding handlers for debugging.")

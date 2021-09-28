@@ -51,8 +51,34 @@ static inline void start_bank_2() {
     NVIC_SystemReset();
 }
 
+static volatile uint8_t smb1_graphics_idx = 0;
+
+uint8_t * prepare_clock_rom(void *src, size_t len){
+    const uint8_t *compressed_src = NULL;
+
+    memcpy((uint8_t *)0x24000000, src, len);
+
+    if(smb1_graphics_idx > SMB1_GRAPHIC_MODS_MAX){
+        smb1_graphics_idx = 0;
+    }
+
+    if(smb1_graphics_idx){
+        compressed_src = SMB1_GRAPHIC_MODS[smb1_graphics_idx - 1];
+    }
+    if(compressed_src) {
+        // Load custom graphics
+        memcpy_inflate((uint8_t *)0x24008000, compressed_src, 0x1ec0);
+    }
+    else{
+        smb1_graphics_idx = 0;
+    }
+
+    uint8_t *out = stock_prepare_clock_rom((void *)0x24000000, len);
+
+    return out;
+}
+
 gamepad_t read_buttons() {
-    static uint8_t smb1_graphics_idx = 0;
     static gamepad_t gamepad_last = 0;
 
     gamepad_t gamepad = 0;
@@ -71,25 +97,10 @@ gamepad_t read_buttons() {
     if(mode == GNW_MODE_CLOCK){
         // Actions to only perform on the clock screen
         if((gamepad & GAMEPAD_DOWN) && !(gamepad_last &GAMEPAD_DOWN)){
+            // TODO: detect if menu is up or not
             smb1_graphics_idx++;
-            const uint8_t *compressed_src = NULL;
-            if(smb1_graphics_idx > SMB1_GRAPHIC_MODS_MAX) {
-                smb1_graphics_idx = 0;
-            }
-            else {
-                compressed_src = SMB1_GRAPHIC_MODS[smb1_graphics_idx - 1];
-            }
-
-            if(compressed_src) {
-                // Load custom graphics
-                memcpy_inflate(smb1_clock_graphics_working, compressed_src, 0x1ec0);
-            }
-            else{
-                // load original SMB1 graphics
-                // TODO: This is broken
-                smb1_graphics_idx = 0;
-                memcpy(smb1_clock_graphics_working, SMB1_ROM + 0x8000, 0x1ec0);
-            }
+            // Force a reload
+            *(uint8_t *)0x2000103d = 1; // Not sure the difference between setting 1 or 2.
         }
     }
 

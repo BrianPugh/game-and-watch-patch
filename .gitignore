@@ -9,3 +9,4 @@ iconset_palette_*.png
 captures/
 *.nes
 /*.png
+.gdbinit

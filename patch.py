@@ -127,6 +127,10 @@ def main():
     # Save the decrypted external firmware for debugging/development purposes.
     Path("build/decrypt.bin").write_bytes(device.external)
 
+    # Dump ITCM and DTCM RAM data
+    Path("build/itcm_rwdata.bin").write_bytes(device.internal.rwdata.datas[0])
+    Path("build/dtcm_rwdata.bin").write_bytes(device.internal.rwdata.datas[1])
+
     # Copy over novel code
     patch = args.patch.read_bytes()
     if len(device.internal) != len(patch):

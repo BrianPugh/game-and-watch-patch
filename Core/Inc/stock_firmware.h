@@ -78,13 +78,13 @@ volatile uint8_t * const gnw_mode_addr = 0x20001044;
  */
 const uint8_t * const SMB1_ROM = 0x90001e60;
 
-const uint8_t * const smb1_clock_working = 0x24000000;
-const uint8_t * const smb1_clock_graphics_working = smb1_clock_working + 0x8000;
+uint8_t * const smb1_clock_working = 0x24000000;
+uint8_t * const smb1_clock_graphics_working = smb1_clock_working + 0x8000;
 
 /**
  * Function that loads the SMB1 rom into memory and prepares all the sprite
  * data.
  */
-uint8_t * (* const stock_prepare_clock_rom)(void *src, size_t len) = 0x08010e10 | THUMB;
+uint8_t * (* const stock_prepare_clock_rom)(uint8_t *src, size_t len) = 0x08010e10 | THUMB;
 
 #pragma GCC diagnostic pop

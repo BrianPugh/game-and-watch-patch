@@ -56,7 +56,7 @@ static volatile uint8_t smb1_graphics_idx = 0;
 uint8_t * prepare_clock_rom(void *src, size_t len){
     const uint8_t *compressed_src = NULL;
 
-    memcpy((uint8_t *)0x24000000, src, len);
+    memcpy(smb1_clock_working, src, len);
 
     if(smb1_graphics_idx > SMB1_GRAPHIC_MODS_MAX){
         smb1_graphics_idx = 0;
@@ -67,15 +67,13 @@ uint8_t * prepare_clock_rom(void *src, size_t len){
     }
     if(compressed_src) {
         // Load custom graphics
-        memcpy_inflate((uint8_t *)0x24008000, compressed_src, 0x1ec0);
+        memcpy_inflate(smb1_clock_graphics_working, compressed_src, 0x1ec0);
     }
     else{
         smb1_graphics_idx = 0;
     }
 
-    uint8_t *out = stock_prepare_clock_rom((void *)0x24000000, len);
-
-    return out;
+    return stock_prepare_clock_rom(smb1_clock_working, len);
 }
 
 gamepad_t read_buttons() {

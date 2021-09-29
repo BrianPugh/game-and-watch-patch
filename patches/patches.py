@@ -495,16 +495,23 @@ def apply_patches(args, device, build):
         device.internal.nop(0x1_0EF0, 2)
 
         table = device.internal.address("SMB1_GRAPHIC_MODS", sub_base=True)
-        for rom_path in args.smb1_graphics:
-            rom = rom_path.read_bytes()
-            if len(rom) == 40976:
-                # Remove the NES header
-                rom = rom[16:]
-            assert len(rom) == 40960
-            graphics = rom[0x8000:0x9EC0]
-            graphics_compressed = lzma_compress(graphics)
-            loc = move_to_int(graphics_compressed, len(graphics_compressed), None)
-            loc += device.internal.FLASH_BASE
+        for file_path in args.smb1_graphics:
+            if file_path.suffix.lower() == ".nes":
+                rom = file_path.read_bytes()
+                if len(rom) == 40976:
+                    # Remove the NES header
+                    rom = rom[16:]
+                assert len(rom) == 40960
+                graphics = rom[0x8000:0x9EC0]
+                graphics_compressed = lzma_compress(graphics)
+                loc = move_to_int(graphics_compressed, len(graphics_compressed), None)
+                loc += device.internal.FLASH_BASE
+            elif file_path.suffix.lower() == ".ips":
+                patch = file_path.read_bytes()
+                loc = move_to_int(patch, len(patch), None)
+                loc += device.internal.FLASH_BASE
+            else:
+                raise ValueError(f"Don't know how to handle extension for {file_path}.")
             # Update the SMB1_GRAPHIC_MODS table
             device.internal.replace(table, loc, size=4)
             table += 4

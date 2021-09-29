@@ -7,6 +7,7 @@
 #include "stm32h7xx_hal.h"
 #include "LzmaDec.h"
 #include <string.h>
+#include "ips.h"
 
 
 #define BANK_2_ADDRESS 0x08100000
@@ -55,23 +56,26 @@ static inline void start_bank_2() {
 const uint8_t * const SMB1_GRAPHIC_MODS[SMB1_GRAPHIC_MODS_MAX] = { 0 };
 static volatile uint8_t smb1_graphics_idx = 0;
 
-uint8_t * prepare_clock_rom(void *src, size_t len){
-    const uint8_t *compressed_src = NULL;
-
-    memcpy(smb1_clock_working, src, len);
+uint8_t * prepare_clock_rom(void *mario_rom, size_t len){
+    const uint8_t *patch = NULL;
 
     if(smb1_graphics_idx > SMB1_GRAPHIC_MODS_MAX){
         smb1_graphics_idx = 0;
     }
 
     if(smb1_graphics_idx){
-        compressed_src = SMB1_GRAPHIC_MODS[smb1_graphics_idx - 1];
+        patch = SMB1_GRAPHIC_MODS[smb1_graphics_idx - 1];
     }
-    if(compressed_src) {
+    if(patch) {
         // Load custom graphics
-        memcpy_inflate(smb1_clock_graphics_working, compressed_src, 0x1ec0);
+        if(IPS_PATCH_WRONG_HEADER == ips_patch(smb1_clock_working, mario_rom, patch)){
+            // Attempt a direct graphics override
+            memcpy(smb1_clock_working, mario_rom, len);
+            memcpy_inflate(smb1_clock_graphics_working, patch, 0x1ec0);
+        }
     }
     else{
+        memcpy(smb1_clock_working, mario_rom, len);
         smb1_graphics_idx = 0;
     }
 

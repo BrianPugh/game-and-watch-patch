@@ -36,6 +36,7 @@ BUILD_DIR = build
 
 # C sources
 C_SOURCES =  \
+Core/Src/ips.c \
 Core/Src/main.c \
 Core/lzma/LzmaDec.c \
 

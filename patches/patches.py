@@ -77,6 +77,14 @@ def add_patch_args(parser):
         default="build/smb1.nes",
         help="Override SMB1 ROM with your own file.",
     )
+    group.add_argument(
+        "--smb1-graphics",
+        action="extend",
+        nargs="+",
+        default=[],
+        type=Path,
+        help="ROM hacks where just the graphical assets will be used.",
+    )
     mgroup = group.add_mutually_exclusive_group()
     mgroup.add_argument(
         "--clock-tileset",
@@ -137,6 +145,9 @@ def validate_patch_args(parser, args):
         args.mario_song_time < 1 or args.mario_song_time > 1092
     ):
         parser.error("--mario_song-time must be in range [1, 1092]")
+
+    if len(args.smb1_graphics) > 8:
+        parser.error("A maximum of 8 SMB1 graphics mods can be specified.")
 
     if args.internal_only:
         args.slim = True
@@ -275,12 +286,18 @@ def apply_patches(args, device, build):
         if int_free_space() < size:
             raise NotEnoughSpaceError
 
-        device.move_to_int(ext, int_pos, size=size)
-        print(f"    move_to_int {hex(ext)} -> {hex(int_pos)}")
+        new_loc = int_pos
+
+        if isinstance(ext, (bytes, bytearray)):
+            device.internal[int_pos : int_pos + size] = ext
+        else:
+            device.move_to_int(ext, int_pos, size=size)
+            print(f"    move_to_int {hex(ext)} -> {hex(int_pos)}")
+        int_pos += _round_up_word(size)
+
         if reference is not None:
             device.internal.lookup(reference)
-        new_loc = int_pos
-        int_pos += _round_up_word(size)
+
         return new_loc
 
     def move_to_sram3(ext, size, reference):
@@ -341,10 +358,16 @@ def apply_patches(args, device, build):
         return new_loc
 
     def move_ext_external(ext, size, reference):
-        device.external.move(ext, offset, size=size)
+        if isinstance(ext, (bytes, bytearray)):
+            device.external[offset : offset + size] = ext
+        else:
+            device.external.move(ext, offset, size=size)
+
         if reference is not None:
             device.internal.lookup(reference)
+
         new_loc = ext + offset
+
         return new_loc
 
     def move_ext(ext, size, reference):
@@ -358,7 +381,8 @@ def apply_patches(args, device, build):
         nonlocal offset
         try:
             new_loc = move_to_int(ext, size, reference)
-            offset -= _round_down_word(size)
+            if isinstance(ext, int):
+                offset -= _round_down_word(size)
             return new_loc
         except NotEnoughSpaceError:
             print(
@@ -455,16 +479,36 @@ def apply_patches(args, device, build):
     #        tilemap_to_bytes(iconset, palette, bpp=4)[:iconset_size]
 
     # Dump BALL logo
-    ball_logo_addr, ball_logo_size = 0x1_13CC, 768
-    palette_addr = 0xB_EC68
-    palette = device.external[palette_addr : palette_addr + 320]
-    ball_logo = bytes_to_tilemap(
-        device.external[ball_logo_addr : ball_logo_addr + ball_logo_size],
-        palette=palette,
-        width=128,
-        bpp=2,
-    )
-    ball_logo.save(build / "ball_logo.png")
+    # ball_logo_addr, ball_logo_size = 0x1_13CC, 768
+    # palette_addr = 0xB_EC68
+    # palette = device.external[palette_addr : palette_addr + 320]
+    # ball_logo = bytes_to_tilemap(
+    #    device.external[ball_logo_addr : ball_logo_addr + ball_logo_size],
+    #    palette=palette,
+    #    width=128,
+    #    bpp=2,
+    # )
+    # ball_logo.save(build / "ball_logo.png")
+
+    if args.smb1_graphics:
+        printi("Intercept prepare_clock_rom")
+        device.internal.bl(0x690E, "prepare_clock_rom")
+        device.internal.nop(0x1_0EF0, 2)
+
+        table = device.internal.address("SMB1_GRAPHIC_MODS", sub_base=True)
+        for rom_path in args.smb1_graphics:
+            rom = rom_path.read_bytes()
+            if len(rom) == 40976:
+                # Remove the NES header
+                rom = rom[16:]
+            assert len(rom) == 40960
+            graphics = rom[0x8000:0x9EC0]
+            graphics_compressed = lzma_compress(graphics)
+            loc = move_to_int(graphics_compressed, len(graphics_compressed), None)
+            loc += device.internal.FLASH_BASE
+            # Update the SMB1_GRAPHIC_MODS table
+            device.internal.replace(table, loc, size=4)
+            table += 4
 
     printd("Compressing and moving stuff stuff to internal firmware.")
     compressed_len = device.external.compress(
@@ -490,7 +534,8 @@ def apply_patches(args, device, build):
     if len(smb1) != smb1_size:
         raise ValueError(f"Unknown length {len(smb1)} of file {args.smb1}")
     device.external[smb1_addr : smb1_addr + smb1_size] = smb1
-    move_to_sram3(smb1_addr, smb1_size, [0x7368, 0x10954, 0x7218])
+    patch_smb1_refr = device.internal.address("SMB1_ROM", sub_base=True)
+    move_to_sram3(smb1_addr, smb1_size, [0x7368, 0x10954, 0x7218, patch_smb1_refr])
 
     # I think these are all scenes for the clock, but not 100% sure.
     # The giant lookup table references all these

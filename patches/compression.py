@@ -1,5 +1,4 @@
 import lzma
-import struct
 
 
 def lzma_compress(data):
@@ -15,9 +14,7 @@ def lzma_compress(data):
             }
         ],
     )
-    compressed_data = (
-        compressed_data[:5] + struct.pack("<Q", len(data)) + compressed_data[13:]
-    )
+    compressed_data = compressed_data[13:]
     return compressed_data
 
 

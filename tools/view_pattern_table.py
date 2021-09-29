@@ -38,7 +38,7 @@ class ROMViewer(object):
     def update_offset(self, offset):
         """update offset and re-draw figure"""
         offset = max(offset, 0)
-        offset = min(offset, self.data.shape[0] / 2 - self.N1 * self.N2)
+        offset = int(min(offset, self.data.shape[0] / 2 - self.N1 * self.N2))
         self.current_offset = offset
         self.ax.set_title("offset = %i" % offset)
 
@@ -51,6 +51,7 @@ class ROMViewer(object):
         for i in range(self.N1):
             for j in range(self.N2):
                 thumb = self.data[2 * offset] + 2 * self.data[2 * offset + 1]
+
                 ind_i = self.sep + (8 + self.sep) * i
                 ind_j = self.sep + (8 + self.sep) * j
                 im_array[ind_i : ind_i + 8, ind_j : ind_j + 8] = thumb

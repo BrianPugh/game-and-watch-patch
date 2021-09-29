@@ -6,6 +6,7 @@
 #include "gw_linker.h"
 #include "stm32h7xx_hal.h"
 #include "LzmaDec.h"
+#include <string.h>
 
 
 #define BANK_2_ADDRESS 0x08100000
@@ -48,7 +49,43 @@ static inline void start_bank_2() {
     NVIC_SystemReset();
 }
 
+
+#if ENABLE_SMB1_GRAPHIC_MODS
+#define SMB1_GRAPHIC_MODS_MAX 8
+const uint8_t * const SMB1_GRAPHIC_MODS[SMB1_GRAPHIC_MODS_MAX] = { 0 };
+static volatile uint8_t smb1_graphics_idx = 0;
+
+uint8_t * prepare_clock_rom(void *src, size_t len){
+    const uint8_t *compressed_src = NULL;
+
+    memcpy(smb1_clock_working, src, len);
+
+    if(smb1_graphics_idx > SMB1_GRAPHIC_MODS_MAX){
+        smb1_graphics_idx = 0;
+    }
+
+    if(smb1_graphics_idx){
+        compressed_src = SMB1_GRAPHIC_MODS[smb1_graphics_idx - 1];
+    }
+    if(compressed_src) {
+        // Load custom graphics
+        memcpy_inflate(smb1_clock_graphics_working, compressed_src, 0x1ec0);
+    }
+    else{
+        smb1_graphics_idx = 0;
+    }
+
+    return stock_prepare_clock_rom(smb1_clock_working, len);
+}
+#endif
+
+bool is_menu_open(){
+    return *ui_draw_status_addr == 5;
+}
+
 gamepad_t read_buttons() {
+    static gamepad_t gamepad_last = 0;
+
     gamepad_t gamepad = 0;
     gamepad = stock_read_buttons();
 
@@ -62,18 +99,29 @@ gamepad_t read_buttons() {
         start_bank_2();
     }
 
-    if(mode == GNW_MODE_CLOCK){
+    if(mode == GNW_MODE_CLOCK && !is_menu_open()){
+#if ENABLE_SMB1_GRAPHIC_MODS
         // Actions to only perform on the clock screen
+        if((gamepad & GAMEPAD_DOWN) && !(gamepad_last &GAMEPAD_DOWN)){
+            // TODO: detect if menu is up or not
+            smb1_graphics_idx++;
+            // Force a reload
+            *(uint8_t *)0x2000103d = 1; // Not sure the difference between setting 1 or 2.
+        }
+#endif
     }
+
+    gamepad_last = gamepad;
 
     return gamepad;
 }
 
-#define LZMA_BUF_SIZE            (1<<15)
+
+const uint8_t const LZMA_PROP_DATA[5] = {0x5d, 0x00, 0x40, 0x00, 0x00};
+#define LZMA_BUF_SIZE            20000
 
 static void *SzAlloc(ISzAllocPtr p, size_t size) {
     void* res = p->Mem;
-    //p->Mem += size;
     return res;
 }
 
@@ -84,9 +132,9 @@ const ISzAlloc g_Alloc = { SzAlloc, SzFree };
 
 /**
  * Dropin replacement for memcpy for loading compressed assets.
- * @param n Compressed data length
+ * @param n Compressed data length. Can be larger than necessary.
  */
-void *memcpy_inflate(uint8_t *dst, uint8_t *src, size_t n){
+void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n){
     unsigned char lzma_heap[LZMA_BUF_SIZE];
     ISzAlloc allocs = {
         .Alloc=SzAlloc,
@@ -94,10 +142,9 @@ void *memcpy_inflate(uint8_t *dst, uint8_t *src, size_t n){
         .Mem=lzma_heap,
     };
 
-    ELzmaStatus lzmaStatus;
-    n -= 13;
+    ELzmaStatus status;
     size_t dst_len = 393216;
-    LzmaDecode(dst, &dst_len, &src[13], &n, src, 5, LZMA_FINISH_ANY, &lzmaStatus, &allocs);
+    LzmaDecode(dst, &dst_len, src, &n, LZMA_PROP_DATA, 5, LZMA_FINISH_ANY, &status, &allocs);
     return dst;
 }
 
@@ -116,7 +163,7 @@ int32_t *rwdata_inflate(int32_t *table){
 /**
  * This gets hooked into the rwdata/bss init table.
  */
-int32_t bss_rwdata_init(int32_t *table){
+int32_t *bss_rwdata_init(int32_t *table){
     /* Copy init values from text to data */
     uint32_t *init_values_ptr = &_sidata;
     uint32_t *data_ptr = &_sdata;

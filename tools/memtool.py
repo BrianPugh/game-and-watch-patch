@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pyocd.core.exceptions import TransferFaultError
 from pyocd.core.helpers import ConnectHelper
+from pyocd.core.target import Target
+from tqdm import tqdm
 
 time_str = strftime("%Y%m%d-%H%M%S")
 auto_int = partial(int, base=0)  # Auto detect input format
@@ -34,6 +36,11 @@ MEM_ADDR = {
     "itcm_ram_1": (0x0000_0000, 64 << 10),
     "backup_ram_1": (0x3880_0000, 4 << 10),
 }
+
+
+def inf_generator():
+    while True:
+        yield
 
 
 def get_char(prompt="", valid=None, echo=True, newline=True):
@@ -97,18 +104,69 @@ class Main:
                 self.target.resume()
                 getattr(self, args.command)(sys.argv[2:])
 
+    def _wait_until_halt(self):
+        # Wait until breakpoint is hit.
+        while self.target.get_state() != Target.State.HALTED:
+            pass
+
+    def flow(self, argv):
+        """This command is not yet in a minimum working state."""
+
+        parser = argparse.ArgumentParser(description="Capture PC data from device.")
+        parser.add_argument("cmd_start", type=str, help="GDB command ")
+        parser.add_argument("cmd_end", type=str, help="GDB command ")
+        args = parser.parse_args(argv)
+
+        def gdb_parser(cmd):
+            if isinstance(cmd, str):
+                cmd = cmd.split(" ")
+
+            if cmd[0] == "break":
+                self.target.set_breakpoint(auto_int(cmd[1]))
+            elif cmd[0] == "rwatch":
+                self.target.set_watchpoint(
+                    auto_int(cmd[1]), 1, Target.WatchpointType.READ
+                )
+            elif cmd[0] == "watch":
+                self.target.set_watchpoint(
+                    auto_int(cmd[1]), 1, Target.WatchpointType.WRITE
+                )
+            elif cmd[0] == "awatch":
+                self.target.set_watchpoint(
+                    auto_int(cmd[1]), 1, Target.WatchpointType.READ_WRITE
+                )
+            else:
+                raise ValueError(f"Unknown gdb command {cmd[0]}")
+
+        self.target.halt()
+        gdb_parser(args.cmd_start)
+        self.target.resume()
+
+        print("Waiting until start condition is met")
+        self._wait_until_halt()
+        print("Start condition is met!")
+
+        gdb_parser(args.cmd_end)
+
+        for _ in tqdm(inf_generator()):
+            self.target.step()
+            if self.target.get_halt_reason() != Target.HaltReason.DEBUG:
+                break
+
     def clear(self, argv):
         self.target.halt()
         for name, (start, size) in MEM_ADDR.items():
             print(f"Erasing {name}")
-            self.target.write_memory_block8(start, b"\x00" * size)
+            block = 1 << 10
+            for s in tqdm(range(start, start + size, block)):
+                self.target.write_memory_block8(s, b"\x00" * block)
         self.target.reset()
         self.target.resume()
 
     def capture(self, argv):
         parser = argparse.ArgumentParser(description="Capture memory data from device.")
         parser.add_argument("addr_start")
-        args = parser.parse_args(sys.argv[2:3])
+        args = parser.parse_args(argv[:1])
 
         if args.addr_start not in MEM_ADDR:
             parser.add_argument("addr_end", type=auto_int)
@@ -204,7 +262,9 @@ class Main:
                         print("")
 
                 if args.dump:
-                    args.output.with_suffix(".bin").write_binary(data)
+                    out = args.output.with_suffix(".bin")
+                    out.write_bytes(data)
+                    print(f"Saved dump to {out}")
                     return
             elif char == "r":
                 print("Reseting Target")

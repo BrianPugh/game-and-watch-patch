@@ -337,19 +337,16 @@ class IntFirmware(Firmware):
         if h != self.STOCK_ROM_SHA1_HASH:
             raise InvalidStockRomError
 
-    def address(self, symbol_name):
+    def address(self, symbol_name, sub_base=False):
         symbols = self.symtab.get_symbol_by_name(symbol_name)
         if not symbols:
             raise MissingSymbolError(f'Cannot find symbol "{symbol_name}"')
         address = symbols[0]["st_value"]
-        if not address or not (
-            (self.RAM_BASE <= address <= self.RAM_BASE + self.RAM_LEN)
-            or (self.FLASH_BASE <= address <= self.FLASH_BASE + self.FLASH_LEN)
-        ):
-            raise MissingSymbolError(
-                f'Symbol "{symbol_name}" has invalid address 0x{address:08X}'
-            )
+        if address == 0:
+            raise MissingSymbolError(f"{symbol_name} has address 0x0")
         print(f"    found {symbol_name} at 0x{address:08X}")
+        if sub_base:
+            address -= self.FLASH_BASE
         return address
 
     @property

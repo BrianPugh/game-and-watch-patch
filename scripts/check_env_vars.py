@@ -2,7 +2,15 @@ import sys
 from pathlib import Path
 
 targets = sys.argv[1]
-if targets in ["openocd", "gdb"]:
+if targets in [
+    "openocd",
+    "gdb",
+    "dump",
+    "erase_int",
+    "erase_ext",
+    "flash_stock_int",
+    "flash_stock_ext",
+]:
     sys.exit()
 
 f = Path(sys.argv[2])

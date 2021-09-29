@@ -14,6 +14,10 @@ ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
 	C_DEFS += -DCLOCK_ONLY
 endif
 
+ifneq (,$(findstring --smb1-graphics, $(PATCH_PARAMS)))
+	C_DEFS += -DENABLE_SMB1_GRAPHIC_MODS
+endif
+
 ifneq (,$(findstring --debug, $(PATCH_PARAMS)))
 	DEBUG = 1
 	C_DEFS += -DDEBUG
@@ -84,13 +88,9 @@ MCU = $(CPU) -mthumb $(FPU) $(FLOAT-ABI)
 AS_DEFS =
 
 # C defines
-C_DEFS =  \
+C_DEFS +=  \
 -DUSE_HAL_DRIVER \
 -DSTM32H7B0xx \
-
-ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
-	C_DEFS += -DCLOCK_ONLY
-endif
 
 # AS includes
 AS_INCLUDES =
@@ -132,9 +132,12 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--gc-sections \
 		  -Wl,--undefined=HardFault_Handler \
 		  -Wl,--undefined=NMI_Handler \
+		  -Wl,--undefined=SMB1_GRAPHIC_MODS \
+		  -Wl,--undefined=SMB1_ROM \
 		  -Wl,--undefined=bootloader \
 		  -Wl,--undefined=bss_rwdata_init \
 		  -Wl,--undefined=memcpy_inflate \
+		  -Wl,--undefined=prepare_clock_rom \
 		  -Wl,--undefined=read_buttons \
 		  -Wl,--undefined=rwdata_inflate \
 

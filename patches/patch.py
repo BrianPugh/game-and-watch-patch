@@ -20,11 +20,6 @@ class FirmwarePatchMixin:
                 f"Patch offset {offset} exceeds firmware length {len(self)}"
             )
 
-        if offset >= self.STOCK_ROM_END:
-            raise IndexError(
-                f"Patch offset {offset} exceeds stock firmware region {self.STOCK_ROM_END}"
-            )
-
         n_bytes_patched = 0
 
         if isinstance(data, bytes):

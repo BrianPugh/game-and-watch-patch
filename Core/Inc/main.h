@@ -92,6 +92,8 @@ typedef uint8_t gnw_mode_t;
 
 gnw_mode_t get_gnw_mode();
 
+void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n);
+
 #ifdef __cplusplus
 }
 #endif

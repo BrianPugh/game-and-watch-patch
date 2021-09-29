@@ -157,7 +157,9 @@ class Main:
         self.target.halt()
         for name, (start, size) in MEM_ADDR.items():
             print(f"Erasing {name}")
-            self.target.write_memory_block8(start, b"\x00" * size)
+            block = 1 << 10
+            for s in tqdm(range(start, start + size, block)):
+                self.target.write_memory_block8(s, b"\x00" * block)
         self.target.reset()
         self.target.resume()
 

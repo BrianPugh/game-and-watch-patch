@@ -116,11 +116,12 @@ gamepad_t read_buttons() {
     return gamepad;
 }
 
-#define LZMA_BUF_SIZE            (1<<15)
+
+const uint8_t const LZMA_PROP_DATA[5] = {0x5d, 0x00, 0x40, 0x00, 0x00};
+#define LZMA_BUF_SIZE            (1 << 15)
 
 static void *SzAlloc(ISzAllocPtr p, size_t size) {
     void* res = p->Mem;
-    //p->Mem += size;
     return res;
 }
 
@@ -141,10 +142,9 @@ void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n){
         .Mem=lzma_heap,
     };
 
-    ELzmaStatus lzmaStatus;
-    n -= 13;
+    ELzmaStatus status;
     size_t dst_len = 393216;
-    LzmaDecode(dst, &dst_len, &src[13], &n, src, 5, LZMA_FINISH_ANY, &lzmaStatus, &allocs);
+    LzmaDecode(dst, &dst_len, src, &n, LZMA_PROP_DATA, 5, LZMA_FINISH_ANY, &status, &allocs);
     return dst;
 }
 

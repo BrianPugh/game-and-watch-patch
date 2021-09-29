@@ -118,7 +118,7 @@ gamepad_t read_buttons() {
 
 
 const uint8_t LZMA_PROP_DATA[5] = {0x5d, 0x00, 0x40, 0x00, 0x00};
-#define LZMA_BUF_SIZE            20000
+#define LZMA_BUF_SIZE            16256
 
 static void *SzAlloc(ISzAllocPtr p, size_t size) {
     void* res = p->Mem;
@@ -130,12 +130,12 @@ static void SzFree(ISzAllocPtr p, void *address) {
 
 const ISzAlloc g_Alloc = { SzAlloc, SzFree };
 
+static unsigned char lzma_heap[LZMA_BUF_SIZE];
 /**
  * Dropin replacement for memcpy for loading compressed assets.
  * @param n Compressed data length. Can be larger than necessary.
  */
 void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n){
-    unsigned char lzma_heap[LZMA_BUF_SIZE];
     ISzAlloc allocs = {
         .Alloc=SzAlloc,
         .Free=SzFree,

@@ -79,8 +79,7 @@ def add_patch_args(parser):
     )
     group.add_argument(
         "--smb1-graphics",
-        action="extend",
-        nargs="+",
+        nargs="*",
         default=[],
         type=Path,
         help="ROM hacks where just the graphical assets will be used.",

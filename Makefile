@@ -14,6 +14,10 @@ ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
 	C_DEFS += -DCLOCK_ONLY
 endif
 
+ifneq (,$(findstring --smb1-graphics, $(PATCH_PARAMS)))
+	C_DEFS += -DENABLE_SMB1_GRAPHIC_MODS
+endif
+
 ifneq (,$(findstring --debug, $(PATCH_PARAMS)))
 	DEBUG = 1
 	C_DEFS += -DDEBUG
@@ -84,13 +88,9 @@ MCU = $(CPU) -mthumb $(FPU) $(FLOAT-ABI)
 AS_DEFS =
 
 # C defines
-C_DEFS =  \
+C_DEFS +=  \
 -DUSE_HAL_DRIVER \
 -DSTM32H7B0xx \
-
-ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
-	C_DEFS += -DCLOCK_ONLY
-endif
 
 # AS includes
 AS_INCLUDES =

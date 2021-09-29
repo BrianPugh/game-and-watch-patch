@@ -342,6 +342,8 @@ class IntFirmware(Firmware):
         if not symbols:
             raise MissingSymbolError(f'Cannot find symbol "{symbol_name}"')
         address = symbols[0]["st_value"]
+        if address == 0:
+            raise MissingSymbolError(f"{symbol_name} has address 0x0")
         print(f"    found {symbol_name} at 0x{address:08X}")
         if sub_base:
             address -= self.FLASH_BASE

@@ -25,9 +25,6 @@ static inline void set_bootloader(uint32_t address){
     *BOOTLOADER_JUMP_ADDRESS = (uint32_t *)address;
 }
 
-#define SMB1_GRAPHIC_MODS_MAX 8
-const uint8_t * const SMB1_GRAPHIC_MODS[SMB1_GRAPHIC_MODS_MAX] = { 0 };
-
 /**
  * Executed on boot; will jump to a non-default program if:
  *     1. the value at `BOOTLOADER_MAGIC_ADDRESS` is `BOOTLOADER_MAGIC`
@@ -52,6 +49,10 @@ static inline void start_bank_2() {
     NVIC_SystemReset();
 }
 
+
+#if ENABLE_SMB1_GRAPHIC_MODS
+#define SMB1_GRAPHIC_MODS_MAX 8
+const uint8_t * const SMB1_GRAPHIC_MODS[SMB1_GRAPHIC_MODS_MAX] = { 0 };
 static volatile uint8_t smb1_graphics_idx = 0;
 
 uint8_t * prepare_clock_rom(void *src, size_t len){
@@ -76,6 +77,7 @@ uint8_t * prepare_clock_rom(void *src, size_t len){
 
     return stock_prepare_clock_rom(smb1_clock_working, len);
 }
+#endif
 
 bool is_menu_open(){
     return *ui_draw_status_addr == 5;
@@ -98,6 +100,7 @@ gamepad_t read_buttons() {
     }
 
     if(mode == GNW_MODE_CLOCK && !is_menu_open()){
+#if ENABLE_SMB1_GRAPHIC_MODS
         // Actions to only perform on the clock screen
         if((gamepad & GAMEPAD_DOWN) && !(gamepad_last &GAMEPAD_DOWN)){
             // TODO: detect if menu is up or not
@@ -105,6 +108,7 @@ gamepad_t read_buttons() {
             // Force a reload
             *(uint8_t *)0x2000103d = 1; // Not sure the difference between setting 1 or 2.
         }
+#endif
     }
 
     gamepad_last = gamepad;

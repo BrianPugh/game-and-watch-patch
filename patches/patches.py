@@ -399,10 +399,6 @@ def apply_patches(args, device, build):
     printi("Mute clock audio on first boot.")
     device.internal.asm(0x49E0, "mov.w r1, #0x00000")
 
-    printi("Intercept prepare_clock_rom")
-    device.internal.bl(0x690E, "prepare_clock_rom")
-    device.internal.nop(0x1_0EF0, 2)
-
     if args.debug:
         # Override fault handlers for easier debugging via gdb.
         printi("Overriding handlers for debugging.")
@@ -494,21 +490,25 @@ def apply_patches(args, device, build):
     # )
     # ball_logo.save(build / "ball_logo.png")
 
-    # Add all the rom hack graphics
-    table = device.internal.address("SMB1_GRAPHIC_MODS", sub_base=True)
-    for rom_path in args.smb1_graphics:
-        rom = rom_path.read_bytes()
-        if len(rom) == 40976:
-            # Remove the NES header
-            rom = rom[16:]
-        assert len(rom) == 40960
-        graphics = rom[0x8000:0x9EC0]
-        graphics_compressed = lzma_compress(graphics)
-        loc = move_to_int(graphics_compressed, len(graphics_compressed), None)
-        loc += device.internal.FLASH_BASE
-        # Update the SMB1_GRAPHIC_MODS table
-        device.internal.replace(table, loc, size=4)
-        table += 4
+    if args.smb1_graphics:
+        printi("Intercept prepare_clock_rom")
+        device.internal.bl(0x690E, "prepare_clock_rom")
+        device.internal.nop(0x1_0EF0, 2)
+
+        table = device.internal.address("SMB1_GRAPHIC_MODS", sub_base=True)
+        for rom_path in args.smb1_graphics:
+            rom = rom_path.read_bytes()
+            if len(rom) == 40976:
+                # Remove the NES header
+                rom = rom[16:]
+            assert len(rom) == 40960
+            graphics = rom[0x8000:0x9EC0]
+            graphics_compressed = lzma_compress(graphics)
+            loc = move_to_int(graphics_compressed, len(graphics_compressed), None)
+            loc += device.internal.FLASH_BASE
+            # Update the SMB1_GRAPHIC_MODS table
+            device.internal.replace(table, loc, size=4)
+            table += 4
 
     printd("Compressing and moving stuff stuff to internal firmware.")
     compressed_len = device.external.compress(

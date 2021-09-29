@@ -118,7 +118,7 @@ gamepad_t read_buttons() {
 
 
 const uint8_t const LZMA_PROP_DATA[5] = {0x5d, 0x00, 0x40, 0x00, 0x00};
-#define LZMA_BUF_SIZE            (1 << 15)
+#define LZMA_BUF_SIZE            20000
 
 static void *SzAlloc(ISzAllocPtr p, size_t size) {
     void* res = p->Mem;

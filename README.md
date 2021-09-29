@@ -10,22 +10,19 @@ This repo contains custom code as well as a patching utility to add additional f
 
 # Features
 * Works correctly with [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) in internal flash bank 2.
-
 * Press button combination (`LEFT` + `GAME`) to launch retro-go from internal flash bank 2.
-
 * Ability to store the enitre firmware in internal flash! No external flash required!
 
     * Option to remove the "Mario Song" easter egg.
     * Option to remove the 5 sleeping illustrations.
     * LZMA compressed data.
     * Inteligently move as much data to internal firmware as possible.
-
 * Configurable timeouts.
-
-* Ability to play SMB1 ROM hacks via `--smb1=path-to-patched-smb1-rom`
-
+* Ability to play SMB1 ROM hacks via `--smb1=path-to-patched-smb1-rom.nes`
+* Ability to dynamically load SMB1 ROM hack sprites for the clock via `--smb1-graphics=path-to-patched-smb1-rom.nes`
+    * Can add up to 8 additional graphics sets.
+    * Cycle through via the down button on the clock screen.
 * Dumps SMB1 and SMB2 ROMs that are playable by other emulators.
-
 * Run `make help` to see all configuration options.
 
 

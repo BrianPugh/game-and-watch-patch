@@ -55,8 +55,6 @@ gamepad_t (* const stock_read_buttons)(void) = 0x08010d48 | THUMB;
 #define GAMEPAD_PAUSE ((gamepad_t) ( 1 <<  9 ))
 #define GAMEPAD_GAME  ((gamepad_t) ( 1 << 10 ))
 
-void (* const memcpy)(uint8_t *, const uint8_t *, size_t) = 0x08004b60 | THUMB;
-
 /**
  * Returns `true` if USB power is connected, `false` otherwise.
  */

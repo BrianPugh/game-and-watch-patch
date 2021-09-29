@@ -77,6 +77,10 @@ uint8_t * prepare_clock_rom(void *src, size_t len){
     return stock_prepare_clock_rom(smb1_clock_working, len);
 }
 
+bool is_menu_open(){
+    return *ui_draw_status_addr == 5;
+}
+
 gamepad_t read_buttons() {
     static gamepad_t gamepad_last = 0;
 
@@ -93,7 +97,7 @@ gamepad_t read_buttons() {
         start_bank_2();
     }
 
-    if(mode == GNW_MODE_CLOCK){
+    if(mode == GNW_MODE_CLOCK && !is_menu_open()){
         // Actions to only perform on the clock screen
         if((gamepad & GAMEPAD_DOWN) && !(gamepad_last &GAMEPAD_DOWN)){
             // TODO: detect if menu is up or not

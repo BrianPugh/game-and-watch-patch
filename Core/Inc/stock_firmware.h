@@ -79,6 +79,14 @@ const uint8_t * const SMB1_ROM = 0x90001e60;
 uint8_t * const smb1_clock_working = 0x24000000;
 uint8_t * const smb1_clock_graphics_working = smb1_clock_working + 0x8000;
 
+
+volatile uint8_t * const ui_draw_status_addr = 0x20010694;
+
+/**
+ * Returns `true` if the menu is open (pause/set button menu)
+ */
+bool is_menu_open();
+
 /**
  * Function that loads the SMB1 rom into memory and prepares all the sprite
  * data.

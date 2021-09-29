@@ -6,6 +6,7 @@
 #include "gw_linker.h"
 #include "stm32h7xx_hal.h"
 #include "LzmaDec.h"
+#include <string.h>
 
 
 #define BANK_2_ADDRESS 0x08100000

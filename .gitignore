@@ -11,3 +11,4 @@ captures/
 /*.png
 .gdbinit
 *.ips
+ips/

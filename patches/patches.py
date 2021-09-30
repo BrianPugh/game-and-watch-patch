@@ -79,13 +79,20 @@ def add_patch_args(parser):
         default="build/smb1.nes",
         help="Override SMB1 ROM with your own file.",
     )
-    group.add_argument(
+    mgroup = group.add_mutually_exclusive_group()
+    mgroup.add_argument(
         "--smb1-graphics",
         nargs="*",
         default=[],
         type=Path,
         help="ROM hacks where just the graphical assets will be used.",
     )
+    mgroup.add_argument(
+        "--smb1-graphics-glob",
+        action="store_true",
+        help='Add all IPS files from the "ips/" folder',
+    )
+
     mgroup = group.add_mutually_exclusive_group()
     mgroup.add_argument(
         "--clock-tileset",
@@ -149,6 +156,9 @@ def validate_patch_args(parser, args):
 
     if len(args.smb1_graphics) > 8:
         parser.error("A maximum of 8 SMB1 graphics mods can be specified.")
+
+    if args.smb1_graphics_glob:
+        args.smb1_graphics = list(Path("ips").glob("*.ips"))
 
     if args.internal_only:
         args.slim = True

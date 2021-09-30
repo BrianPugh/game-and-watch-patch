@@ -81,6 +81,18 @@ Pass in the path to your patched SMB1 ROM file using the `--smb1` argument.
 ## Other Clock Graphics Mods
 Run `make` to dump the clock tileset to `build/tileset.png`. You can copy and edit this file using any image editng tool. To use your modified tileset, pass in the path via the `--clock-tileset` argument.
 
+# Troubleshooting:
+
+### Unable to install python dependency `keystone-engine` on rpi3
+If you are unable to install `keystone-engine` on a raspberry pi 3, try:
+1. Update the GPU RAM to 16MB from `raspi-config`
+2. Build and install keystone-engine from source (should take ~15 minutes):
+```
+git clone https://github.com/keystone-engine/keystone
+cd keystone/bindings/python/
+python3 -m pip install .
+```
+
 # Advanced usage
 Other potentially useful make targets are listed below. Note that external flash only needs to be flashed if the patched external binary is greater than zero bytes.
 

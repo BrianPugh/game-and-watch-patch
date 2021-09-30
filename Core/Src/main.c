@@ -62,20 +62,20 @@ uint8_t * prepare_clock_rom(void *mario_rom, size_t len){
     if(smb1_graphics_idx > SMB1_GRAPHIC_MODS_MAX){
         smb1_graphics_idx = 0;
     }
-
     if(smb1_graphics_idx){
         patch = SMB1_GRAPHIC_MODS[smb1_graphics_idx - 1];
     }
+
+    memcpy(smb1_clock_working, mario_rom, len);
+
     if(patch) {
         // Load custom graphics
-        if(IPS_PATCH_WRONG_HEADER == ips_patch(smb1_clock_working, mario_rom, patch)){
+        if(IPS_PATCH_WRONG_HEADER == ips_patch(smb1_clock_working, patch)){
             // Attempt a direct graphics override
-            memcpy(smb1_clock_working, mario_rom, len);
             memcpy_inflate(smb1_clock_graphics_working, patch, 0x1ec0);
         }
     }
     else{
-        memcpy(smb1_clock_working, mario_rom, len);
         smb1_graphics_idx = 0;
     }
 

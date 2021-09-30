@@ -78,6 +78,8 @@ Run `make` to dump the SMB1 ROM to `build/smb1.nes`. Most ROM hacks are provided
 
 Pass in the path to your patched SMB1 ROM file using the `--smb1` argument.
 
+NOTE: No ROM's or romhack patches will be hosted in this repo.
+
 ## Other Clock Graphics Mods
 Run `make` to dump the clock tileset to `build/tileset.png`. You can copy and edit this file using any image editng tool. To use your modified tileset, pass in the path via the `--clock-tileset` argument.
 
@@ -104,9 +106,6 @@ make flash_stock_ext
 make flash_patch_int
 make flash_patch_ext
 ```
-
-# TODO
-* More custom sprites, icons, and other graphical mods.
 
 # Development
 Main stages to developing a feature:

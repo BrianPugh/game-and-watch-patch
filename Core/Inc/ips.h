@@ -10,4 +10,4 @@ enum {
 };
 typedef uint8_t ips_patch_res_t;
 
-ips_patch_res_t ips_patch(uint8_t *dst, const uint8_t *src, const uint8_t *patch);
+ips_patch_res_t ips_patch(uint8_t *dst, const uint8_t *patch);

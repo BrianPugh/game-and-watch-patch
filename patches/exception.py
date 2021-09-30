@@ -20,3 +20,7 @@ class NotEnoughSpaceError(Exception):
 
 class BadImageError(Exception):
     """Provided image is corrupt/wrong dimensions/wrong format"""
+
+
+class InvalidIPSError(Exception):
+    """Corrupt IPS Patch file"""

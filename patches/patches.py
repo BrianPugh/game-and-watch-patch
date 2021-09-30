@@ -4,6 +4,8 @@ from pathlib import Path
 from colorama import Fore, Style
 from PIL import Image
 
+import patches
+
 from .compression import lzma_compress
 from .exception import BadImageError, NotEnoughSpaceError, ParsingError
 from .tileset import bytes_to_tilemap, tilemap_to_bytes
@@ -509,6 +511,7 @@ def apply_patches(args, device, build):
                 loc += device.internal.FLASH_BASE
             elif file_path.suffix.lower() == ".ips":
                 patch = file_path.read_bytes()
+                patch = patches.ips.strip_header(patch)
                 loc = move_to_int(patch, len(patch), None)
                 loc += device.internal.FLASH_BASE
             else:

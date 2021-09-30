@@ -19,9 +19,10 @@ This repo contains custom code as well as a patching utility to add additional f
     * Inteligently move as much data to internal firmware as possible.
 * Configurable timeouts.
 * Ability to play SMB1 ROM hacks via `--smb1=path-to-patched-smb1-rom.nes`
-* Ability to dynamically load SMB1 ROM hack sprites for the clock via `--smb1-graphics=path-to-patched-smb1-rom.nes`
+* Ability to dynamically load SMB1 ROM hack sprites for the clock via `--smb1-graphics=path-to-patch.ips`
     * Can add up to 8 additional graphics sets.
     * Cycle through via the down button on the clock screen.
+    * Add all your ips files to `ips/` and have the patcher automatically discover them via the flag `--smb1-graphics-glob`
 * Dumps SMB1 and SMB2 ROMs that are playable by other emulators.
 * Run `make help` to see all configuration options.
 

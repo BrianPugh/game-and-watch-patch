@@ -31,6 +31,6 @@ def strip_header(data, shift=-16):
         if data_len:
             idx += data_len
         else:
-            idx += 1
+            idx += 3
 
     return bytes(data)

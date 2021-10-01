@@ -158,7 +158,9 @@ def validate_patch_args(parser, args):
         parser.error("A maximum of 8 SMB1 graphics mods can be specified.")
 
     if args.smb1_graphics_glob:
-        args.smb1_graphics = list(Path("ips").glob("*.ips"))
+        ips_folder = Path("ips")
+        args.smb1_graphics = list(ips_folder.glob("*.ips"))
+        args.smb1_graphics.extend(list(ips_folder.glob("*.IPS")))
 
     if args.internal_only:
         args.slim = True

@@ -11,12 +11,11 @@ This repo contains custom code as well as a patching utility to add additional f
 # Features
 * Works correctly with [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) in internal flash bank 2.
 * Press button combination (`LEFT` + `GAME`) to launch retro-go from internal flash bank 2.
-* Ability to store the enitre firmware in internal flash! No external flash required!
-
+* Ability to store the entire firmware in internal flash! No external flash required!
     * Option to remove the "Mario Song" easter egg.
     * Option to remove the 5 sleeping illustrations.
     * LZMA compressed data.
-    * Inteligently move as much data to internal firmware as possible.
+    * Intelligently move as much data to internal firmware as possible.
 * Configurable timeouts.
 * Ability to play SMB1 ROM hacks via `--smb1=path-to-patched-smb1-rom.nes`
 * Ability to dynamically load SMB1 ROM hack sprites for the clock via `--smb1-graphics=path-to-patch.ips`
@@ -82,7 +81,7 @@ Pass in the path to your patched SMB1 ROM file using the `--smb1` argument.
 NOTE: No ROM's or romhack patches will be hosted in this repo.
 
 ## Other Clock Graphics Mods
-Run `make` to dump the clock tileset to `build/tileset.png`. You can copy and edit this file using any image editng tool. To use your modified tileset, pass in the path via the `--clock-tileset` argument.
+Run `make` to dump the clock tileset to `build/tileset.png`. You can copy and edit this file using any image editing tool. To use your modified tileset, pass in the path via the `--clock-tileset` argument.
 
 # Troubleshooting:
 

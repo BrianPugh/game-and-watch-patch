@@ -76,8 +76,9 @@ volatile uint8_t * const gnw_mode_addr = 0x20001044;
  */
 const uint8_t * const SMB1_ROM = 0x90001e60;
 
-uint8_t * const smb1_clock_working = 0x24000000;
-uint8_t * const smb1_clock_graphics_working = smb1_clock_working + 0x8000;
+#define SMB1_CLOCK_WORKING 0x24000000
+uint8_t * const smb1_clock_working = SMB1_CLOCK_WORKING;
+uint8_t * const smb1_clock_graphics_working = SMB1_CLOCK_WORKING + 0x8000;
 
 
 volatile uint8_t * const ui_draw_status_addr = 0x20010694;

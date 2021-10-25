@@ -636,8 +636,8 @@ def apply_patches(args, device, build):
     # This is a 320 byte palette used for BALL, but the last 160 bytes are empty
     move_to_sram3(0x1_2C04, 320, 0x4538)
 
+    mario_song_len = 0x85E40  # 548,416 bytes
     if args.no_mario_song:
-        mario_song_len = 0x85E40  # 548,416 bytes
         # This isn't really necessary, but we keep it here because its more explicit.
         printe("Erasing Mario Song")
         device.external.replace(0x1_2D44, b"\x00" * mario_song_len)
@@ -645,6 +645,21 @@ def apply_patches(args, device, build):
         offset -= mario_song_len
 
         device.internal.asm(0x6FC8, "b 0x1c")
+    else:
+        references = [
+            # Banners
+            0x11A00,
+            0x11A00 + 4,
+            0x11A00 + 8,
+            0x11A00 + 12,
+            0x11A00 + 16,
+            0x11A00 + 20,
+            0x11A00 + 24,
+            # Audio
+            0x1199C,
+        ]
+        move_ext(0x1_2D44, mario_song_len, references)
+        rwdata_lookup(0x1_2D44, mario_song_len)
 
     # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
     # These index into one of the palettes starting at 0xbec68.

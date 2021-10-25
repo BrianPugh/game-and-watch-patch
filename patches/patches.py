@@ -817,6 +817,14 @@ def apply_patches(args, device, build):
     move_to_sram3(0xC4CD8, 2984, 0x459C)
     move_to_sram3(0xC5880, 120, 0x4594)
 
+    total_image_length = 193_568
+    references = [
+        0x1097C,
+        0x1097C + 4,
+        0x1097C + 8,
+        0x1097C + 12,
+        0x1097C + 16,
+    ]
     if args.no_sleep_images:
         # Images Notes:
         #    * In-between images are just zeros.
@@ -829,10 +837,12 @@ def apply_patches(args, device, build):
         #          zero_padded_end: 0x900f_4d18
         # Total Image Length: 193_568 bytes
         printe("Deleting sleeping images.")
-        total_image_length = 193_568
         device.external.replace(0xC58F8, b"\x00" * total_image_length)
-        device.internal.replace(0x1097C, b"\x00" * 4 * 5)  # Erase image references
+        for reference in references:
+            device.internal.replace(reference, b"\x00" * 4)  # Erase image references
         offset -= total_image_length
+    else:
+        move_ext(0xC58F8, total_image_length, references)
 
     # Definitely at least contains part of the TIME graphic on startup screen.
     move_to_sram3(0xF4D18, 2880, 0x10960)

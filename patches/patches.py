@@ -1,4 +1,3 @@
-from math import ceil
 from pathlib import Path
 
 from colorama import Fore, Style
@@ -9,38 +8,15 @@ import patches
 from .compression import lzma_compress
 from .exception import BadImageError, NotEnoughSpaceError, ParsingError
 from .tileset import bytes_to_tilemap, tilemap_to_bytes
-
-
-def printi(msg, *args):
-    print(Fore.MAGENTA + msg + Style.RESET_ALL, *args)
-
-
-def printe(msg, *args):
-    print(Fore.YELLOW + msg + Style.RESET_ALL, *args)
-
-
-def printd(msg, *args):
-    print(Fore.BLUE + msg + Style.RESET_ALL, *args)
-
-
-def _round_down_word(val):
-    return (val // 4) * 4
-
-
-def _round_up_word(val):
-    return ceil(val / 4) * 4
-
-
-def _round_down_page(val):
-    return (val // 4096) * 4096
-
-
-def _round_up_page(val):
-    return ceil(val / 4096) * 4096
-
-
-def _seconds_to_frames(seconds):
-    return int(round(60 * seconds))
+from .utils import (
+    printd,
+    printe,
+    printi,
+    round_down_word,
+    round_up_page,
+    round_up_word,
+    seconds_to_frames,
+)
 
 
 def add_patch_args(parser):
@@ -306,7 +282,7 @@ def apply_patches(args, device, build):
         else:
             device.move_to_int(ext, int_pos, size=size)
             print(f"    move_to_int {hex(ext)} -> {hex(int_pos)}")
-        int_pos += _round_up_word(size)
+        int_pos += round_up_word(size)
 
         if reference is not None:
             device.internal.lookup(reference)
@@ -365,8 +341,8 @@ def apply_patches(args, device, build):
         if reference is not None:
             device.internal.lookup(reference)
         new_loc = sram3_pos
-        sram3_pos += _round_up_word(size)
-        offset -= _round_down_word(size)
+        sram3_pos += round_up_word(size)
+        offset -= round_down_word(size)
 
         return new_loc
 
@@ -395,7 +371,7 @@ def apply_patches(args, device, build):
         try:
             new_loc = move_to_int(ext, size, reference)
             if isinstance(ext, int):
-                offset -= _round_down_word(size)
+                offset -= round_down_word(size)
             return new_loc
         except NotEnoughSpaceError:
             print(
@@ -427,7 +403,7 @@ def apply_patches(args, device, build):
 
     if args.sleep_time:
         printi(f"Setting sleep time to {args.sleep_time} seconds.")
-        sleep_time_frames = _seconds_to_frames(args.sleep_time)
+        sleep_time_frames = seconds_to_frames(args.sleep_time)
         device.internal.asm(0x6C3C, f"movw r2, #{sleep_time_frames}")
 
     if args.disable_sleep:
@@ -436,7 +412,7 @@ def apply_patches(args, device, build):
 
     if args.mario_song_time:
         printi(f"Setting Mario Song time to {args.mario_song_time} seconds.")
-        mario_song_frames = _seconds_to_frames(args.mario_song_time)
+        mario_song_frames = seconds_to_frames(args.mario_song_time)
         device.internal.asm(0x6FC4, f"cmp.w r0, #{mario_song_frames}")
 
     if not args.encrypt:
@@ -538,7 +514,7 @@ def apply_patches(args, device, build):
     device.internal.bl(0x665C, "memcpy_inflate")
     move_ext(0x0, compressed_len, 0x7204)
     # Note: the 4 bytes between 7772 and 7776 is padding.
-    offset -= 7776 - _round_down_word(compressed_len)
+    offset -= 7776 - round_down_word(compressed_len)
 
     # SMB1 ROM (plus loading custom ROM)
     printd("Compressing and moving SMB1 ROM to sram3.")
@@ -669,7 +645,7 @@ def apply_patches(args, device, build):
 
     printe("Moving clock graphics")
     move_ext(0x9_8B84, compressed_len, 0x7350)
-    offset -= 0x1_0000 - _round_down_word(compressed_len)
+    offset -= 0x1_0000 - round_down_word(compressed_len)
 
     # Note: the clock uses a different palette; this palette only applies
     # to ingame Super Mario Bros 1 & 2
@@ -714,12 +690,12 @@ def apply_patches(args, device, build):
         compressed_len = device.external.compress(smb2_addr, smb2_size)
         device.internal.bl(0x6A12, "memcpy_inflate")
         move_to_sram3(smb2_addr, compressed_len, 0x7374)
-        offset -= smb2_size - _round_down_word(
+        offset -= smb2_size - round_down_word(
             compressed_len
         )  # Move by the space savings.
 
         # Round to nearest page so that the length can be used as an imm
-        compressed_len = _round_up_page(compressed_len)
+        compressed_len = round_up_page(compressed_len)
 
         # Update the length of the compressed data (doesn't matter if its too large)
         device.internal.asm(0x6A0A, f"mov.w r2, #{compressed_len}")
@@ -878,7 +854,7 @@ def apply_patches(args, device, build):
 
     # Shorten the external firmware
     # This rounds the negative offset towards zero.
-    offset = _round_up_page(offset)
+    offset = round_up_page(offset)
 
     if args.no_save:
         # Disable nvram loading

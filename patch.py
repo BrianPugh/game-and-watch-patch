@@ -15,25 +15,27 @@ from pathlib import Path
 import colorama
 from colorama import Fore, Style
 
-from patches import (
-    Device,
-    ExtFirmware,
-    IntFirmware,
-    add_patch_args,
-    apply_patches,
-    validate_patch_args,
-)
+from patches import MarioGnW
 from patches.exception import InvalidPatchError
 
 colorama.init()
 
 
-def parse_args():
+def main():
     parser = argparse.ArgumentParser(description="Game and Watch Firmware Patcher.")
 
     #########################
     # Global configurations #
     #########################
+    parser.add_argument(
+        "--device",
+        type=str,
+        choices=[
+            "mario",
+        ],
+        default="mario",
+        help="Game and Watch device model",
+    )
     parser.add_argument(
         "--int-firmware",
         type=Path,
@@ -102,27 +104,20 @@ def parse_args():
         "--debug", action="store_true", help="Install useful debugging fault handlers."
     )
 
-    ########################
-    # Patch configurations #
-    ########################
-    add_patch_args(parser)
+    args, _ = parser.parse_known_args()
 
-    # Final Validation
-    args = parser.parse_args()
-    validate_patch_args(parser, args)
+    if args.device == "mario":
+        # TODO: do device lookup with init_subclass and new
+        device = MarioGnW(args.int_firmware, args.elf, args.ext_firmware)
+    else:
+        raise ValueError(f'Unexpected device "{args.device}"')
 
-    return args
+    args = device.argparse(parser)
 
+    device.crypt()  # Decrypt the external firmware
 
-def main():
-    args = parse_args()
-
-    device = Device(
-        IntFirmware(args.int_firmware, args.elf), ExtFirmware(args.ext_firmware)
-    )
-
-    # Decrypt the external firmware
-    device.crypt()
+    # Save the decrypted external firmware for debugging/development purposes.
+    Path("build/decrypt.bin").write_bytes(device.external)
 
     # Save the decrypted external firmware for debugging/development purposes.
     Path("build/decrypt.bin").write_bytes(device.external)
@@ -150,14 +145,7 @@ def main():
     print("# BEGINING BINARY PATCH #")
     print("#########################" + Style.RESET_ALL)
 
-    # Perform all replacements in stock code.
-    internal_remaining_free, sram3_remaining_free = apply_patches(
-        args, device, Path("build")
-    )
-
-    # Erase the extflash vram region
-    if not args.no_save:
-        device.external[-8192:] = b"\x00" * 8192
+    internal_remaining_free, sram3_remaining_free = device()  # Apply patches
 
     if args.show:
         # Debug visualization

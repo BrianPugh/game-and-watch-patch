@@ -1,5 +1,4 @@
 import hashlib
-from abc import ABC, abstractmethod
 
 from colorama import Fore, Style
 from Crypto.Cipher import AES
@@ -414,7 +413,13 @@ class ExtFirmware(Firmware):
                 self[offset + i] ^= cipher_byte
 
 
-class Device(ABC, DevicePatchMixin):
+class Device(DevicePatchMixin):
+    registry = {}
+
+    def __init_subclass__(cls, name, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.registry[name] = cls
+
     def __init__(self, internal_bin, internal_elf, external_bin):
         self.internal = self.Int(internal_bin, internal_elf)
         self.external = self.Ext(external_bin)
@@ -444,6 +449,6 @@ class Device(ABC, DevicePatchMixin):
         if show:
             plt.show()
 
-    @abstractmethod
     def __call__(self):
         """Device specific argument parsing and patching routine"""
+        raise NotImplementedError

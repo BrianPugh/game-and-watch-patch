@@ -423,13 +423,13 @@ class Device(DevicePatchMixin):
     def __init__(self, internal_bin, internal_elf, external_bin):
         self.internal = self.Int(internal_bin, internal_elf)
         self.external = self.Ext(external_bin)
-        self.sram3 = self.SRAM()
+        self.compressed_memory = self.FreeMemory()
 
         # Link all lookup tables to a single device instance
         self.lookup = Lookup()
         self.internal._lookup = self.lookup
         self.external._lookup = self.lookup
-        self.sram3._lookup = self.lookup
+        self.compressed_memory._lookup = self.lookup
 
         # TODO: keep track of positions and stuff here
 

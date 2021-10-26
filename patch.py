@@ -138,7 +138,10 @@ def main():
     print("# BEGINING BINARY PATCH #")
     print("#########################" + Style.RESET_ALL)
 
-    internal_remaining_free, sram3_remaining_free = device()  # Apply patches
+    (
+        internal_remaining_free,
+        compressed_memory_remaining_free,
+    ) = device()  # Apply patches
 
     if args.show:
         # Debug visualization
@@ -156,13 +159,13 @@ def main():
     print(Fore.GREEN)
     print("Binary Patching Complete!")
     print(
-        f"    Internal Firmware Used: {len(device.internal) - internal_remaining_free} bytes"
+        f"    Internal Firmware Used:  {len(device.internal) - internal_remaining_free} bytes"
     )
     print(f"        Free: {internal_remaining_free} bytes")
     print(
-        f"    SRAM3 Used:             {len(device.sram3) - sram3_remaining_free} bytes"
+        f"    Compressed Memory Used: {len(device.compressed_memory) - compressed_memory_remaining_free} bytes"
     )
-    print(f"        Free: {sram3_remaining_free} bytes")
+    print(f"        Free: {compressed_memory_remaining_free} bytes")
     print(f"    External Firmware Used: {len(device.external)} bytes")
     print(Style.RESET_ALL)
 

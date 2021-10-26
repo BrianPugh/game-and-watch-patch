@@ -299,5 +299,13 @@ class DevicePatchMixin:
     def copy_to_int(self, ext_offset: int, int_offset: int, size: int) -> int:
         return self.copy(self.internal, int_offset, self.external, ext_offset, size)
 
-    def move_to_sram3(self, ext_offset: int, sram_offset: int, size: int) -> int:
-        return self.move(self.sram3, sram_offset, self.external, ext_offset, size)
+    def move_to_compressed_memory(
+        self, ext_offset: int, compressed_memory_offset: int, size: int
+    ) -> int:
+        return self.move(
+            self.compressed_memory,
+            compressed_memory_offset,
+            self.external,
+            ext_offset,
+            size,
+        )

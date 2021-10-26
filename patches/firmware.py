@@ -1,11 +1,17 @@
 import hashlib
+from abc import ABC, abstractmethod
 
 from colorama import Fore, Style
 from Crypto.Cipher import AES
 from elftools.elf.elffile import ELFFile
 
 from .compression import lz77_decompress, lzma_compress
-from .exception import InvalidStockRomError, MissingSymbolError, NotEnoughSpaceError
+from .exception import (
+    InvalidStockRomError,
+    MissingSymbolError,
+    NotEnoughSpaceError,
+    ParsingError,
+)
 from .patch import DevicePatchMixin, FirmwarePatchMixin
 
 
@@ -101,6 +107,13 @@ class Firmware(FirmwarePatchMixin, bytearray):
 
         return super().__setitem__(key, new_val)
 
+    def __str__(self):
+        return self.__name__
+
+    @staticmethod
+    def hash(data):
+        return hashlib.sha1(data).hexdigest()
+
     def int(self, offset: int, size=4):
         return int.from_bytes(self[offset : offset + size], "little")
 
@@ -161,8 +174,8 @@ class RWData:
             rel_offset_to_fn = firmware.int(i)
             if rel_offset_to_fn > 0x8000_0000:
                 rel_offset_to_fn -= 0x1_0000_0000
-            fn_addr = i + rel_offset_to_fn
-            assert fn_addr == 0x18005  # lz_decompress function
+            # fn_addr = i + rel_offset_to_fn
+            # assert fn_addr == 0x18005  # lz_decompress function
             i += 4
 
             data_addr = i + firmware.int(i)
@@ -314,23 +327,15 @@ class RWData:
 
 
 class IntFirmware(Firmware):
-    STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
-
     FLASH_BASE = 0x08000000
     FLASH_LEN = 0x00020000
-
-    STOCK_ROM_END = 0x00019300  # Actual stock rom end
 
     def __init__(self, firmware, elf):
         super().__init__(firmware)
         self._elf_f = open(elf, "rb")
         self.elf = ELFFile(self._elf_f)
         self.symtab = self.elf.get_section_by_name(".symtab")
-
-        self.rwdata = RWData(self, 0x1_80A4, 36)
-
-    def __str__(self):
-        return "internal"
+        self.rwdata = RWData(self, self.RWDATA_OFFSET, self.RWDATA_LEN)
 
     def _verify(self):
         h = hashlib.sha1(self).hexdigest()
@@ -350,14 +355,30 @@ class IntFirmware(Firmware):
         return address
 
     @property
+    def empty_offset(self):
+        """Detect a series of 0x00 to figure out the end of the internal firmware.
+
+        Returns
+        -------
+        int
+            Offset into firmware where empty region begins.
+        """
+
+        for addr in range(self.rwdata.table_end, self.FLASH_LEN, 0x10):
+            if self[addr : addr + 256] == b"\x00" * 256:
+                int_pos_start = addr
+                break
+        else:
+            raise ParsingError("Couldn't find end of internal code.")
+        return int_pos_start
+
+    @property
     def key(self):
-        offset = 0x106F4
-        return self[offset : offset + 16]
+        return self[self.KEY_OFFSET : self.KEY_OFFSET + 16]
 
     @property
     def nonce(self):
-        offset = 0x106E4
-        return self[offset : offset + 8]
+        return self[self.NONCE_OFFSET : self.NONCE_OFFSET + 8]
 
 
 def _nonce_to_iv(nonce):
@@ -369,20 +390,8 @@ def _nonce_to_iv(nonce):
 
 
 class ExtFirmware(Firmware):
-    STOCK_ROM_SHA1_HASH = "eea70bb171afece163fb4b293c5364ddb90637ae"
-
     FLASH_BASE = 0x9000_0000
     FLASH_LEN = 0x0010_0000
-    ENC_LEN = 0xF_E000  # end address at 0x080106ec
-    STOCK_ROM_END = 0x0010_0000
-
-    def __str__(self):
-        return "external"
-
-    def _verify(self):
-        h = hashlib.sha1(self[:-8192]).hexdigest()
-        if h != self.STOCK_ROM_SHA1_HASH:
-            raise InvalidStockRomError
 
     def crypt(self, key, nonce):
         """Decrypts if encrypted; encrypts if in plain text."""
@@ -405,26 +414,19 @@ class ExtFirmware(Firmware):
                 self[offset + i] ^= cipher_byte
 
 
-class SRAM3(Firmware):
-    # This address of unused ram was found via tools/mem_observer.py
-    FLASH_BASE = 0x240F2124
-    FLASH_LEN = 0x24100000 - FLASH_BASE
+class Device(ABC, DevicePatchMixin):
+    def __init__(self, internal_bin, internal_elf, external_bin):
+        self.internal = self.Int(internal_bin, internal_elf)
+        self.external = self.Ext(external_bin)
+        self.sram3 = self.SRAM()
 
-    def __str__(self):
-        return "sram3"
-
-
-class Device(DevicePatchMixin):
-    def __init__(self, internal, external):
-        self.internal = internal
-        self.external = external
-
-        self.sram3 = SRAM3()
-
+        # Link all lookup tables to a single device instance
         self.lookup = Lookup()
         self.internal._lookup = self.lookup
         self.external._lookup = self.lookup
         self.sram3._lookup = self.lookup
+
+        # TODO: keep track of positions and stuff here
 
     def crypt(self):
         self.external.crypt(self.internal.key, self.internal.nonce)
@@ -441,3 +443,7 @@ class Device(DevicePatchMixin):
             self.internal.show(show=False)
         if show:
             plt.show()
+
+    @abstractmethod
+    def __call__(self):
+        """Device specific argument parsing and patching routine"""

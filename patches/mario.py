@@ -22,7 +22,7 @@ from .utils import (
 build_dir = Path("build")  # TODO: expose this properly or put in better location
 
 
-class MarioGnW(Device):
+class MarioGnW(Device, name="mario"):
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
         KEY_OFFSET = 0x106F4

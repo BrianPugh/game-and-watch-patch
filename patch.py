@@ -15,7 +15,7 @@ from pathlib import Path
 import colorama
 from colorama import Fore, Style
 
-from patches import MarioGnW
+from patches import Device
 from patches.exception import InvalidPatchError
 
 colorama.init()
@@ -106,18 +106,11 @@ def main():
 
     args, _ = parser.parse_known_args()
 
-    if args.device == "mario":
-        # TODO: do device lookup with init_subclass and new
-        device = MarioGnW(args.int_firmware, args.elf, args.ext_firmware)
-    else:
-        raise ValueError(f'Unexpected device "{args.device}"')
-
+    device = Device.registry[args.device](
+        args.int_firmware, args.elf, args.ext_firmware
+    )
     args = device.argparse(parser)
-
     device.crypt()  # Decrypt the external firmware
-
-    # Save the decrypted external firmware for debugging/development purposes.
-    Path("build/decrypt.bin").write_bytes(device.external)
 
     # Save the decrypted external firmware for debugging/development purposes.
     Path("build/decrypt.bin").write_bytes(device.external)

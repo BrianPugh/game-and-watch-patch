@@ -187,14 +187,6 @@ class MarioGnW(Device, name="mario"):
         return self.args
 
     def patch(self):
-        def int_free_space(add_index=0):
-            return (
-                len(self.internal)
-                - self.int_pos
-                - self.compressed_memory_compressed_len(add_index=add_index)
-                - self.internal.rwdata.compressed_len
-            )
-
         def compressed_memory_free_space():
             return len(self.compressed_memory) - self.compressed_memory_pos
 
@@ -222,7 +214,7 @@ class MarioGnW(Device, name="mario"):
                     self.internal.rwdata[1][i : i + 4] = b"\x00\x00\x00\x00"
 
         def move_to_int(ext, size, reference):
-            if int_free_space() < size:
+            if self.int_free_space < size:
                 raise NotEnoughSpaceError
 
             new_loc = self.int_pos
@@ -267,7 +259,7 @@ class MarioGnW(Device, name="mario"):
                 f"    {Fore.YELLOW}compression_ratio: {compression_ratio}{Style.RESET_ALL}"
             )
 
-            if diff > int_free_space():
+            if diff > self.int_free_space:
                 print(
                     f"        {Fore.RED}not putting into free memory due not enough free "
                     f"internal storage for compressed data.{Style.RESET_ALL}"

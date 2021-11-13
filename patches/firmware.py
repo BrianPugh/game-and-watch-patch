@@ -505,6 +505,10 @@ class Device:
     compressed_memory_compressed_len.memo = {}
 
     @property
+    def compressed_memory_free_space(self):
+        return len(self.compressed_memory) - self.compressed_memory_pos
+
+    @property
     def int_free_space(self):
         return (
             len(self.internal)

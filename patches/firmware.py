@@ -433,6 +433,7 @@ class Device:
 
         # TODO: keep track of positions and stuff here
         self.ext_offset = 0
+        self.int_pos = 0
 
     def _move_copy(
         self, dst, dst_offset: int, src, src_offset: int, size: int, delete: bool
@@ -489,5 +490,11 @@ class Device:
             plt.show()
 
     def __call__(self):
-        """Device specific argument parsing and patching routine"""
+        self.int_pos = self.internal.empty_offset
+        return self.patch()
+
+    def patch(self):
+        """Device specific argument parsing and patching routine.
+        Called from __call__; not to be called otherwise.
+        """
         raise NotImplementedError

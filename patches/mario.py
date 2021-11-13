@@ -186,9 +186,8 @@ class MarioGnW(Device, name="mario"):
 
         return self.args
 
-    def __call__(self):
+    def patch(self):
         # TODO: move some of this stuff to methods
-        int_pos = self.internal.empty_offset
         compressed_memory_pos = 0
 
         def compressed_memory_compressed_len(add_index=0):
@@ -209,7 +208,7 @@ class MarioGnW(Device, name="mario"):
         def int_free_space(add_index=0):
             return (
                 len(self.internal)
-                - int_pos
+                - self.int_pos
                 - compressed_memory_compressed_len(add_index=add_index)
                 - self.internal.rwdata.compressed_len
             )
@@ -241,19 +240,17 @@ class MarioGnW(Device, name="mario"):
                     self.internal.rwdata[1][i : i + 4] = b"\x00\x00\x00\x00"
 
         def move_to_int(ext, size, reference):
-            nonlocal int_pos
-
             if int_free_space() < size:
                 raise NotEnoughSpaceError
 
-            new_loc = int_pos
+            new_loc = self.int_pos
 
             if isinstance(ext, (bytes, bytearray)):
-                self.internal[int_pos : int_pos + size] = ext
+                self.internal[self.int_pos : self.int_pos + size] = ext
             else:
-                self._move_ext_to_int(ext, int_pos, size=size)
-                print(f"    move_ext_to_int {hex(ext)} -> {hex(int_pos)}")
-            int_pos += round_up_word(size)
+                self._move_ext_to_int(ext, self.int_pos, size=size)
+                print(f"    move_ext_to_int {hex(ext)} -> {hex(self.int_pos)}")
+            self.int_pos += round_up_word(size)
 
             if reference is not None:
                 self.internal.lookup(reference)
@@ -833,7 +830,7 @@ class MarioGnW(Device, name="mario"):
             )
 
         # Compress, insert, and reference the modified rwdata
-        int_pos += self.internal.rwdata.write_table_and_data(int_pos)
+        self.int_pos += self.internal.rwdata.write_table_and_data(self.int_pos)
 
         # Shorten the external firmware
         # This rounds the negative self.ext_offset towards zero.
@@ -872,7 +869,7 @@ class MarioGnW(Device, name="mario"):
         self.internal.add(0x1_06EC, self.ext_offset)
         self.external.shorten(self.ext_offset)
 
-        internal_remaining_free = len(self.internal) - int_pos
+        internal_remaining_free = len(self.internal) - self.int_pos
         compressed_memory_free = len(self.compressed_memory) - compressed_memory_pos
 
         return internal_remaining_free, compressed_memory_free

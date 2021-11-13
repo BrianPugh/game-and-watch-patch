@@ -286,23 +286,23 @@ class DevicePatchMixin:
 
         return size
 
-    def move(self, dst, dst_offset: int, src, src_offset: int, size: int) -> int:
+    def _move(self, dst, dst_offset: int, src, src_offset: int, size: int) -> int:
         return self._move_copy(dst, dst_offset, src, src_offset, size, True)
 
-    def copy(self, dst, dst_offset: int, src, src_offset: int, size: int) -> int:
+    def _copy(self, dst, dst_offset: int, src, src_offset: int, size: int) -> int:
         return self._move_copy(dst, dst_offset, src, src_offset, size, False)
 
     # Convenience methods for move and copy
-    def move_to_int(self, ext_offset: int, int_offset: int, size: int) -> int:
-        return self.move(self.internal, int_offset, self.external, ext_offset, size)
+    def _move_ext_to_int(self, ext_offset: int, int_offset: int, size: int) -> int:
+        return self._move(self.internal, int_offset, self.external, ext_offset, size)
 
-    def copy_to_int(self, ext_offset: int, int_offset: int, size: int) -> int:
-        return self.copy(self.internal, int_offset, self.external, ext_offset, size)
+    def _copy_ext_to_int(self, ext_offset: int, int_offset: int, size: int) -> int:
+        return self._copy(self.internal, int_offset, self.external, ext_offset, size)
 
-    def move_to_compressed_memory(
+    def _move_to_compressed_memory(
         self, ext_offset: int, compressed_memory_offset: int, size: int
     ) -> int:
-        return self.move(
+        return self._move(
             self.compressed_memory,
             compressed_memory_offset,
             self.external,

@@ -560,6 +560,20 @@ class Device:
 
         return new_loc
 
+    def move_ext_external(self, ext, size, reference):
+        """Explicitly just moves ext->ext data"""
+        if isinstance(ext, (bytes, bytearray)):
+            self.external[self.ext_offset : self.ext_offset + size] = ext
+        else:
+            self.external.move(ext, self.ext_offset, size=size)
+
+        if reference is not None:
+            self.internal.lookup(reference)
+
+        new_loc = ext + self.ext_offset
+
+        return new_loc
+
     def __call__(self):
         self.int_pos = self.internal.empty_offset
         return self.patch()

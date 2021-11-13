@@ -188,7 +188,6 @@ class MarioGnW(Device, name="mario"):
 
     def __call__(self):
         # TODO: move some of this stuff to methods
-        offset = 0
         int_pos = self.internal.empty_offset
         compressed_memory_pos = 0
 
@@ -270,7 +269,7 @@ class MarioGnW(Device, name="mario"):
             This is the primary moving method for any compressible data.
             """
 
-            nonlocal compressed_memory_pos, offset
+            nonlocal compressed_memory_pos
 
             current_len = compressed_memory_compressed_len()
 
@@ -320,20 +319,20 @@ class MarioGnW(Device, name="mario"):
                 self.internal.lookup(reference)
             new_loc = compressed_memory_pos
             compressed_memory_pos += round_up_word(size)
-            offset -= round_down_word(size)
+            self.ext_offset -= round_down_word(size)
 
             return new_loc
 
         def move_ext_external(ext, size, reference):
             if isinstance(ext, (bytes, bytearray)):
-                self.external[offset : offset + size] = ext
+                self.external[self.ext_offset : self.ext_offset + size] = ext
             else:
-                self.external.move(ext, offset, size=size)
+                self.external.move(ext, self.ext_offset, size=size)
 
             if reference is not None:
                 self.internal.lookup(reference)
 
-            new_loc = ext + offset
+            new_loc = ext + self.ext_offset
 
             return new_loc
 
@@ -345,11 +344,10 @@ class MarioGnW(Device, name="mario"):
             This is the primary moving function for data that is already compressed
             or is incompressible.
             """
-            nonlocal offset
             try:
                 new_loc = move_to_int(ext, size, reference)
                 if isinstance(ext, int):
-                    offset -= round_down_word(size)
+                    self.ext_offset -= round_down_word(size)
                 return new_loc
             except NotEnoughSpaceError:
                 print(
@@ -496,7 +494,7 @@ class MarioGnW(Device, name="mario"):
         self.internal.bl(0x665C, "memcpy_inflate")
         move_ext(0x0, compressed_len, 0x7204)
         # Note: the 4 bytes between 7772 and 7776 is padding.
-        offset -= 7776 - round_down_word(compressed_len)
+        self.ext_offset -= 7776 - round_down_word(compressed_len)
 
         # SMB1 ROM (plus loading custom ROM)
         printd("Compressing and moving SMB1 ROM to compressed_memory.")
@@ -602,7 +600,7 @@ class MarioGnW(Device, name="mario"):
             printe("Erasing Mario Song")
             self.external.replace(0x1_2D44, b"\x00" * mario_song_len)
             rwdata_erase(0x1_2D44, mario_song_len)
-            offset -= mario_song_len
+            self.ext_offset -= mario_song_len
 
             self.internal.asm(0x6FC8, "b 0x1c")
         else:
@@ -629,7 +627,7 @@ class MarioGnW(Device, name="mario"):
 
         printe("Moving clock graphics")
         move_ext(0x9_8B84, compressed_len, 0x7350)
-        offset -= 0x1_0000 - round_down_word(compressed_len)
+        self.ext_offset -= 0x1_0000 - round_down_word(compressed_len)
 
         # Note: the clock uses a different palette; this palette only applies
         # to ingame Super Mario Bros 1 & 2
@@ -668,13 +666,13 @@ class MarioGnW(Device, name="mario"):
                 smb2_addr,
                 b"\x00" * smb2_size,
             )
-            offset -= smb2_size
+            self.ext_offset -= smb2_size
         else:
             printe("Compressing and moving SMB2 ROM.")
             compressed_len = self.external.compress(smb2_addr, smb2_size)
             self.internal.bl(0x6A12, "memcpy_inflate")
             move_to_compressed_memory(smb2_addr, compressed_len, 0x7374)
-            offset -= smb2_size - round_down_word(
+            self.ext_offset -= smb2_size - round_down_word(
                 compressed_len
             )  # Move by the space savings.
 
@@ -815,7 +813,7 @@ class MarioGnW(Device, name="mario"):
             self.external.replace(0xC58F8, b"\x00" * total_image_length)
             for reference in references:
                 self.internal.replace(reference, b"\x00" * 4)  # Erase image references
-            offset -= total_image_length
+            self.ext_offset -= total_image_length
         else:
             move_ext(0xC58F8, total_image_length, references)
 
@@ -825,7 +823,7 @@ class MarioGnW(Device, name="mario"):
         # What is this data?
         # The memcpy to this address is all zero, so i guess its not used?
         self.external.replace(0xF5858, b"\x00" * 34728)  # refence at internal 0x7210
-        offset -= 34728
+        self.ext_offset -= 34728
 
         if compressed_memory_pos:
             # Compress and copy over compressed_memory
@@ -838,8 +836,8 @@ class MarioGnW(Device, name="mario"):
         int_pos += self.internal.rwdata.write_table_and_data(int_pos)
 
         # Shorten the external firmware
-        # This rounds the negative offset towards zero.
-        offset = round_up_page(offset)
+        # This rounds the negative self.ext_offset towards zero.
+        self.ext_offset = round_up_page(self.ext_offset)
 
         if self.args.no_save:
             # Disable nvram loading
@@ -852,27 +850,27 @@ class MarioGnW(Device, name="mario"):
             # This just skips the body of the nvram_write_bank function
             self.internal.b(0x48BE, 0x4912)
 
-            offset -= 8192
+            self.ext_offset -= 8192
         else:
             printi("Update NVRAM read addresses")
             self.internal.asm(
                 0x4856,
                 "ite ne; "
-                f"movne.w r4, #{hex(0xff000 + offset)}; "
-                f"moveq.w r4, #{hex(0xfe000 + offset)}",
+                f"movne.w r4, #{hex(0xff000 + self.ext_offset)}; "
+                f"moveq.w r4, #{hex(0xfe000 + self.ext_offset)}",
             )
             printi("Update NVRAM write addresses")
             self.internal.asm(
                 0x48C0,
                 "ite ne; "
-                f"movne.w r4, #{hex(0xff000 + offset)}; "
-                f"moveq.w r4, #{hex(0xfe000 + offset)}",
+                f"movne.w r4, #{hex(0xff000 + self.ext_offset)}; "
+                f"moveq.w r4, #{hex(0xfe000 + self.ext_offset)}",
             )
 
         # Finally, shorten the firmware
         printi("Updating end of OTFDEC pointer")
-        self.internal.add(0x1_06EC, offset)
-        self.external.shorten(offset)
+        self.internal.add(0x1_06EC, self.ext_offset)
+        self.external.shorten(self.ext_offset)
 
         internal_remaining_free = len(self.internal) - int_pos
         compressed_memory_free = len(self.compressed_memory) - compressed_memory_pos

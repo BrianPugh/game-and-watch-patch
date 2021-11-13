@@ -432,6 +432,7 @@ class Device:
         self.compressed_memory._lookup = self.lookup
 
         # TODO: keep track of positions and stuff here
+        self.ext_offset = 0
 
     def _move_copy(
         self, dst, dst_offset: int, src, src_offset: int, size: int, delete: bool

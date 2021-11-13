@@ -11,7 +11,7 @@ from .exception import (
     NotEnoughSpaceError,
     ParsingError,
 )
-from .patch import DevicePatchMixin, FirmwarePatchMixin
+from .patch import FirmwarePatchMixin
 
 
 def _val_to_color(val):
@@ -413,7 +413,7 @@ class ExtFirmware(Firmware):
                 self[offset + i] ^= cipher_byte
 
 
-class Device(DevicePatchMixin):
+class Device:
     registry = {}
 
     def __init_subclass__(cls, name, **kwargs):
@@ -432,6 +432,44 @@ class Device(DevicePatchMixin):
         self.compressed_memory._lookup = self.lookup
 
         # TODO: keep track of positions and stuff here
+
+    def _move_copy(
+        self, dst, dst_offset: int, src, src_offset: int, size: int, delete: bool
+    ) -> int:
+        dst[dst_offset : dst_offset + size] = src[src_offset : src_offset + size]
+        if delete:
+            src.clear_range(src_offset, src_offset + size)
+
+        for i in range(size):
+            self.lookup[src.FLASH_BASE + src_offset + i] = (
+                dst.FLASH_BASE + dst_offset + i
+            )
+
+        return size
+
+    def _move(self, dst, dst_offset: int, src, src_offset: int, size: int) -> int:
+        return self._move_copy(dst, dst_offset, src, src_offset, size, True)
+
+    def _copy(self, dst, dst_offset: int, src, src_offset: int, size: int) -> int:
+        return self._move_copy(dst, dst_offset, src, src_offset, size, False)
+
+    # Convenience methods for move and copy
+    def _move_ext_to_int(self, ext_offset: int, int_offset: int, size: int) -> int:
+        return self._move(self.internal, int_offset, self.external, ext_offset, size)
+
+    def _copy_ext_to_int(self, ext_offset: int, int_offset: int, size: int) -> int:
+        return self._copy(self.internal, int_offset, self.external, ext_offset, size)
+
+    def _move_to_compressed_memory(
+        self, ext_offset: int, compressed_memory_offset: int, size: int
+    ) -> int:
+        return self._move(
+            self.compressed_memory,
+            compressed_memory_offset,
+            self.external,
+            ext_offset,
+            size,
+        )
 
     def crypt(self):
         self.external.crypt(self.internal.key, self.internal.nonce)

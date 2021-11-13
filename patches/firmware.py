@@ -12,7 +12,7 @@ from .exception import (
     ParsingError,
 )
 from .patch import FirmwarePatchMixin
-from .utils import round_up_word
+from .utils import round_down_word, round_up_word
 
 
 def _val_to_color(val):
@@ -573,6 +573,25 @@ class Device:
         new_loc = ext + self.ext_offset
 
         return new_loc
+
+    def move_ext(self, ext, size, reference):
+        """Attempt to relocate in priority order:
+        1. Internal
+        2. External
+
+        This is the primary moving function for data that is already compressed
+        or is incompressible.
+        """
+        try:
+            new_loc = self.move_to_int(ext, size, reference)
+            if isinstance(ext, int):
+                self.ext_offset -= round_down_word(size)
+            return new_loc
+        except NotEnoughSpaceError:
+            print(
+                f"        {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}"
+            )
+            return self.move_ext_external(ext, size, reference)
 
     def __call__(self):
         self.int_pos = self.internal.empty_offset

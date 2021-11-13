@@ -205,7 +205,7 @@ class MarioGnW(Device, name="mario"):
                 print(
                     f"        {Fore.RED}compressed_memory full. Attempting to put in internal{Style.RESET_ALL}"
                 )
-                return move_ext(ext, size, reference)
+                return self.move_ext(ext, size, reference)
 
             new_len = self.compressed_memory_compressed_len(size)
             diff = new_len - current_len
@@ -232,7 +232,7 @@ class MarioGnW(Device, name="mario"):
                 self.compressed_memory.clear_range(
                     self.compressed_memory_pos, self.compressed_memory_pos + size
                 )
-                return move_ext(ext, size, reference)
+                return self.move_ext(ext, size, reference)
             # Even though the data is already moved, this builds the reference lookup
             self._move_to_compressed_memory(ext, self.compressed_memory_pos, size=size)
 
@@ -246,25 +246,6 @@ class MarioGnW(Device, name="mario"):
             self.ext_offset -= round_down_word(size)
 
             return new_loc
-
-        def move_ext(ext, size, reference):
-            """Attempt to relocate in priority order:
-            1. Internal
-            2. External
-
-            This is the primary moving function for data that is already compressed
-            or is incompressible.
-            """
-            try:
-                new_loc = self.move_to_int(ext, size, reference)
-                if isinstance(ext, int):
-                    self.ext_offset -= round_down_word(size)
-                return new_loc
-            except NotEnoughSpaceError:
-                print(
-                    f"        {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}"
-                )
-                return self.move_ext_external(ext, size, reference)
 
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
         self.internal.replace(0x4, "bootloader")
@@ -403,7 +384,7 @@ class MarioGnW(Device, name="mario"):
             0x0, 7772
         )  # Dst expects only 7772 bytes, not 7776
         self.internal.bl(0x665C, "memcpy_inflate")
-        move_ext(0x0, compressed_len, 0x7204)
+        self.move_ext(0x0, compressed_len, 0x7204)
         # Note: the 4 bytes between 7772 and 7776 is padding.
         self.ext_offset -= 7776 - round_down_word(compressed_len)
 
@@ -527,7 +508,7 @@ class MarioGnW(Device, name="mario"):
                 # Audio
                 0x1199C,
             ]
-            move_ext(0x1_2D44, mario_song_len, references)
+            self.move_ext(0x1_2D44, mario_song_len, references)
             self.rwdata_lookup(0x1_2D44, mario_song_len)
 
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
@@ -537,7 +518,7 @@ class MarioGnW(Device, name="mario"):
         self.internal.bl(0x678E, "memcpy_inflate")
 
         printe("Moving clock graphics")
-        move_ext(0x9_8B84, compressed_len, 0x7350)
+        self.move_ext(0x9_8B84, compressed_len, 0x7350)
         self.ext_offset -= 0x1_0000 - round_down_word(compressed_len)
 
         # Note: the clock uses a different palette; this palette only applies
@@ -654,7 +635,7 @@ class MarioGnW(Device, name="mario"):
         move_to_compressed_memory(0xBFA0C, 784, 0x1_0F9C)
 
         # MOVE EXTERNAL FUNCTIONS
-        new_loc = move_ext(0xB_FD1C, 14244, None)
+        new_loc = self.move_ext(0xB_FD1C, 14244, None)
         references = [  # internal references to external functions
             0x00D330,
             0x00D310,
@@ -726,7 +707,7 @@ class MarioGnW(Device, name="mario"):
                 self.internal.replace(reference, b"\x00" * 4)  # Erase image references
             self.ext_offset -= total_image_length
         else:
-            move_ext(0xC58F8, total_image_length, references)
+            self.move_ext(0xC58F8, total_image_length, references)
 
         # Definitely at least contains part of the TIME graphic on startup screen.
         move_to_compressed_memory(0xF4D18, 2880, 0x10960)

@@ -3,27 +3,6 @@
 ######################################
 TARGET = gw_patch
 
-
-######################################
-# building variables
-######################################
-
-PATCH_PARAMS ?=
-
-ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
-	C_DEFS += -DCLOCK_ONLY
-endif
-
-ifneq (,$(findstring --smb1-graphics, $(PATCH_PARAMS)))
-	C_DEFS += -DENABLE_SMB1_GRAPHIC_MODS
-endif
-
-ifneq (,$(findstring --debug, $(PATCH_PARAMS)))
-	DEBUG = 1
-	C_DEFS += -DDEBUG
-endif
-
-ADAPTER ?= stlink
 #######################################
 # paths
 #######################################
@@ -68,6 +47,30 @@ OPENOCD ?= openocd
 FLASHAPP ?= scripts/flashloader.sh
 GDB ?= $(PREFIX)gdb
 PYTHON ?= python3
+
+######################################
+# building variables
+######################################
+
+PATCH_PARAMS ?=
+
+GNW_DEVICE_C_DEF := $(shell $(PYTHON) scripts/device_from_patch_params.py $(PATCH_PARAMS))
+C_DEFS += $(GNW_DEVICE_C_DEF)
+
+ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
+	C_DEFS += -DCLOCK_ONLY
+endif
+
+ifneq (,$(findstring --smb1-graphics, $(PATCH_PARAMS)))
+	C_DEFS += -DENABLE_SMB1_GRAPHIC_MODS
+endif
+
+ifneq (,$(findstring --debug, $(PATCH_PARAMS)))
+	DEBUG = 1
+	C_DEFS += -DDEBUG
+endif
+
+ADAPTER ?= stlink
 
 #######################################
 # CFLAGS

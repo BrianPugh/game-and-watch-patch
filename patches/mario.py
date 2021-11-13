@@ -187,20 +187,6 @@ class MarioGnW(Device, name="mario"):
         return self.args
 
     def patch(self):
-        def compressed_memory_free_space():
-            return len(self.compressed_memory) - self.compressed_memory_pos
-
-        def rwdata_lookup(lower, size):
-            lower += 0x9000_0000
-            upper = lower + size
-
-            for i in range(0, len(self.internal.rwdata[1]), 4):
-                val = int.from_bytes(self.internal.rwdata[1][i : i + 4], "little")
-                if lower <= val < upper:
-                    new_val = self.lookup[val]
-                    print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
-                    self.internal.rwdata[1][i : i + 4] = new_val.to_bytes(4, "little")
-
         def rwdata_erase(lower, size):
             """
             Erasing no longer used references makes it compress better.
@@ -490,7 +476,7 @@ class MarioGnW(Device, name="mario"):
 
         # Starting here are BALL references
         move_to_compressed_memory(0xEBC4, 528, 0x4154)
-        rwdata_lookup(0xEBC4, 528)
+        self.rwdata_lookup(0xEBC4, 528)
 
         move_to_compressed_memory(0xEDD4, 100, 0x4570)
 
@@ -585,7 +571,7 @@ class MarioGnW(Device, name="mario"):
                 0x1199C,
             ]
             move_ext(0x1_2D44, mario_song_len, references)
-            rwdata_lookup(0x1_2D44, mario_song_len)
+            self.rwdata_lookup(0x1_2D44, mario_song_len)
 
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
         # These index into one of the palettes starting at 0xbec68.
@@ -754,7 +740,7 @@ class MarioGnW(Device, name="mario"):
 
         # BALL sound samples.
         move_to_compressed_memory(0xC34C0, 6168, 0x43EC)
-        rwdata_lookup(0xC34C0, 6168)
+        self.rwdata_lookup(0xC34C0, 6168)
         move_to_compressed_memory(0xC4CD8, 2984, 0x459C)
         move_to_compressed_memory(0xC5880, 120, 0x4594)
 

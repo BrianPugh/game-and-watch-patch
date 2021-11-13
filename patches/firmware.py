@@ -517,6 +517,17 @@ class Device:
             - self.internal.rwdata.compressed_len
         )
 
+    def rwdata_lookup(self, lower, size):
+        lower += self.external.FLASH_BASE
+        upper = lower + size
+
+        for i in range(0, len(self.internal.rwdata[1]), 4):
+            val = int.from_bytes(self.internal.rwdata[1][i : i + 4], "little")
+            if lower <= val < upper:
+                new_val = self.lookup[val]
+                print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
+                self.internal.rwdata[1][i : i + 4] = new_val.to_bytes(4, "little")
+
     def __call__(self):
         self.int_pos = self.internal.empty_offset
         return self.patch()

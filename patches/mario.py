@@ -187,11 +187,8 @@ class MarioGnW(Device, name="mario"):
         return self.args
 
     def patch(self):
-        # TODO: move some of this stuff to methods
-        compressed_memory_pos = 0
-
         def compressed_memory_compressed_len(add_index=0):
-            index = compressed_memory_pos + add_index
+            index = self.compressed_memory_pos + add_index
             if not index:
                 return 0
 
@@ -214,7 +211,7 @@ class MarioGnW(Device, name="mario"):
             )
 
         def compressed_memory_free_space():
-            return len(self.compressed_memory) - compressed_memory_pos
+            return len(self.compressed_memory) - self.compressed_memory_pos
 
         def rwdata_lookup(lower, size):
             lower += 0x9000_0000
@@ -265,14 +262,11 @@ class MarioGnW(Device, name="mario"):
 
             This is the primary moving method for any compressible data.
             """
-
-            nonlocal compressed_memory_pos
-
             current_len = compressed_memory_compressed_len()
 
             try:
                 self.compressed_memory[
-                    compressed_memory_pos : compressed_memory_pos + size
+                    self.compressed_memory_pos : self.compressed_memory_pos + size
                 ] = self.external[ext : ext + size]
             except NotEnoughSpaceError:
                 print(
@@ -294,7 +288,7 @@ class MarioGnW(Device, name="mario"):
                     f"internal storage for compressed data.{Style.RESET_ALL}"
                 )
                 self.compressed_memory.clear_range(
-                    compressed_memory_pos, compressed_memory_pos + size
+                    self.compressed_memory_pos, self.compressed_memory_pos + size
                 )
                 return move_ext_external(ext, size, reference)
             elif compression_ratio < self.args.compression_ratio:
@@ -303,19 +297,19 @@ class MarioGnW(Device, name="mario"):
                     f"        {Fore.RED}not putting in free memory due to poor compression.{Style.RESET_ALL}"
                 )
                 self.compressed_memory.clear_range(
-                    compressed_memory_pos, compressed_memory_pos + size
+                    self.compressed_memory_pos, self.compressed_memory_pos + size
                 )
                 return move_ext(ext, size, reference)
             # Even though the data is already moved, this builds the reference lookup
-            self._move_to_compressed_memory(ext, compressed_memory_pos, size=size)
+            self._move_to_compressed_memory(ext, self.compressed_memory_pos, size=size)
 
             print(
-                f"    move_to_compressed_memory {hex(ext)} -> {hex(compressed_memory_pos)}"
+                f"    move_to_compressed_memory {hex(ext)} -> {hex(self.compressed_memory_pos)}"
             )
             if reference is not None:
                 self.internal.lookup(reference)
-            new_loc = compressed_memory_pos
-            compressed_memory_pos += round_up_word(size)
+            new_loc = self.compressed_memory_pos
+            self.compressed_memory_pos += round_up_word(size)
             self.ext_offset -= round_down_word(size)
 
             return new_loc
@@ -822,10 +816,10 @@ class MarioGnW(Device, name="mario"):
         self.external.replace(0xF5858, b"\x00" * 34728)  # refence at internal 0x7210
         self.ext_offset -= 34728
 
-        if compressed_memory_pos:
+        if self.compressed_memory_pos:
             # Compress and copy over compressed_memory
             self.internal.rwdata.append(
-                self.compressed_memory[:compressed_memory_pos].copy(),
+                self.compressed_memory[: self.compressed_memory_pos].copy(),
                 self.compressed_memory.FLASH_BASE,
             )
 
@@ -870,7 +864,9 @@ class MarioGnW(Device, name="mario"):
         self.external.shorten(self.ext_offset)
 
         internal_remaining_free = len(self.internal) - self.int_pos
-        compressed_memory_free = len(self.compressed_memory) - compressed_memory_pos
+        compressed_memory_free = (
+            len(self.compressed_memory) - self.compressed_memory_pos
+        )
 
         return internal_remaining_free, compressed_memory_free
 

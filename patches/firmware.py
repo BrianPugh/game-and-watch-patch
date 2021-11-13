@@ -489,6 +489,21 @@ class Device:
         if show:
             plt.show()
 
+    def compressed_memory_compressed_len(self, add_index=0):
+        index = self.compressed_memory_pos + add_index
+        if not index:
+            return 0
+
+        data = bytes(self.compressed_memory[:index])
+        if data in self.compressed_memory_compressed_len.memo:
+            return self.compressed_memory_compressed_len.memo[data]
+
+        compressed_data = lzma_compress(data)
+        self.compressed_memory_compressed_len.memo[data] = len(compressed_data)
+        return len(compressed_data)
+
+    compressed_memory_compressed_len.memo = {}
+
     def __call__(self):
         self.int_pos = self.internal.empty_offset
         return self.patch()

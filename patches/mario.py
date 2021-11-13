@@ -252,8 +252,8 @@ class MarioGnW(Device, name="mario"):
             if isinstance(ext, (bytes, bytearray)):
                 self.internal[int_pos : int_pos + size] = ext
             else:
-                self.move_to_int(ext, int_pos, size=size)
-                print(f"    move_to_int {hex(ext)} -> {hex(int_pos)}")
+                self._move_ext_to_int(ext, int_pos, size=size)
+                print(f"    move_ext_to_int {hex(ext)} -> {hex(int_pos)}")
             int_pos += round_up_word(size)
 
             if reference is not None:
@@ -311,7 +311,7 @@ class MarioGnW(Device, name="mario"):
                 )
                 return move_ext(ext, size, reference)
             # Even though the data is already moved, this builds the reference lookup
-            self.move_to_compressed_memory(ext, compressed_memory_pos, size=size)
+            self._move_to_compressed_memory(ext, compressed_memory_pos, size=size)
 
             print(
                 f"    move_to_compressed_memory {hex(ext)} -> {hex(compressed_memory_pos)}"

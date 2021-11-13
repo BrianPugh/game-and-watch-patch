@@ -504,6 +504,15 @@ class Device:
 
     compressed_memory_compressed_len.memo = {}
 
+    @property
+    def int_free_space(self):
+        return (
+            len(self.internal)
+            - self.int_pos
+            - self.compressed_memory_compressed_len()
+            - self.internal.rwdata.compressed_len
+        )
+
     def __call__(self):
         self.int_pos = self.internal.empty_offset
         return self.patch()

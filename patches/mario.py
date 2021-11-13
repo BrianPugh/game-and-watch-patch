@@ -187,26 +187,11 @@ class MarioGnW(Device, name="mario"):
         return self.args
 
     def patch(self):
-        def compressed_memory_compressed_len(add_index=0):
-            index = self.compressed_memory_pos + add_index
-            if not index:
-                return 0
-
-            data = bytes(self.compressed_memory[:index])
-            if data in compressed_memory_compressed_len.memo:
-                return compressed_memory_compressed_len.memo[data]
-
-            compressed_data = lzma_compress(data)
-            compressed_memory_compressed_len.memo[data] = len(compressed_data)
-            return len(compressed_data)
-
-        compressed_memory_compressed_len.memo = {}
-
         def int_free_space(add_index=0):
             return (
                 len(self.internal)
                 - self.int_pos
-                - compressed_memory_compressed_len(add_index=add_index)
+                - self.compressed_memory_compressed_len(add_index=add_index)
                 - self.internal.rwdata.compressed_len
             )
 
@@ -262,7 +247,7 @@ class MarioGnW(Device, name="mario"):
 
             This is the primary moving method for any compressible data.
             """
-            current_len = compressed_memory_compressed_len()
+            current_len = self.compressed_memory_compressed_len()
 
             try:
                 self.compressed_memory[
@@ -274,7 +259,7 @@ class MarioGnW(Device, name="mario"):
                 )
                 return move_ext(ext, size, reference)
 
-            new_len = compressed_memory_compressed_len(size)
+            new_len = self.compressed_memory_compressed_len(size)
             diff = new_len - current_len
             compression_ratio = size / diff
 

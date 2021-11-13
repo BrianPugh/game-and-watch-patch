@@ -187,18 +187,6 @@ class MarioGnW(Device, name="mario"):
         return self.args
 
     def patch(self):
-        def rwdata_erase(lower, size):
-            """
-            Erasing no longer used references makes it compress better.
-            """
-            lower += 0x9000_0000
-            upper = lower + size
-
-            for i in range(0, len(self.internal.rwdata[1]), 4):
-                val = int.from_bytes(self.internal.rwdata[1][i : i + 4], "little")
-                if lower <= val < upper:
-                    self.internal.rwdata[1][i : i + 4] = b"\x00\x00\x00\x00"
-
         def move_to_int(ext, size, reference):
             if self.int_free_space < size:
                 raise NotEnoughSpaceError
@@ -553,7 +541,7 @@ class MarioGnW(Device, name="mario"):
             # This isn't really necessary, but we keep it here because its more explicit.
             printe("Erasing Mario Song")
             self.external.replace(0x1_2D44, b"\x00" * mario_song_len)
-            rwdata_erase(0x1_2D44, mario_song_len)
+            self.rwdata_erase(0x1_2D44, mario_song_len)
             self.ext_offset -= mario_song_len
 
             self.internal.asm(0x6FC8, "b 0x1c")

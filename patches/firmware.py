@@ -593,6 +593,66 @@ class Device:
             )
             return self.move_ext_external(ext, size, reference)
 
+    def move_to_compressed_memory(self, ext, size, reference):
+        """Attempt to relocate in priority order:
+        1. compressed_memory
+        2. Internal
+        3. External
+
+        This is the primary moving method for any compressible data.
+        """
+        current_len = self.compressed_memory_compressed_len()
+
+        try:
+            self.compressed_memory[
+                self.compressed_memory_pos : self.compressed_memory_pos + size
+            ] = self.external[ext : ext + size]
+        except NotEnoughSpaceError:
+            print(
+                f"        {Fore.RED}compressed_memory full. Attempting to put in internal{Style.RESET_ALL}"
+            )
+            return self.move_ext(ext, size, reference)
+
+        new_len = self.compressed_memory_compressed_len(size)
+        diff = new_len - current_len
+        compression_ratio = size / diff
+
+        print(
+            f"    {Fore.YELLOW}compression_ratio: {compression_ratio}{Style.RESET_ALL}"
+        )
+
+        if diff > self.int_free_space:
+            print(
+                f"        {Fore.RED}not putting into free memory due not enough free "
+                f"internal storage for compressed data.{Style.RESET_ALL}"
+            )
+            self.compressed_memory.clear_range(
+                self.compressed_memory_pos, self.compressed_memory_pos + size
+            )
+            return self.move_ext_external(ext, size, reference)
+        elif compression_ratio < self.args.compression_ratio:
+            # Revert putting this data into compressed_memory due to poor space_savings
+            print(
+                f"        {Fore.RED}not putting in free memory due to poor compression.{Style.RESET_ALL}"
+            )
+            self.compressed_memory.clear_range(
+                self.compressed_memory_pos, self.compressed_memory_pos + size
+            )
+            return self.move_ext(ext, size, reference)
+        # Even though the data is already moved, this builds the reference lookup
+        self._move_to_compressed_memory(ext, self.compressed_memory_pos, size=size)
+
+        print(
+            f"    move_to_compressed_memory {hex(ext)} -> {hex(self.compressed_memory_pos)}"
+        )
+        if reference is not None:
+            self.internal.lookup(reference)
+        new_loc = self.compressed_memory_pos
+        self.compressed_memory_pos += round_up_word(size)
+        self.ext_offset -= round_down_word(size)
+
+        return new_loc
+
     def __call__(self):
         self.int_pos = self.internal.empty_offset
         return self.patch()

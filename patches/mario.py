@@ -223,7 +223,7 @@ class MarioGnW(Device, name="mario"):
                 self.compressed_memory.clear_range(
                     self.compressed_memory_pos, self.compressed_memory_pos + size
                 )
-                return move_ext_external(ext, size, reference)
+                return self.move_ext_external(ext, size, reference)
             elif compression_ratio < self.args.compression_ratio:
                 # Revert putting this data into compressed_memory due to poor space_savings
                 print(
@@ -247,19 +247,6 @@ class MarioGnW(Device, name="mario"):
 
             return new_loc
 
-        def move_ext_external(ext, size, reference):
-            if isinstance(ext, (bytes, bytearray)):
-                self.external[self.ext_offset : self.ext_offset + size] = ext
-            else:
-                self.external.move(ext, self.ext_offset, size=size)
-
-            if reference is not None:
-                self.internal.lookup(reference)
-
-            new_loc = ext + self.ext_offset
-
-            return new_loc
-
         def move_ext(ext, size, reference):
             """Attempt to relocate in priority order:
             1. Internal
@@ -277,7 +264,7 @@ class MarioGnW(Device, name="mario"):
                 print(
                     f"        {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}"
                 )
-                return move_ext_external(ext, size, reference)
+                return self.move_ext_external(ext, size, reference)
 
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
         self.internal.replace(0x4, "bootloader")

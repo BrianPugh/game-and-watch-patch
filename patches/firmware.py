@@ -12,6 +12,7 @@ from .exception import (
     ParsingError,
 )
 from .patch import FirmwarePatchMixin
+from .utils import round_up_word
 
 
 def _val_to_color(val):
@@ -540,6 +541,24 @@ class Device:
             val = int.from_bytes(self.internal.rwdata[1][i : i + 4], "little")
             if lower <= val < upper:
                 self.internal.rwdata[1][i : i + 4] = b"\x00\x00\x00\x00"
+
+    def move_to_int(self, ext, size, reference):
+        if self.int_free_space < size:
+            raise NotEnoughSpaceError
+
+        new_loc = self.int_pos
+
+        if isinstance(ext, (bytes, bytearray)):
+            self.internal[self.int_pos : self.int_pos + size] = ext
+        else:
+            self._move_ext_to_int(ext, self.int_pos, size=size)
+            print(f"    move_ext_to_int {hex(ext)} -> {hex(self.int_pos)}")
+        self.int_pos += round_up_word(size)
+
+        if reference is not None:
+            self.internal.lookup(reference)
+
+        return new_loc
 
     def __call__(self):
         self.int_pos = self.internal.empty_offset

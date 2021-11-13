@@ -187,24 +187,6 @@ class MarioGnW(Device, name="mario"):
         return self.args
 
     def patch(self):
-        def move_to_int(ext, size, reference):
-            if self.int_free_space < size:
-                raise NotEnoughSpaceError
-
-            new_loc = self.int_pos
-
-            if isinstance(ext, (bytes, bytearray)):
-                self.internal[self.int_pos : self.int_pos + size] = ext
-            else:
-                self._move_ext_to_int(ext, self.int_pos, size=size)
-                print(f"    move_ext_to_int {hex(ext)} -> {hex(self.int_pos)}")
-            self.int_pos += round_up_word(size)
-
-            if reference is not None:
-                self.internal.lookup(reference)
-
-            return new_loc
-
         def move_to_compressed_memory(ext, size, reference):
             """Attempt to relocate in priority order:
             1. compressed_memory
@@ -287,7 +269,7 @@ class MarioGnW(Device, name="mario"):
             or is incompressible.
             """
             try:
-                new_loc = move_to_int(ext, size, reference)
+                new_loc = self.move_to_int(ext, size, reference)
                 if isinstance(ext, int):
                     self.ext_offset -= round_down_word(size)
                 return new_loc
@@ -412,14 +394,14 @@ class MarioGnW(Device, name="mario"):
                     assert len(rom) == 40960
                     graphics = rom[0x8000:0x9EC0]
                     graphics_compressed = lzma_compress(graphics)
-                    loc = move_to_int(
+                    loc = self.move_to_int(
                         graphics_compressed, len(graphics_compressed), None
                     )
                     loc += self.internal.FLASH_BASE
                 elif file_path.suffix.lower() == ".ips":
                     patch = file_path.read_bytes()
                     patch = patches.ips.strip_header(patch)
-                    loc = move_to_int(patch, len(patch), None)
+                    loc = self.move_to_int(patch, len(patch), None)
                     loc += self.internal.FLASH_BASE
                 else:
                     raise ValueError(

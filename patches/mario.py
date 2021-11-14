@@ -27,6 +27,7 @@ class MarioGnW(Device, name="mario"):
         NONCE_OFFSET = 0x106E4
         RWDATA_OFFSET = 0x180A4
         RWDATA_LEN = 36
+        RWDATA_IDX = 1
 
     class Ext(ExtFirmware):
         STOCK_ROM_SHA1_HASH = "eea70bb171afece163fb4b293c5364ddb90637ae"

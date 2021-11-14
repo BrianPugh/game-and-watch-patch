@@ -59,6 +59,8 @@ _estack = 0x20011330;
 _Min_Heap_Size = 0x200;      /* required amount of heap  */
 _Min_Stack_Size = 0x400; /* required amount of stack */
 
+INCLUDE build/device.ld
+
 /* Specify the memory areas */
 MEMORY
 {
@@ -79,7 +81,7 @@ SECTIONS
   /* The program code and other data goes into FLASH */
   .text :
   {
-    . = 0x00018100;
+    . = __STOCK_ROM_END__;
     . = ALIGN(4);
     *(.text)           /* .text sections (code) */
     *(.text*)          /* .text* sections (code) */

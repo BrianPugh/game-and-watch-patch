@@ -54,7 +54,7 @@ PYTHON ?= python3
 
 PATCH_PARAMS ?=
 
-GNW_DEVICE_C_DEF := $(shell $(PYTHON) scripts/device_from_patch_params.py $(PATCH_PARAMS))
+GNW_DEVICE_C_DEF := $(shell $(PYTHON) -m scripts.device_from_patch_params $(PATCH_PARAMS))
 C_DEFS += $(GNW_DEVICE_C_DEF)
 
 ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))

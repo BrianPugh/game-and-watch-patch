@@ -64,6 +64,7 @@ INCLUDE build/device.ld
 /* Specify the memory areas */
 MEMORY
 {
+  /* AHB SRAM2 */
   RAM      (xrw) : ORIGIN = 0x30010000, LENGTH = 64K - 8192
   FLASH    (xr ) : ORIGIN = 0x8000000,  LENGTH = 128K
 }

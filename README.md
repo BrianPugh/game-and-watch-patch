@@ -1,4 +1,4 @@
-Custom firmware for the Game and Watch: Super Mario Bros. console.
+Custom firmware for the newer Nintendo Game and Watch consoles.
 
 
 [![Click to play demo](https://thumbs.gfycat.com/UntriedMajesticAfricancivet-mobile.jpg)](https://gfycat.com/untriedmajesticafricancivet)
@@ -11,6 +11,9 @@ This repo contains custom code as well as a patching utility to add additional f
 # Features
 * Works correctly with [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) in internal flash bank 2.
 * Press button combination (`LEFT` + `GAME`) to launch retro-go from internal flash bank 2.
+* Run `make help` to see all configuration options.
+
+### Mario (`PATCH_PARAMS="--device=mario"`)
 * Ability to store the entire firmware in internal flash! No external flash required!
     * Option to remove the "Mario Song" easter egg.
     * Option to remove the 5 sleeping illustrations.
@@ -23,8 +26,10 @@ This repo contains custom code as well as a patching utility to add additional f
     * Cycle through via the down button on the clock screen.
     * Add all your ips files to `ips/` and have the patcher automatically discover them via the flag `--smb1-graphics-glob`
 * Dumps SMB1 and SMB2 ROMs that are playable by other emulators.
-* Run `make help` to see all configuration options.
+* See [the mario document for more information](docs/mario.md).
 
+### Zelda (`PATCH_PARAMS="--device=zelda"`)
+Coming Soon! Currently not supported.
 
 # Usage
 Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this
@@ -68,20 +73,6 @@ make PATCH_PARAMS="--internal-only" flash_patched_int
 make clean
 make -j8 INTFLASH_BANK=2 flash
 ```
-
-# Graphical mods
-
-## SMB1 Rom Hacks
-The clock uses the SMB1 ROM for game logic and most graphics. Changing the SMB1 ROM with a ROM Hack that changes these graphics will also influence the clock.
-
-Run `make` to dump the SMB1 ROM to `build/smb1.nes`. Most ROM hacks are provided as an IPS patch file and need to be applied to the ROM via a [ROM patcher](https://www.marcrobledo.com/RomPatcher.js/).
-
-Pass in the path to your patched SMB1 ROM file using the `--smb1` argument.
-
-NOTE: No ROM's or romhack patches will be hosted in this repo.
-
-## Other Clock Graphics Mods
-Run `make` to dump the clock tileset to `build/tileset.png`. You can copy and edit this file using any image editing tool. To use your modified tileset, pass in the path via the `--clock-tileset` argument.
 
 # Troubleshooting:
 

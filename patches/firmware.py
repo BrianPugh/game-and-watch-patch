@@ -518,17 +518,20 @@ class Device:
             - self.internal.rwdata.compressed_len
         )
 
-    # TODO: rwdata index of interest needs to be set somewhere in child device.
     def rwdata_lookup(self, lower, size):
         lower += self.external.FLASH_BASE
         upper = lower + size
 
-        for i in range(0, len(self.internal.rwdata[1]), 4):
-            val = int.from_bytes(self.internal.rwdata[1][i : i + 4], "little")
+        for i in range(0, len(self.internal.rwdata[self.internal.RWDATA_IDX]), 4):
+            val = int.from_bytes(
+                self.internal.rwdata[self.internal.RWDATA_IDX][i : i + 4], "little"
+            )
             if lower <= val < upper:
                 new_val = self.lookup[val]
                 print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
-                self.internal.rwdata[1][i : i + 4] = new_val.to_bytes(4, "little")
+                self.internal.rwdata[self.internal.RWDATA_IDX][
+                    i : i + 4
+                ] = new_val.to_bytes(4, "little")
 
     def rwdata_erase(self, lower, size):
         """
@@ -537,10 +540,14 @@ class Device:
         lower += 0x9000_0000
         upper = lower + size
 
-        for i in range(0, len(self.internal.rwdata[1]), 4):
-            val = int.from_bytes(self.internal.rwdata[1][i : i + 4], "little")
+        for i in range(0, len(self.internal.rwdata[self.internal.RWDATA_IDX]), 4):
+            val = int.from_bytes(
+                self.internal.rwdata[self.internal.RWDATA_IDX][i : i + 4], "little"
+            )
             if lower <= val < upper:
-                self.internal.rwdata[1][i : i + 4] = b"\x00\x00\x00\x00"
+                self.internal.rwdata[self.internal.RWDATA_IDX][
+                    i : i + 4
+                ] = b"\x00\x00\x00\x00"
 
     def move_to_int(self, ext, size, reference):
         if self.int_free_space < size:

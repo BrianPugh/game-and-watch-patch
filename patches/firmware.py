@@ -522,14 +522,14 @@ class Device:
         lower += self.external.FLASH_BASE
         upper = lower + size
 
-        for i in range(0, len(self.internal.rwdata[self.internal.RWDATA_IDX]), 4):
+        for i in range(0, len(self.internal.rwdata[self.internal.RWDATA_DTCM_IDX]), 4):
             val = int.from_bytes(
-                self.internal.rwdata[self.internal.RWDATA_IDX][i : i + 4], "little"
+                self.internal.rwdata[self.internal.RWDATA_DTCM_IDX][i : i + 4], "little"
             )
             if lower <= val < upper:
                 new_val = self.lookup[val]
                 print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
-                self.internal.rwdata[self.internal.RWDATA_IDX][
+                self.internal.rwdata[self.internal.RWDATA_DTCM_IDX][
                     i : i + 4
                 ] = new_val.to_bytes(4, "little")
 
@@ -540,12 +540,12 @@ class Device:
         lower += 0x9000_0000
         upper = lower + size
 
-        for i in range(0, len(self.internal.rwdata[self.internal.RWDATA_IDX]), 4):
+        for i in range(0, len(self.internal.rwdata[self.internal.RWDATA_DTCM_IDX]), 4):
             val = int.from_bytes(
-                self.internal.rwdata[self.internal.RWDATA_IDX][i : i + 4], "little"
+                self.internal.rwdata[self.internal.RWDATA_DTCM_IDX][i : i + 4], "little"
             )
             if lower <= val < upper:
-                self.internal.rwdata[self.internal.RWDATA_IDX][
+                self.internal.rwdata[self.internal.RWDATA_DTCM_IDX][
                     i : i + 4
                 ] = b"\x00\x00\x00\x00"
 

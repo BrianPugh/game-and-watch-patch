@@ -35,14 +35,13 @@ def seconds_to_frames(seconds):
     return int(round(60 * seconds))
 
 
-def fds_crc(data):
+def fds_crc(data, checksum=0x8000):
     """
     Do not include any existing checksum, not even the blank checksums 00 00 or FF FF.
     The formula will automatically count 2 0x00 bytes without the programmer adding them manually.
     Also, do not include the gap terminator (0x80) in the data.
     If you wish to do so, change sum to 0x0000.
     """
-    checksum = 0x8000
     size = len(data)
     for i in range(size + 2):
         if i < size:
@@ -100,9 +99,9 @@ def fds_add_crc_gaps(rom):
     """Add CRC gaps"""
     offset = 0x0
 
-    def get_block(size, crc_gap=2):
+    def get_block(size):
         nonlocal offset
-        block = rom[offset : offset + size]
+        block = bytes(rom[offset : offset + size])
         offset += size
         crc = fds_crc(block)
         return block + crc

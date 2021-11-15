@@ -52,6 +52,9 @@ class ZeldaGnW(Device, name="zelda"):
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
         self.internal.replace(0x4, "bootloader")
 
+        printi("Intercept button presses for macros.")
+        self.internal.bl(0xFE54, "read_buttons")
+
         if not self.args.encrypt:
             # Disable OTFDEC
             self.internal.nop(0x16536, 2)

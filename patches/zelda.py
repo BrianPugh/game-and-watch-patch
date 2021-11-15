@@ -2,7 +2,7 @@ from pathlib import Path
 
 from .exception import InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
-from .utils import printi
+from .utils import fds_remove_crc_gaps, printi
 
 build_dir = Path("build")  # TODO: expose this properly or put in better location
 
@@ -41,6 +41,19 @@ class ZeldaGnW(Device, name="zelda"):
         (build_dir / "Legend of Zelda, The (USA).nes").write_bytes(
             b"NES\x1a\x08\x00\x12\x00\x00\x00\x00\x00\x00\x00\x00\x00"
             + self.external[rom_addr : rom_addr + rom_size]
+        )
+
+        # This rom doesn't work :(
+        rom_addr = 0x5_0000
+        rom_size = 0x1_0000
+        rom1 = bytearray(self.external[rom_addr : rom_addr + rom_size])
+        # bios = self.external[0x5_E000:0x6_0000]
+        rom1 = fds_remove_crc_gaps(rom1)
+        rom_addr = 0x6_0000
+        rom_size = 0x1_0000
+        rom2 = fds_remove_crc_gaps(self.external[rom_addr : rom_addr + rom_size])
+        (build_dir / "Zelda no Densetsu: The Hyrule Fantasy (J).fds").write_bytes(
+            rom1 + rom2
         )
 
     def patch(self):

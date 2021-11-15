@@ -1,11 +1,10 @@
 Custom firmware for the newer Nintendo Game and Watch consoles.
 
-
-[![Click to play demo](https://thumbs.gfycat.com/UntriedMajesticAfricancivet-mobile.jpg)](https://gfycat.com/untriedmajesticafricancivet)
+[![Click to play demo](https://i.imgur.com/IxgAVsj.jpeg)](https://gfycat.com/untriedmajesticafricancivet)
 
 
 # What is this?
-This repo contains custom code as well as a patching utility to add additional functionality to the stock Game and Watch firmware. This is the only custom firmware that allows you to run both the stock firmware as well as retro-go without soldering a higher capacity flash chip!
+This repo contains custom code as well as a patching utility to add additional functionality to the stock Game and Watch firmware. In short, this project allows you to run the firmware your game and watch came with along side [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go).
 
 
 # Features
@@ -107,18 +106,6 @@ cd keystone/bindings/python/
 python3 -m pip install .
 ```
 
-# Advanced usage
-Other potentially useful make targets are listed below. Note that external flash only needs to be flashed if the patched external binary is greater than zero bytes.
-
-```
-make clean
-make patch  # Generates the patched bin at build/internal_flash_patched.bin, but doesn't flash
-make flash_stock_int
-make flash_stock_ext
-make flash_patch_int
-make flash_patch_ext
-```
-
 # Development
 Main stages to developing a feature:
 1. Find a place to take control in the stock rom (usually function calls).
@@ -128,8 +115,6 @@ Main stages to developing a feature:
 
 # Journal
 This is my first time ever developing patches for a closed source binary. [I documented my journey in hopes that it helps other people](docs/journal.md). If you have any recommendations, tips, tricks, or anything like that, please leave a github issue and I'll update the documentation!
-
-
 
 # Acknowledgement
 

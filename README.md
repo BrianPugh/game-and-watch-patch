@@ -84,7 +84,7 @@ This assumes you have upgraded the external flash to something larger than 4MB. 
 ```
 # in this repo
 make clean
-make PATCH_PARAMS="--device=mario" flash_patched
+make PATCH_PARAMS="--device=zelda" flash_patched
 
 # in the retro-go repo
 make clean

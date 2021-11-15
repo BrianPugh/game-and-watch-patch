@@ -24,8 +24,8 @@ class ZeldaGnW(Device, name="zelda"):
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "ac14bcea6e4ff68c88fd2302c021025a2fb47940"
         STOCK_ROM_END = 0x1B6E0  # Used for generating linker script.
-        KEY_OFFSET = 0x16590
-        NONCE_OFFSET = 0x16594
+        KEY_OFFSET = 0x165A4
+        NONCE_OFFSET = 0x16590
         # RWDATA_OFFSET = 0x1B390
         RWDATA_LEN = 20
         RWDATA_DTCM_IDX = 0  # decompresses to 0x2000_A800

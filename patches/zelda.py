@@ -80,8 +80,45 @@ class ZeldaGnW(Device, name="zelda"):
             rom1 + rom2
         )
 
+        # English Link's Awakening
+        # This rom doesn't work :(
+        rom_addr = 0xD_2000
+        rom_size = 0x8_0000
+        (build_dir / "Legend of Zelda, The - Link's Awakening (en).gb").write_bytes(
+            self.external[rom_addr : rom_addr + rom_size]
+        )
+
+    def _erase_roms(self):
+        """Temporary for debugging, just seeing which roms impact the clock."""
+        if False:
+            # loz1-en is critical to clock
+            rom_addr = 0x3_0000
+            rom_size = 0x2_0000
+            self.external.clear_range(rom_addr, rom_addr + rom_size)
+
+        if True:
+            # loz1-jp is not critical
+            rom_addr = 0x5_0000
+            rom_size = 0x2_0000
+            self.external.clear_range(rom_addr, rom_addr + rom_size)
+
+        if True:
+            # loz2-en is not critical
+            rom_addr = 0x7_0000
+            rom_size = 0x4_0000
+            self.external.clear_range(rom_addr, rom_addr + rom_size)
+
+        if True:
+            # loz2-jp is critical to timer; only crashes if timer is started.
+            rom_addr = 0xB_0000
+            rom_size = 0x2_0000
+            self.external.clear_range(rom_addr, rom_addr + rom_size)
+
     def patch(self):
         self._dump_roms()
+
+        if False:
+            self._erase_roms()
 
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
         self.internal.replace(0x4, "bootloader")

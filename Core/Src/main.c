@@ -83,9 +83,11 @@ uint8_t * prepare_clock_rom(void *mario_rom, size_t len){
 }
 #endif
 
+#if ENABLE_SMB1_GRAPHIC_MODS
 bool is_menu_open(){
     return *ui_draw_status_addr == 5;
 }
+#endif
 
 gamepad_t read_buttons() {
     static gamepad_t gamepad_last = 0;
@@ -93,7 +95,6 @@ gamepad_t read_buttons() {
     gamepad_t gamepad = 0;
     gamepad = stock_read_buttons();
 
-    gnw_mode_t mode = get_gnw_mode();
 
 #if CLOCK_ONLY
     if(gamepad & GAMEPAD_GAME){
@@ -103,8 +104,9 @@ gamepad_t read_buttons() {
         start_bank_2();
     }
 
-    if(mode == GNW_MODE_CLOCK && !is_menu_open()){
 #if ENABLE_SMB1_GRAPHIC_MODS
+    gnw_mode_t mode = get_gnw_mode();
+    if(mode == GNW_MODE_CLOCK && !is_menu_open()){
         // Actions to only perform on the clock screen
         if((gamepad & GAMEPAD_DOWN) && !(gamepad_last &GAMEPAD_DOWN)){
             // TODO: detect if menu is up or not
@@ -112,8 +114,8 @@ gamepad_t read_buttons() {
             // Force a reload
             *(uint8_t *)0x2000103d = 1; // Not sure the difference between setting 1 or 2.
         }
-#endif
     }
+#endif
 
     gamepad_last = gamepad;
 
@@ -186,6 +188,7 @@ int32_t *bss_rwdata_init(int32_t *table){
 }
 
 
+#if ENABLE_SMB1_GRAPHIC_MODS
 gnw_mode_t get_gnw_mode(){
     uint8_t val = *gnw_mode_addr;
     if(val == 0x20) return GNW_MODE_SMB2;
@@ -193,6 +196,7 @@ gnw_mode_t get_gnw_mode(){
     else if(val == 0x08) return GNW_MODE_BALL;
     else return GNW_MODE_CLOCK;
 }
+#endif
 
 
 void NMI_Handler(void) {

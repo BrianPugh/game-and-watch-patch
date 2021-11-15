@@ -53,6 +53,12 @@ extern "C" {
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
+/**
+ * Returns `true` if the menu is open (pause/set button menu)
+ */
+bool is_menu_open();
+
+
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */

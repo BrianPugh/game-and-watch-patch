@@ -32,21 +32,10 @@ def main():
         type=str,
         choices=[
             "mario",
+            "zelda",
         ],
         default="mario",
         help="Game and Watch device model",
-    )
-    parser.add_argument(
-        "--int-firmware",
-        type=Path,
-        default="internal_flash_backup.bin",
-        help="Input stock internal firmware.",
-    )
-    parser.add_argument(
-        "--ext-firmware",
-        type=Path,
-        default="flash_backup.bin",
-        help="Input stock external firmware.",
     )
     parser.add_argument(
         "--patch",
@@ -105,6 +94,8 @@ def main():
     )
 
     args, _ = parser.parse_known_args()
+    args.int_firmware = Path(f"internal_flash_backup_{args.device}.bin")
+    args.ext_firmware = Path(f"flash_backup_{args.device}.bin")
 
     device = Device.registry[args.device](
         args.int_firmware, args.elf, args.ext_firmware
@@ -116,12 +107,14 @@ def main():
     Path("build/decrypt.bin").write_bytes(device.external)
 
     # Dump ITCM and DTCM RAM data
-    Path("build/itcm_rwdata.bin").write_bytes(
-        device.internal.rwdata.datas[device.internal.RWDATA_ITCM_IDX]
-    )
-    Path("build/dtcm_rwdata.bin").write_bytes(
-        device.internal.rwdata.datas[device.internal.RWDATA_DTCM_IDX]
-    )
+    if device.internal.RWDATA_ITCM_IDX is not None:
+        Path("build/itcm_rwdata.bin").write_bytes(
+            device.internal.rwdata.datas[device.internal.RWDATA_ITCM_IDX]
+        )
+    if device.internal.RWDATA_DTCM_IDX is not None:
+        Path("build/dtcm_rwdata.bin").write_bytes(
+            device.internal.rwdata.datas[device.internal.RWDATA_DTCM_IDX]
+        )
 
     # Copy over novel code
     patch = args.patch.read_bytes()

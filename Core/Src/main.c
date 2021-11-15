@@ -9,6 +9,7 @@
 #include <string.h>
 #include "ips.h"
 
+#define MSP_ADDRESS 0x08000000
 
 #define BANK_2_ADDRESS 0x08100000
 #define BOOTLOADER_MAGIC 0x544F4F42  // "BOOT"
@@ -41,7 +42,7 @@ void bootloader(){
         start_app((void (* const)(void)) pc, (uint32_t) sp);
     }
 
-    start_app(stock_Reset_Handler, 0x20011330);
+    start_app(stock_Reset_Handler, *(uint32_t *) MSP_ADDRESS);
     while(1);
 }
 

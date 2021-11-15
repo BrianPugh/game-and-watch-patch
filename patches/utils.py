@@ -68,6 +68,7 @@ def fds_remove_crc_gaps(rom):
         nonlocal offset
         block = rom[offset : offset + size]
         offset += size + crc_gap
+
         return block
 
     disk_info_block = get_block(0x38)

@@ -44,7 +44,6 @@ class Firmware(FirmwarePatchMixin, bytearray):
 
     RAM_BASE = 0x02000000
     RAM_LEN = 0x00020000
-    ENC_LEN = 0
 
     FLASH_BASE = 0x0000_0000
     FLASH_LEN = 0
@@ -151,7 +150,7 @@ class Firmware(FirmwarePatchMixin, bytearray):
 
 class RWData:
     """
-    Assumptions (which are valid for this firmware):
+    Assumptions:
         1. Only compressed rwdata is after this table
         2. We are only modifying the lz_decompress stuff.
     """
@@ -329,13 +328,20 @@ class RWData:
 class IntFirmware(Firmware):
     FLASH_BASE = 0x08000000
     FLASH_LEN = 0x00020000
+    RWDATA_OFFSET = None
+    RWDATA_LEN = 0
+    RWDATA_ITCM_IDX = None
+    RWDATA_DTCM_IDX = None
 
     def __init__(self, firmware, elf):
         super().__init__(firmware)
         self._elf_f = open(elf, "rb")
         self.elf = ELFFile(self._elf_f)
         self.symtab = self.elf.get_section_by_name(".symtab")
-        self.rwdata = RWData(self, self.RWDATA_OFFSET, self.RWDATA_LEN)
+        if self.RWDATA_OFFSET is None:
+            self.rwdata = None
+        else:
+            self.rwdata = RWData(self, self.RWDATA_OFFSET, self.RWDATA_LEN)
 
     def _verify(self):
         h = hashlib.sha1(self).hexdigest()
@@ -364,7 +370,11 @@ class IntFirmware(Firmware):
             Offset into firmware where empty region begins.
         """
 
-        for addr in range(self.rwdata.table_end, self.FLASH_LEN, 0x10):
+        if self.rwdata is None:
+            search_start = self.STOCK_ROM_END
+        else:
+            search_start = self.rwdata.table_end
+        for addr in range(search_start, self.FLASH_LEN, 0x10):
             if self[addr : addr + 256] == b"\x00" * 256:
                 int_pos_start = addr
                 break
@@ -393,8 +403,8 @@ class ExtFirmware(Firmware):
     FLASH_BASE = 0x9000_0000
     FLASH_LEN = 0x0010_0000
 
-    RWDATA_ITCM_IDX = None
-    RWDATA_DTCM_IDX = None
+    ENC_START = 0
+    ENC_END = 0
 
     def crypt(self, key, nonce):
         """Decrypts if encrypted; encrypts if in plain text."""
@@ -403,7 +413,7 @@ class ExtFirmware(Firmware):
 
         aes = AES.new(key, AES.MODE_ECB)
 
-        for offset in range(0, self.ENC_LEN, 128 // 8):
+        for offset in range(self.ENC_START, self.ENC_END, 128 // 8):
             counter_block = iv.copy()
 
             counter = (self.FLASH_BASE + offset) >> 4
@@ -514,12 +524,12 @@ class Device:
 
     @property
     def int_free_space(self):
-        return (
-            len(self.internal)
-            - self.int_pos
-            - self.compressed_memory_compressed_len()
-            - self.internal.rwdata.compressed_len
+        out = (
+            len(self.internal) - self.int_pos - self.compressed_memory_compressed_len()
         )
+        if self.internal.rwdata is not None:
+            out -= self.internal.rwdata.compressed_len
+        return out
 
     def rwdata_lookup(self, lower, size):
         lower += self.external.FLASH_BASE

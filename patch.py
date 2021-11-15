@@ -107,11 +107,17 @@ def main():
     Path("build/decrypt.bin").write_bytes(device.external)
 
     # Dump ITCM and DTCM RAM data
-    if device.internal.RWDATA_ITCM_IDX is not None:
+    if (
+        device.internal.RWDATA_OFFSET is not None
+        and device.internal.RWDATA_ITCM_IDX is not None
+    ):
         Path("build/itcm_rwdata.bin").write_bytes(
             device.internal.rwdata.datas[device.internal.RWDATA_ITCM_IDX]
         )
-    if device.internal.RWDATA_DTCM_IDX is not None:
+    if (
+        device.internal.RWDATA_OFFSET is not None
+        and device.internal.RWDATA_DTCM_IDX is not None
+    ):
         Path("build/dtcm_rwdata.bin").write_bytes(
             device.internal.rwdata.datas[device.internal.RWDATA_DTCM_IDX]
         )

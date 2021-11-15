@@ -1,21 +1,8 @@
 from pathlib import Path
 
-from PIL import Image
-
-import patches
-
-from .compression import lzma_compress
-from .exception import BadImageError, InvalidStockRomError
+from .exception import InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
-from .tileset import bytes_to_tilemap, tilemap_to_bytes
-from .utils import (
-    printd,
-    printe,
-    printi,
-    round_down_word,
-    round_up_page,
-    seconds_to_frames,
-)
+from .utils import printi
 
 build_dir = Path("build")  # TODO: expose this properly or put in better location
 

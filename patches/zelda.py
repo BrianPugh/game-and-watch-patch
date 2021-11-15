@@ -49,6 +49,9 @@ class ZeldaGnW(Device, name="zelda"):
         return self.args
 
     def patch(self):
+        printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
+        self.internal.replace(0x4, "bootloader")
+
         if not self.args.encrypt:
             # Disable OTFDEC
             self.internal.nop(0x16536, 2)

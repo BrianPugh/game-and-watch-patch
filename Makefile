@@ -246,12 +246,14 @@ flash_patched_int: build/internal_flash_patched.bin
 .PHONY: flash_patched_int
 
 flash_patched_ext: build/external_flash_patched.bin
-	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
-		-c "init;" \
-		-c "halt;" \
-		-c "program $< 0x90000000 verify;" \
-		-c "exit;"
-	make reset
+	if [ -s $< ]; then \
+		${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
+			-c "init;" \
+			-c "halt;" \
+			-c "program $< 0x90000000 verify;" \
+			-c "exit;" \
+		&& make reset; \
+	fi
 .PHONY: flash_patched_ext
 
 flash_patched: flash_patched_int flash_patched_ext reset

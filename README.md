@@ -50,13 +50,6 @@ Download STM32 Driver files:
 make download_sdk
 ```
 
-To just build and flash, you can just run `make flash`, however it's a bit finicky. You'll probably have better success running the following command (but see the [retro-go section](##retro-go) for suggested usage).:
-
-```
-make flash_patched_ext
-make flash_patched_int
-```
-
 The default programmer interface is `stlink`, you can chose a different interface via the `ADAPTER` variable. For example, `ADAPTER=rpi`.
 
 I recommend pressing the power button at the same time you press enter. Note that the same configuration parameters have to be passed to each `make` command.
@@ -70,7 +63,7 @@ Since most people are going to be using this with retro-go, want the minimum amo
 ```
 # in this repo
 make clean
-make PATCH_PARAMS="--device=mario --internal-only" flash_patched_int
+make PATCH_PARAMS="--device=mario --internal-only" flash_patched
 
 # in the retro-go repo
 make clean

@@ -29,7 +29,8 @@ This repo contains custom code as well as a patching utility to add additional f
 * See [the mario document for more information](docs/mario.md).
 
 ### Zelda (`PATCH_PARAMS="--device=zelda"`)
-Coming Soon! Currently not supported.
+* No extra features currently implemented, just compatible with retro-go
+* External flash savings to come in the future.
 
 # Usage
 Place your `internal_flash_backup_${DEVICE}.bin` and `flash_backup_${DEVICE}.bin` in the root of this
@@ -64,18 +65,35 @@ I recommend pressing the power button at the same time you press enter. Note tha
 For additional configuration options, run `make help`.
 
 
-### Retro Go
+### Retro Go (Mario)
 Since most people are going to be using this with retro-go, want the minimum amount of external storage used, and don't care about the sleeping images or the mario song easter egg, here are the recommend commands. Note that this uses an undocumented 128KB of internal Bank 1 and requires a [patched version of openocd](https://github.com/kbeckmann/ubuntu-openocd-git-builder) installed.
 
 ```
 # in this repo
 make clean
-make PATCH_PARAMS="--internal-only" flash_patched_int
+make PATCH_PARAMS="--device=mario --internal-only" flash_patched_int
 
 # in the retro-go repo
 make clean
 make -j8 INTFLASH_BANK=2 flash
 ```
+
+### Retro Go (Zelda)
+
+This assumes you have upgraded the external flash to something larger than 4MB. Currently zelda CFW requires 4MB of external flash (to be reduced at some point in the future).
+
+```
+# in this repo
+make clean
+make PATCH_PARAMS="--device=mario" flash_patched
+
+# in the retro-go repo
+make clean
+# In this example, I'm assuming you have a 64MB flash chip (60 = 64 - 4)
+make -j8 EXTFLASH_SIZE_MB=60 EXTFLASH_OFFSET=4194304 INTFLASH_BANK=2 flash
+```
+
+
 
 # Troubleshooting:
 

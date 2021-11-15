@@ -32,8 +32,11 @@ This repo contains custom code as well as a patching utility to add additional f
 Coming Soon! Currently not supported.
 
 # Usage
-Place your `internal_flash_backup.bin` and `flash_backup.bin` in the root of this
-repo. To extract these from your gnw system, see the [game and watch backup repo](https://github.com/ghidraninja/game-and-watch-backup)
+Place your `internal_flash_backup_${DEVICE}.bin` and `flash_backup_${DEVICE}.bin` in the root of this
+repo. To extract these from your gnw system, see the [game and watch backup repo](https://github.com/ghidraninja/game-and-watch-backup).
+For example, if we are patching the `mario` game and watch, we need the files
+`internal_flash_backup_mario.bin` and `flash_backup_mario.bin` in the root
+directory of this project.
 
 Install python dependencies (>=python3.6 required) via:
 

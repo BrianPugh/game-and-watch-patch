@@ -393,6 +393,9 @@ class ExtFirmware(Firmware):
     FLASH_BASE = 0x9000_0000
     FLASH_LEN = 0x0010_0000
 
+    RWDATA_ITCM_IDX = None
+    RWDATA_DTCM_IDX = None
+
     def crypt(self, key, nonce):
         """Decrypts if encrypted; encrypts if in plain text."""
         key = bytes(key[::-1])

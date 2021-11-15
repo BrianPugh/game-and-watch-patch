@@ -44,7 +44,6 @@ HEX = $(CP) -O ihex
 BIN = $(CP) -O binary -S
 ECHO  = echo
 OPENOCD ?= openocd
-FLASHAPP ?= scripts/flashloader.sh
 GDB ?= $(PREFIX)gdb
 PYTHON ?= python3
 
@@ -54,8 +53,8 @@ PYTHON ?= python3
 
 PATCH_PARAMS ?=
 
-GNW_DEVICE_C_DEF := $(shell $(PYTHON) -m scripts.device_from_patch_params $(PATCH_PARAMS))
-C_DEFS += $(GNW_DEVICE_C_DEF)
+GNW_DEVICE := $(shell $(PYTHON) -m scripts.device_from_patch_params $(PATCH_PARAMS))
+C_DEFS += -DGNW_DEVICE_$(GNW_DEVICE)=1
 
 ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
 	C_DEFS += -DCLOCK_ONLY
@@ -202,7 +201,11 @@ $(BUILD_DIR)/dummy.bin:
 	$(PYTHON) -c "with open('$@', 'wb') as f: f.write(b'\xFF'*1048576)"
 
 erase_ext: $(BUILD_DIR)/dummy.bin
-	$(FLASHAPP) $(ADAPTER) $<
+	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
+		-c "init;" \
+		-c "halt;" \
+		-c "program $< 0x90000000 verify;" \
+		-c "exit;"
 	make reset
 .PHONY: erase_ext
 
@@ -210,19 +213,23 @@ dump_ext:
 	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt; dump_image \"dump_ext.bin\" 0x90000000 0x100000; resume; exit;"
 .PHONY: dump_ext
 
-flash_stock_int: internal_flash_backup.bin
+flash_stock_int: internal_flash_backup_$(GNW_DEVICE).bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
 		-c "init; halt;" \
 		-c "program $< 0x08000000 verify;" \
 		-c "reset; exit;"
 .PHONY: flash_stock_int
 
-flash_stock_ext: flash_backup.bin
-	$(FLASHAPP) $(ADAPTER) $<
+flash_stock_ext: flash_backup_$(GNW_DEVICE).bin
+	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
+		-c "init;" \
+		-c "halt;" \
+		-c "program $< 0x90000000 verify;" \
+		-c "exit;"
 	make reset
 .PHONY: flash_stock_ext
 
-flash_stock: flash_stock_int flash_stock_ext reset
+flash_stock: flash_stock_ext flash_stock_int reset
 .PHONY: flash_stock
 
 $(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin &: $(BUILD_DIR)/$(TARGET).bin patch.py $(shell find patches -type f)
@@ -239,7 +246,11 @@ flash_patched_int: build/internal_flash_patched.bin
 .PHONY: flash_patched_int
 
 flash_patched_ext: build/external_flash_patched.bin
-	$(FLASHAPP) $(ADAPTER) $<
+	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
+		-c "init;" \
+		-c "halt;" \
+		-c "program $< 0x90000000 verify;" \
+		-c "exit;"
 	make reset
 .PHONY: flash_patched_ext
 

@@ -59,6 +59,7 @@ class ZeldaGnW(Device, name="zelda"):
             # Disable OTFDEC
             self.internal.nop(0x16536, 2)
             self.internal.nop(0x1653A, 1)
+            self.internal.nop(0x1653C, 1)
 
         internal_remaining_free = len(self.internal) - self.int_pos
         compressed_memory_free = (

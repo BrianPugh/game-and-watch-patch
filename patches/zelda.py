@@ -35,7 +35,17 @@ class ZeldaGnW(Device, name="zelda"):
         self.args = parser.parse_args()
         return self.args
 
+    def _dump_roms(self):
+        rom_addr = 0x3_0000
+        rom_size = 0x2_0000
+        (build_dir / "Legend of Zelda, The (USA).nes").write_bytes(
+            b"NES\x1a\x08\x00\x12\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+            + self.external[rom_addr : rom_addr + rom_size]
+        )
+
     def patch(self):
+        self._dump_roms()
+
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
         self.internal.replace(0x4, "bootloader")
 

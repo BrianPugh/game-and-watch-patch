@@ -33,7 +33,7 @@ class MarioGnW(Device, name="mario"):
 
     class Ext(ExtFirmware):
         STOCK_ROM_SHA1_HASH = "eea70bb171afece163fb4b293c5364ddb90637ae"
-        ENC_LEN = 0xF_E000
+        ENC_END = 0xF_E000
 
         def _verify(self):
             h = self.hash(self[:-8192])

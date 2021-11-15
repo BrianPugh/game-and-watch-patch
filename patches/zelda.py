@@ -26,19 +26,17 @@ class ZeldaGnW(Device, name="zelda"):
         STOCK_ROM_END = 0x1B6E0  # Used for generating linker script.
         KEY_OFFSET = 0x16590
         NONCE_OFFSET = 0x16594
-        RWDATA_OFFSET = 0x1B390
+        # RWDATA_OFFSET = 0x1B390
         RWDATA_LEN = 20
         RWDATA_DTCM_IDX = 0  # decompresses to 0x2000_A800
 
     class Ext(ExtFirmware):
         STOCK_ROM_SHA1_HASH = "1c1c0ed66d07324e560dcd9e86a322ec5e4c1e96"
-        # ENC_LEN = 0xF_E000
+        ENC_START = 0x20000
+        ENC_END = 0x3254A0
 
         def _verify(self):
-            import ipdb
-
-            ipdb.set_trace()
-            h = self.hash(self[0x20000 : (0x3254A0 - 0x20000)])
+            h = self.hash(self[self.ENC_START : self.ENC_END])
             if h != self.STOCK_ROM_SHA1_HASH:
                 raise InvalidStockRomError
 

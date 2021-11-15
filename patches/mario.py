@@ -9,6 +9,7 @@ from .exception import BadImageError, InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
 from .tileset import bytes_to_tilemap, tilemap_to_bytes
 from .utils import (
+    fds_remove_crc_gaps,
     printd,
     printe,
     printi,
@@ -492,7 +493,7 @@ class MarioGnW(Device, name="mario"):
         smb2_addr, smb2_size = 0xA_EC58, 0x1_0000
         smb2_end = smb2_addr + smb2_size
         smb2 = self.external[smb2_addr:smb2_end].copy()
-        smb2 = smb2_remove_crc_gaps(smb2)
+        smb2 = fds_remove_crc_gaps(smb2)
         (build_dir / "smb2.fds").write_bytes(smb2)
 
         if self.args.no_smb2:
@@ -713,40 +714,3 @@ class MarioGnW(Device, name="mario"):
         )
 
         return internal_remaining_free, compressed_memory_free
-
-
-def smb2_remove_crc_gaps(smb2):
-    """Remove each block's CRC padding so it can be played by FDS
-    https://wiki.nesdev.org/w/index.php/FDS_disk_format
-    """
-    offset = 0x0
-
-    def get_block(size, crc_gap=2):
-        nonlocal offset
-        block = smb2[offset : offset + size]
-        offset += size + crc_gap
-        return block
-
-    disk_info_block = get_block(0x38)
-
-    file_amount_block = get_block(0x2)
-    assert file_amount_block[0] == 0x02
-    n_files = file_amount_block[1]
-
-    blocks = [disk_info_block, file_amount_block]
-    for i in range(n_files):
-        file_header_block = get_block(0x10)
-        assert file_header_block[0] == 3
-        blocks.append(file_header_block)
-
-        file_size = int.from_bytes(file_header_block[13 : 13 + 2], "little")
-        file_data_block = get_block(file_size + 1)
-        blocks.append(file_data_block)
-
-    out = b"".join(blocks)
-
-    # Zero pad to be 65500 bytes long
-    padding = b"\x00" * (65500 - len(out))
-    out += padding
-
-    return out

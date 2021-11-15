@@ -34,6 +34,7 @@ def round_up_page(val):
 def seconds_to_frames(seconds):
     return int(round(60 * seconds))
 
+
 def fds_crc(data):
     """
     Do not include any existing checksum, not even the blank checksums 00 00 or FF FF.
@@ -56,6 +57,7 @@ def fds_crc(data):
             if carry:
                 checksum ^= 0x8408
     return checksum.to_bytes(2, "little")
+
 
 def fds_remove_crc_gaps(rom):
     """Remove each block's CRC padding so it can be played by FDS
@@ -90,5 +92,38 @@ def fds_remove_crc_gaps(rom):
     # Zero pad to be 65500 bytes long
     padding = b"\x00" * (65500 - len(out))
     out += padding
+
+    return out
+
+
+def fds_add_crc_gaps(rom):
+    """Add CRC gaps"""
+    offset = 0x0
+
+    def get_block(size, crc_gap=2):
+        nonlocal offset
+        block = rom[offset : offset + size]
+        offset += size
+        crc = fds_crc(block)
+        return block + crc
+
+    disk_info_block = get_block(0x38)
+
+    file_amount_block = get_block(0x2)
+    assert file_amount_block[0] == 0x02
+    n_files = file_amount_block[1]
+
+    blocks = [disk_info_block, file_amount_block]
+
+    for i in range(n_files):
+        file_header_block = get_block(0x10)
+        assert file_header_block[0] == 3
+        blocks.append(file_header_block)
+
+        file_size = int.from_bytes(file_header_block[13 : 13 + 2], "little")
+        file_data_block = get_block(file_size + 1)
+        blocks.append(file_data_block)
+
+    out = b"".join(blocks)
 
     return out

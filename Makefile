@@ -256,7 +256,7 @@ flash_patched_ext: build/external_flash_patched.bin
 	fi
 .PHONY: flash_patched_ext
 
-flash_patched: flash_patched_int flash_patched_ext reset
+flash_patched: flash_patched_int flash_patched_ext
 .PHONY: flash_patched
 
 flash: flash_patched

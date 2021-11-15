@@ -36,6 +36,7 @@ class ZeldaGnW(Device, name="zelda"):
         return self.args
 
     def _dump_roms(self):
+        # English Zelda 1
         rom_addr = 0x3_0000
         rom_size = 0x2_0000
         (build_dir / "Legend of Zelda, The (USA).nes").write_bytes(
@@ -43,6 +44,7 @@ class ZeldaGnW(Device, name="zelda"):
             + self.external[rom_addr : rom_addr + rom_size]
         )
 
+        # Japanse Zelda 1
         # This rom doesn't work :(
         rom_addr = 0x5_0000
         rom_size = 0x1_0000
@@ -53,6 +55,28 @@ class ZeldaGnW(Device, name="zelda"):
         rom_size = 0x1_0000
         rom2 = fds_remove_crc_gaps(self.external[rom_addr : rom_addr + rom_size])
         (build_dir / "Zelda no Densetsu: The Hyrule Fantasy (J).fds").write_bytes(
+            rom1 + rom2
+        )
+
+        # English Zelda 2
+        rom_addr = 0x7_0000
+        rom_size = 0x4_0000
+        (build_dir / "Zelda II - Adventure of Link (USA).nes").write_bytes(
+            b"NES\x1a\x08\x10\x12\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+            + self.external[rom_addr : rom_addr + rom_size]
+        )
+
+        # Japanse Zelda 2
+        # This rom doesn't work :(
+        rom_addr = 0xB_0000
+        rom_size = 0x1_0000
+        rom1 = bytearray(self.external[rom_addr : rom_addr + rom_size])
+        # bios = self.external[0xB_E000:0xC_0000]
+        rom1 = fds_remove_crc_gaps(rom1)
+        rom_addr = 0xC_0000
+        rom_size = 0x1_0000
+        rom2 = fds_remove_crc_gaps(self.external[rom_addr : rom_addr + rom_size])
+        (build_dir / "Link no Bouken - The Legend of Zelda 2 (J).fds").write_bytes(
             rom1 + rom2
         )
 

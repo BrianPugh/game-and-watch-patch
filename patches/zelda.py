@@ -2,6 +2,7 @@ from pathlib import Path
 
 from .exception import InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
+from .tileset import decode_backdrop
 from .utils import fds_remove_crc_gaps, printi
 
 build_dir = Path("build")  # TODO: expose this properly or put in better location
@@ -116,8 +117,27 @@ class ZeldaGnW(Device, name="zelda"):
             rom_size = 0x2_0000
             self.external.clear_range(rom_addr, rom_addr + rom_size)
 
+    def _dump_backdrops(self):
+        bytes_starts = [
+            ("0", 0x1F4C00),
+            ("1", 0x205A80),
+            ("2", 0x211920),
+            ("3", 0x213840),
+            ("4", 0x222500),
+            ("5", 0x234140),
+            ("6", 0x242480),
+            ("7", 0x253960),
+            ("8", 0x25CF20),
+            ("9", 0x26AB00),
+            ("10", 0x279FA0),
+        ]
+        for name, start in bytes_starts:
+            img, _ = decode_backdrop(self.external[start:])
+            img.save(build_dir / f"backdrop_{name}.png")
+
     def patch(self):
         self._dump_roms()
+        self._dump_backdrops()
 
         if False:
             self._erase_roms()

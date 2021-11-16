@@ -1,7 +1,10 @@
+from io import BytesIO
 from math import ceil
 
 import numpy as np
 from PIL import Image
+
+from .exception import ParsingError
 
 _BLOCK_SIZE = 16
 _BLOCK_PIXEL = _BLOCK_SIZE * _BLOCK_SIZE
@@ -143,3 +146,104 @@ def tilemap_to_bytes(tilemap, palette=None, bpp=8):
         out = bytes(out_packed)
 
     return out
+
+
+def decode_backdrop(data):
+    """Convert easter egg images to GIF
+
+    Based on:
+        https://gist.github.com/GMMan/c1f0b516afdbb71769752ee06adbbd9a
+
+    Returns
+    -------
+    PIL.Image.Image
+        Decoded image
+    int
+        Number of bytes consumed to create image.
+    """
+
+    def rgb565_to_rgba32(pix):
+        r = int(((pix >> 11) * 255 + 15) / 31)
+        g = int((((pix >> 5) & 0x3F) * 255 + 31) / 63)
+        b = int(((pix & 0x1F) * 255 + 15) / 31)
+        return r, g, b
+
+    idx = 0
+    out = []
+
+    # Header
+    out.append(b"GIF89a")
+
+    width = int.from_bytes(data[idx : idx + 2], "little")
+    idx += 2
+
+    height = int.from_bytes(data[idx : idx + 2], "little")
+    idx += 2
+
+    palette_size = data[idx]
+    idx += 1
+    idx += 1  # padding
+
+    palette = []
+    for _ in range(palette_size):
+        palette.append(int.from_bytes(data[idx : idx + 2], "little"))
+        idx += 2
+
+    gct_size = 0
+    calc_gct_size = 2
+    while calc_gct_size < palette_size:
+        gct_size += 1
+        calc_gct_size <<= 1
+
+    # Logical screen descriptor
+    out.append(width.to_bytes(2, "little"))
+    out.append(height.to_bytes(2, "little"))
+    out.append(((1 << 7) | gct_size).to_bytes(1, "little"))
+    out.append(b"\x00")
+    out.append(b"\x00")
+
+    # Global Color Table
+    for i in range(calc_gct_size):
+        if i < len(palette):
+            r, g, b = rgb565_to_rgba32(palette[i])
+            out.append(r.to_bytes(1, "little"))
+            out.append(g.to_bytes(1, "little"))
+            out.append(b.to_bytes(1, "little"))
+        else:
+            out.append(b"\x00")
+            out.append(b"\x00")
+            out.append(b"\x00")
+
+    # Image descriptor
+    out.append(b"\x2c")
+    out.append(b"\x00\x00")  # x
+    out.append(b"\x00\x00")  # y
+    out.append(width.to_bytes(2, "little"))
+    out.append(height.to_bytes(2, "little"))
+    out.append(b"\x00")
+
+    # Frame
+    min_code_size = data[idx]
+    idx += 1
+    out.append(min_code_size.to_bytes(1, "little"))
+
+    while True:
+        block_size = data[idx]
+        idx += 1
+        out.append(block_size.to_bytes(1, "little"))
+        if block_size == 0:
+            break
+        out.append(data[idx : idx + block_size])
+        idx += block_size
+
+    trailer = data[idx]
+    idx += 1
+
+    if trailer != 0x3B:
+        raise ParsingError("Invalid GIF Trailer")
+    out.append(trailer.to_bytes(1, "little"))
+    out = b"".join(out)
+
+    im = Image.open(BytesIO(out))
+
+    return im, idx

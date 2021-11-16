@@ -124,6 +124,10 @@ class ZeldaGnW(Device, name="zelda"):
             rom_end = 0x1F_4C00
             self.external.clear_range(rom_start, rom_end)
 
+        # self.external.ENC_END (0x32_54A0) to the true encryped end 0x3E_0000
+        # is all unused space. Extra 764,768 bytes free
+        # More data at 0x3e_8000...
+
     def _dump_backdrops(self):
         """Dump the 11 backdrop images.
 

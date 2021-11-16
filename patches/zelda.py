@@ -118,6 +118,24 @@ class ZeldaGnW(Device, name="zelda"):
             self.external.clear_range(rom_addr, rom_addr + rom_size)
 
     def _dump_backdrops(self):
+        """Dump the 11 backdrop images.
+
+        Overall length: 603,424 bytes
+
+        Start       End
+        --------    --------
+        0x1F4C00    0x205a7d
+        0x205A80    0x211913
+        0x211920    0x213840
+        0x213840    0x222500
+        0x222500    0x234128
+        0x234140    0x24247e
+        0x242480    0x253949
+        0x253960    0x25cf1f
+        0x25CF20    0x26aaf8
+        0x26AB00    0x279f98
+        0x279FA0    0x28811d
+        """
         bytes_starts = [
             ("0", 0x1F4C00),
             ("1", 0x205A80),
@@ -132,8 +150,9 @@ class ZeldaGnW(Device, name="zelda"):
             ("10", 0x279FA0),
         ]
         for name, start in bytes_starts:
-            img, _ = decode_backdrop(self.external[start:])
+            img, consumed = decode_backdrop(self.external[start:])
             img.save(build_dir / f"backdrop_{name}.png")
+            print(hex(start + consumed))
 
     def patch(self):
         self._dump_roms()

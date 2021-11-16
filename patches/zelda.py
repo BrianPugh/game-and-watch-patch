@@ -117,6 +117,13 @@ class ZeldaGnW(Device, name="zelda"):
             rom_size = 0x2_0000
             self.external.clear_range(rom_addr, rom_addr + rom_size)
 
+        if True:
+            # Links Awakening (various)
+            # 1,190,912 bytes
+            rom_start = 0xD_2000
+            rom_end = 0x1F_4C00
+            self.external.clear_range(rom_start, rom_end)
+
     def _dump_backdrops(self):
         """Dump the 11 backdrop images.
 

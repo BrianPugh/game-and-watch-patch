@@ -47,6 +47,18 @@ OPENOCD ?= openocd
 GDB ?= $(PREFIX)gdb
 PYTHON ?= python3
 
+#######################################
+# Detect OS
+#######################################
+UNAME := $(shell uname)
+
+ifeq ($(UNAME), Darwin)
+NOTIFY_COMMAND=say -v Samantha -r 300 \"flash complete\"
+endif
+
+ifeq ($(UNAME), Linux)
+NOTIFY_COMMAND=echo -en "\007"
+endif
 ######################################
 # building variables
 ######################################
@@ -261,6 +273,14 @@ flash_patched: flash_patched_int flash_patched_ext
 
 flash: flash_patched
 .PHONY: flash
+
+# Useful when developing and you get distracted easily
+notify:
+	@$(NOTIFY_COMMAND)
+.PHONY: notify
+
+flash_notify: flash notify
+.PHONY: flash_notify
 
 dump:
 	arm-none-eabi-objdump -xDSs build/gw_patch.elf > dump.txt && vim dump.txt

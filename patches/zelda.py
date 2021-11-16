@@ -80,6 +80,8 @@ class ZeldaGnW(Device, name="zelda"):
             rom1 + rom2
         )
 
+        # I Believe 0xD_0000 ~ 0xD_2000 are LoZ2-JP tweaks... or maybe just the timer?
+
         # English Link's Awakening
         # This rom doesn't work :(
         rom_addr = 0xD_2000

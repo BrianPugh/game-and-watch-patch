@@ -7,7 +7,7 @@ import patches
 from .compression import lzma_compress
 from .exception import BadImageError, InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
-from .tileset import bytes_to_tilemap, tilemap_to_bytes
+from .tileset import bytes_to_tilemap, decode_backdrop, tilemap_to_bytes
 from .utils import (
     fds_remove_crc_gaps,
     printd,
@@ -634,6 +634,16 @@ class MarioGnW(Device, name="mario"):
             0x1097C + 12,
             0x1097C + 16,
         ]
+        for name, index in [
+            ("mario_sleeping", 0xC_58F8),
+            ("mario_juggling", 0xC_D858),
+            ("bowser_sleeping", 0xD_6C78),
+            ("pizza", 0xE_16F8),
+            ("minions_sleeping", 0xE_C318),
+        ]:
+            img, _ = decode_backdrop(self.external[index:])
+            img.save(build_dir / f"backdrop_{name}.png")
+
         if self.args.no_sleep_images:
             # Images Notes:
             #    * In-between images are just zeros.

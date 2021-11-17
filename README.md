@@ -87,7 +87,10 @@ make -j8 EXTFLASH_SIZE_MB=60 EXTFLASH_OFFSET=4194304 INTFLASH_BANK=2 flash
 
 
 
-# Troubleshooting:
+# Troubleshooting/FAQ:
+
+### `Error: FSIZE in DCR(1) doesn't match actual capacity.` while flashing.
+If you receive this error, you can safely ignore it. It doesn't impact flashing or the final device at all.
 
 ### Unable to install python dependency `keystone-engine` on rpi3
 If you are unable to install `keystone-engine` on a raspberry pi 3, try:

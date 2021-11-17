@@ -35,6 +35,10 @@ Start      End        Description
 
 0x1f4c00   0x288120   The 11 Backdrop Images
 
+0x288120   0x325490   ???
+
+0x325490   0x3e8000   Empty
+
 0x3e8000   0x3F0000   Launched LA, didn't save. Generic GB stuff?
 0x3F0000   0x400000   Empty
 """
@@ -206,7 +210,7 @@ class ZeldaGnW(Device, name="zelda"):
         for name, start in bytes_starts:
             img, consumed = decode_backdrop(self.external[start:])
             img.save(build_dir / f"backdrop_{name}.png")
-            print(hex(start + consumed))
+            # print(hex(start + consumed))
 
     def patch(self):
         self._dump_roms()

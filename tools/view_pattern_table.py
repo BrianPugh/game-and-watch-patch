@@ -15,7 +15,7 @@ from matplotlib import pyplot as plt
 class ROMViewer(object):
     """Visually inspect an NES ROM"""
 
-    def __init__(self, filename, N1=16, N2=16, sep=1):
+    def __init__(self, filename, start=0, N1=16, N2=16, sep=1):
         if zipfile.is_zipfile(filename):
             zp = zipfile.ZipFile(filename)
             data = np.unpackbits(np.frombuffer(zp.read(zp.filelist[0]), dtype=np.uint8))
@@ -32,7 +32,7 @@ class ROMViewer(object):
         )
         self.fig.subplots_adjust(bottom=0.04, top=0.94, left=0.05, right=0.95)
         self.fig.rom_viewer = self  # needed for object persistence
-        self.update_offset(0)
+        self.update_offset(start)
         self.fig.canvas.mpl_connect("key_press_event", self.key_press)
 
     def update_offset(self, offset):
@@ -89,5 +89,11 @@ if __name__ == "__main__":
         print(__doc__)
         sys.exit(0)
 
-    ROMViewer(filename)
+    try:
+        start_index = int(sys.argv[2], base=0)
+    except IndexError:
+        start_index = 0
+        pass
+
+    ROMViewer(filename, start=start_index)
     plt.show()

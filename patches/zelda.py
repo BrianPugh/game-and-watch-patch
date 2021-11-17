@@ -23,6 +23,12 @@ Start      End        Description
 0x10000    0x10360    LoZ2 JP Save1
 0x11000    0x11360    LoZ2 JP Save2
 
+0x12000    0x13000    Factory Test Scratch Pad
+
+0x13000    0z20000    Empty
+
+0x20000    0x30000    Sprites?
+
 0x30000    0x50000    LoZ1 EN ROM
 0x50000    0x70000    LoZ1 JP ROM
 
@@ -221,6 +227,10 @@ class ZeldaGnW(Device, name="zelda"):
 
         # self.external.set_range(0x0000, 0x12000, b"\xFF")
         # self.external.set_range(0x3e_8000, 0x3F_0000, b"\xFF")
+
+        from .tileset import bytes_to_tilemap
+
+        _ = bytes_to_tilemap(self.external[0x20000:0x30000])
 
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
         self.internal.replace(0x4, "bootloader")

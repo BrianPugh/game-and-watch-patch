@@ -1,3 +1,45 @@
+"""
+Start      End        Description
+---------- ---------- --------------------------------
+0x00000    0x00090    If cleared, factory start. Stores Vermin score.
+0x01000    0x01090    ^ second bank
+
+0x02000    0x02B20    LA JP Save1
+0x03000    0x03B20    LA JP Save2
+0x04000    0x04B20    LA EN Save1
+0x05000    0x05B20    LA EN Save2
+0x06000    0x06B20    LA FR Save1
+0x07000    0x07B20    LA FR Save2
+0x08000    0x08B20    LA DE Save1
+0x09000    0x09B20    LA DE Save2
+
+0x0A000    0x0A560    LoZ1 EN Save1
+0x0B000    0x0B560    LoZ1 EN Save2
+0x0C000    0x0C540    LoZ1 JP Save1
+0x0D000    0x0D540    LoZ1 JP Save2
+
+0x0E000    0x0E360    LoZ2 EN Save1
+0x0F000    0x0F360    LoZ2 EN Save2
+0x10000    0x10360    LoZ2 JP Save1
+0x11000    0x11360    LoZ2 JP Save2
+
+0x30000    0x50000    LoZ1 EN ROM
+0x50000    0x70000    LoZ1 JP ROM
+
+0x70000    0xB0000    LoZ2 EN ROM
+0xB0000    0xD0000    LoZ2 JP ROM
+
+0xD0000    0xD2000    LoZ2 Timer stuff?
+
+0xD2000    0x1F4C00   LA ROMs
+
+0x1f4c00   0x288120   The 11 Backdrop Images
+
+0x3e8000   0x3F0000   Launched LA, didn't save. Generic GB stuff?
+0x3F0000   0x400000   Empty
+"""
+
+
 from pathlib import Path
 
 from .exception import InvalidStockRomError
@@ -93,6 +135,7 @@ class ZeldaGnW(Device, name="zelda"):
 
     def _erase_roms(self):
         """Temporary for debugging, just seeing which roms impact the clock."""
+
         if False:
             # loz1-en is critical to clock
             rom_addr = 0x3_0000
@@ -171,6 +214,9 @@ class ZeldaGnW(Device, name="zelda"):
 
         if False:
             self._erase_roms()
+
+        # self.external.set_range(0x0000, 0x12000, b"\xFF")
+        # self.external.set_range(0x3e_8000, 0x3F_0000, b"\xFF")
 
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
         self.internal.replace(0x4, "bootloader")

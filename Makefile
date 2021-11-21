@@ -282,6 +282,9 @@ notify:
 flash_notify: flash notify
 .PHONY: flash_notify
 
+flash_stock_notify: flash_stock notify
+.PHONY: flash_stock_notify
+
 dump:
 	arm-none-eabi-objdump -xDSs build/gw_patch.elf > dump.txt && vim dump.txt
 .PHONY: dump

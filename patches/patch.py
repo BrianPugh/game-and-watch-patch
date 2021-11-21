@@ -74,7 +74,7 @@ class FirmwarePatchMixin:
     def b(self, offset: int, data: int) -> int:
         """Unconditional branch inserted at ``offset`` to offset ``data``
 
-        data should be the aboolute offset into the firmware (i.e. NOT in the
+        data should be the absolute offset into the firmware (i.e. NOT in the
         form 0x08XX_XXXX or 0x9XXX_XXXX)
 
         2 byte command
@@ -98,13 +98,16 @@ class FirmwarePatchMixin:
 
         return 2
 
-    def bl(self, offset: int, data: str) -> int:
+    def bl(self, offset: int, data) -> int:
         """Replace a branch-link statement to a branch to one of our functions
 
         4 byte command.
         """
 
-        dst_address = self.address(data)
+        if isinstance(data, str):
+            dst_address = self.address(data)
+        else:
+            dst_address = self.FLASH_BASE + data
 
         pc = self.FLASH_BASE + offset + 4
 

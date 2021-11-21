@@ -218,6 +218,46 @@ class ZeldaGnW(Device, name="zelda"):
             img.save(build_dir / f"backdrop_{name}.png")
             # print(hex(start + consumed))
 
+    def _disable_save_encryption(self):
+        # Skip ingame save encryption
+        self.internal.nop(0xF222, 1)
+        self.internal.asm(0xF228, "add.w r2,r1,#0x10")
+        self.internal.asm(0xF22C, "sub.w r1,r8,#0x10")
+
+        # Skip LA save state encryption
+        self.internal.b(0x13ED8, 0x13F06)
+
+        # Skip NVRAM (system settings and vermin save) encryption
+        self.internal.asm(0xB5C4, "mov r1,r2")
+        self.internal.nop(0xB5C6, 1)
+        self.internal.nop(0xB5CC, 1)
+
+        # Skip ingame save decryption
+        self.internal.asm(0xF12C, "add.w r7,r0,#0x10")
+        self.internal.asm(0xF130, "mov   r5,r1")
+        self.internal.asm(0xF132, "sub.w r6,r2,#0x10")
+        self.internal.asm(0xF136, "sub   sp,#0x10")
+        self.internal.asm(0xF138, "mov   r1,r6")
+        self.internal.asm(0xF13A, "mov   r0,r7")
+        self.internal.replace(0xF13C, b"\xf4\xf7\xbc\xfc")
+        self.internal.asm(0xF140, "mov   r2,r7")
+        self.internal.asm(0xF142, "mov   r1,r6")
+        self.internal.asm(0xF144, "mov   r0,r5")
+        self.internal.replace(0xF146, b"\xfc\xf7\x29\xfc")
+        self.internal.b(0xF14A, 0xF172)
+
+        # Skip LA save state decryption
+        self.internal.b(0x13F52, 0x13F94)
+
+        # Skip NVRAM (system settings and vermin save) decryption
+        self.internal.asm(0xB528, "mov r7,r0")
+        self.internal.nop(0xB52A, 1)
+        self.internal.replace(0xB54C, b"\xc0\xb1")
+
+    def _erase_savedata(self):
+        self.external.set_range(0x0000, 0x12000, b"\xFF")
+        self.external.set_range(0x3E_8000, 0x3F_0000, b"\xFF")
+
     def patch(self):
         self._dump_roms()
         self._dump_backdrops()
@@ -225,12 +265,19 @@ class ZeldaGnW(Device, name="zelda"):
         if False:
             self._erase_roms()
 
-        # self.external.set_range(0x0000, 0x12000, b"\xFF")
-        # self.external.set_range(0x3e_8000, 0x3F_0000, b"\xFF")
+        self._erase_savedata()
+
+        if self.args.debug:
+            # Override fault handlers for easier debugging via gdb.
+            printi("Overriding handlers for debugging.")
+            self.internal.replace(0x8, "NMI_Handler")
+            self.internal.replace(0xC, "HardFault_Handler")
 
         from .tileset import bytes_to_tilemap
 
         _ = bytes_to_tilemap(self.external[0x20000:0x30000])
+
+        self._disable_save_encryption()
 
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
         self.internal.replace(0x4, "bootloader")

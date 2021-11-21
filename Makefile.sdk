@@ -3,6 +3,7 @@ SDK_C_SOURCES =  \
 Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_adc.c \
 Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_adc_ex.c \
 Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_cortex.c \
+Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_cryp.c \
 Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dac_ex.c \
 Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dac.c \
 Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dma_ex.c \
@@ -53,6 +54,7 @@ Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_adc.h \
 Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_adc.h \
 Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_adc_ex.h \
 Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_cortex.h \
+Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_cryp.h \
 Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_dac_ex.h \
 Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_dac.h \
 Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_def.h \

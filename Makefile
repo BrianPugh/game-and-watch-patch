@@ -201,6 +201,14 @@ FORCE: ;
 
 .EXPORT_ALL_VARIABLES:
 
+openocd_dump_image:
+	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
+		-c "init;" \
+		-c "halt;" \
+		-c "dump_image dump_image.bin 0x90000000 0x400000;" \
+		-c "exit;"
+.PHONY: openocd_dump_image
+
 reset:
 	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; reset; exit"
 .PHONY: reset

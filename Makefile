@@ -83,6 +83,15 @@ endif
 
 ADAPTER ?= stlink
 
+LARGE_FLASH ?= 0
+export LARGE_FLASH  # Used in stm32h7x_spiflash.cfg
+ifeq ($(LARGE_FLASH), 0)
+PROGRAM_VERIFY="verify"
+else
+# Currently verify is broken for large chips
+PROGRAM_VERIFY=""
+endif
+
 #######################################
 # CFLAGS
 #######################################
@@ -224,7 +233,7 @@ erase_ext: $(BUILD_DIR)/dummy.bin
 	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
 		-c "init;" \
 		-c "halt;" \
-		-c "program $< 0x90000000 verify;" \
+		-c "program $< 0x90000000 $(PROGRAM_VERIFY);" \
 		-c "exit;"
 	make reset
 .PHONY: erase_ext
@@ -236,15 +245,14 @@ dump_ext:
 flash_stock_int: internal_flash_backup_$(GNW_DEVICE).bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
 		-c "init; halt;" \
-		-c "program $< 0x08000000 verify;" \
+		-c "program $< 0x08000000 $(PROGRAM_VERIFY);" \
 		-c "reset; exit;"
 .PHONY: flash_stock_int
 
 flash_stock_ext: flash_backup_$(GNW_DEVICE).bin
 	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
-		-c "init;" \
-		-c "halt;" \
-		-c "program $< 0x90000000 verify;" \
+		-c "init; halt;" \
+		-c "program $< 0x90000000 $(PROGRAM_VERIFY);" \
 		-c "exit;"
 	make reset
 .PHONY: flash_stock_ext
@@ -261,17 +269,16 @@ patch: $(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patch
 flash_patched_int: build/internal_flash_patched.bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
 		-c "init; halt;" \
-		-c "program $< 0x08000000 verify;" \
+		-c "program $< 0x08000000 $(PROGRAM_VERIFY);" \
 		-c "reset; exit;"
 .PHONY: flash_patched_int
 
 flash_patched_ext: build/external_flash_patched.bin
 	if [ -s $< ]; then \
 		${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
-			-c "init;" \
-			-c "halt;" \
-			-c "program $< 0x90000000 verify;" \
-			-c "exit;" \
+		-c "init; halt;" \
+		-c "program $< 0x90000000 $(PROGRAM_VERIFY);" \
+		-c "exit;" \
 		&& make reset; \
 	fi
 .PHONY: flash_patched_ext
@@ -292,6 +299,7 @@ flash_notify: flash notify
 
 flash_stock_notify: flash_stock notify
 .PHONY: flash_stock_notify
+
 
 dump:
 	arm-none-eabi-objdump -xDSs build/gw_patch.elf > dump.txt && vim dump.txt

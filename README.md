@@ -52,6 +52,8 @@ make download_sdk
 
 The default programmer interface is `stlink`, you can chose a different interface via the `ADAPTER` variable. For example, `ADAPTER=rpi`.
 
+NOTE: if you are flashing a 64MB chip, add `LARGE_FLASH=1` to your `make` command!
+
 I recommend pressing the power button at the same time you press enter. Note that the same configuration parameters have to be passed to each `make` command.
 
 For additional configuration options, run `make help`.

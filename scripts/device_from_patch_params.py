@@ -27,13 +27,13 @@ __STOCK_ROM_END__ = 0x{device.Int.STOCK_ROM_END:08X};
 """
     if device.name == "mario":
         new_ld += f"""
-__RAM_ORIGIN__ = 0x30010000
-__RAM_LENGTH__ = {64 * (1 << 10) - 8192}
+__RAM_ORIGIN__ = 0x30010000;
+__RAM_LENGTH__ = {64 * (1 << 10) - 8192};
 """
     elif device.name == "zelda":
         new_ld += """
-__RAM_ORIGIN__ = 0x240ec524
-__RAM_LENGTH__ = 68308
+__RAM_ORIGIN__ = 0x240ec524;
+__RAM_LENGTH__ = 68308;
 """
     else:
         raise ValueError(f"Unsupported device {device.name}")

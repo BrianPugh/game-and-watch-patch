@@ -65,7 +65,7 @@ INCLUDE build/device.ld
 MEMORY
 {
   /* AHB SRAM2 */
-  RAM      (xrw) : ORIGIN = 0x30010000, LENGTH = 64K - 8192
+  RAM      (xrw) : ORIGIN = __RAM_ORIGIN__, LENGTH = __RAM_LENGTH__
   FLASH    (xr ) : ORIGIN = 0x8000000,  LENGTH = 128K
 }
 

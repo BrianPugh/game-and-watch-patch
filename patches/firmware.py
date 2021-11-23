@@ -432,6 +432,7 @@ class Device:
 
     def __init_subclass__(cls, name, **kwargs):
         super().__init_subclass__(**kwargs)
+        cls.name = name
         cls.registry[name] = cls
 
     def __init__(self, internal_bin, internal_elf, external_bin):

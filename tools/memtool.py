@@ -303,9 +303,10 @@ class Main:
         new_len = int(width * np.ceil(len(start) / width))
         padding = np.full(new_len - len(start), -1)
         n_comparisons = len(samples) - 1
+        diff = start != start
         for i, sample in enumerate(samples[1:]):
             i += 1
-            diff = start != sample
+            diff |= start != sample
 
             free_segs = zero_runs(diff)
             free_segs_lens = free_segs[:, 1] - free_segs[:, 0]

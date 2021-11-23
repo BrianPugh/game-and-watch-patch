@@ -129,7 +129,8 @@ def main():
             f"Expected patch length {len(device.internal)}, got {len(patch)}"
         )
 
-    novel_code_start = device.internal.address("__do_global_dtors_aux") & 0x00FF_FFF8
+    # novel_code_start = device.internal.address("__do_global_dtors_aux") & 0x00FF_FFF8
+    novel_code_start = device.internal.STOCK_ROM_END
     device.internal[novel_code_start:] = patch[novel_code_start:]
     del patch
 

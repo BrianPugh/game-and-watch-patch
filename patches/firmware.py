@@ -233,7 +233,7 @@ class RWData:
             compressed_len += self.__compressed_len_memo[data]
         return compressed_len
 
-    def write_table_and_data(self, data_offset=None):
+    def write_table_and_data(self, end_of_table_reference, data_offset=None):
         """
         Parameters
         ----------
@@ -293,7 +293,7 @@ class RWData:
         assert index == self.table_end
 
         # Update the pointer to the end of table in the loader
-        self.firmware.relative(0x17DB4, index, size=4)
+        self.firmware.relative(end_of_table_reference, index, size=4)
 
         print(self)
 

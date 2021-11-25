@@ -52,10 +52,10 @@ Start      End        Description
 
 from pathlib import Path
 
-from .exception import InvalidStockRomError
+from .exception import InvalidStockRomError, NotEnoughSpaceError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
 from .tileset import decode_backdrop
-from .utils import fds_remove_crc_gaps, printi
+from .utils import fds_remove_crc_gaps, printe, printi
 
 build_dir = Path("build")  # TODO: expose this properly or put in better location
 
@@ -302,6 +302,13 @@ class ZeldaGnW(Device, name="zelda"):
             self.internal.nop(0x16536, 2)
             self.internal.nop(0x1653A, 1)
             self.internal.nop(0x1653C, 1)
+
+        # Attempt moving LoZ2 Timer stuff to internal flash.
+        try:
+            printi("Attempting to move LoZ2 TIMER data to int")
+            self.move_to_int(0xD_0000, 0x2000, 0xFCF8)
+        except NotEnoughSpaceError:
+            printe("    NotEnoughSpace")
 
         if self.args.no_la:
             printi("Removing Link's Awakening (All Languages)")

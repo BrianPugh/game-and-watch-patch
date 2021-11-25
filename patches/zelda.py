@@ -85,6 +85,18 @@ class ZeldaGnW(Device, name="zelda"):
         FLASH_LEN = 0  # 0x24100000 - FLASH_BASE
 
     def argparse(self, parser):
+        group = parser.add_argument_group("Low level flash savings flags")
+        group.add_argument(
+            "--no-la",
+            action="store_true",
+            help="Remove Link's Awakening rom (all languages).",
+        )
+        group.add_argument(
+            "--no-sleep-images",
+            action="store_true",
+            help="Remove the 5 sleeping images.",
+        )
+
         self.args = parser.parse_args()
         return self.args
 
@@ -290,6 +302,23 @@ class ZeldaGnW(Device, name="zelda"):
             self.internal.nop(0x16536, 2)
             self.internal.nop(0x1653A, 1)
             self.internal.nop(0x1653C, 1)
+
+        if self.args.no_la:
+            printi("Removing Link's Awakening (All Languages)")
+            self.external.clear_range(0xD2000, 0x1F4C00)
+            # TODO: disable LA in the gnw menu.
+            # TODO: make this work with moving stuff around, currently just
+            # removing to free up an island of space.
+
+        if self.args.no_sleep_images:
+            self.external.clear_range(0x1F4C00, 0x288120)
+
+            # setting this to NULL doesn't just display a black image, I
+            # don't think the drawing code has a NULL check.
+            # self.rwdata_erase(0x1f4c00, 0x288120 - 0x1f4c00)
+
+            # TODO: make this work with moving stuff around, currently just
+            # removing to free up an island of space.
 
         # Compress, insert, and reference the modified rwdata
         self.int_pos += self.internal.rwdata.write_table_and_data(self.int_pos)

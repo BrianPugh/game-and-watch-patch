@@ -321,7 +321,9 @@ class ZeldaGnW(Device, name="zelda"):
             # removing to free up an island of space.
 
         # Compress, insert, and reference the modified rwdata
-        self.int_pos += self.internal.rwdata.write_table_and_data(self.int_pos)
+        self.int_pos += self.internal.rwdata.write_table_and_data(
+            0x1B070, data_offset=self.int_pos
+        )
 
         internal_remaining_free = len(self.internal) - self.int_pos
         compressed_memory_free = (

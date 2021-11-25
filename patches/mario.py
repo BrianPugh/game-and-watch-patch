@@ -684,7 +684,9 @@ class MarioGnW(Device, name="mario"):
             )
 
         # Compress, insert, and reference the modified rwdata
-        self.int_pos += self.internal.rwdata.write_table_and_data(self.int_pos)
+        self.int_pos += self.internal.rwdata.write_table_and_data(
+            0x17DB4, data_offset=self.int_pos
+        )
 
         # Shorten the external firmware
         # This rounds the negative self.ext_offset towards zero.

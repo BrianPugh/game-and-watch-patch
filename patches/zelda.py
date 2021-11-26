@@ -271,6 +271,10 @@ class ZeldaGnW(Device, name="zelda"):
         self.external.set_range(0x3E_8000, 0x3F_0000, b"\xFF")
 
     def patch(self):
+        b_w_memcpy_inflate_asm = "b.w #" + hex(
+            0xFFFFFFFE & self.internal.address("memcpy_inflate")
+        )
+
         self._dump_roms()
         self._dump_backdrops()
 
@@ -303,11 +307,17 @@ class ZeldaGnW(Device, name="zelda"):
             self.internal.nop(0x1653A, 1)
             self.internal.nop(0x1653C, 1)
 
-        printd("Compressing and moinge LoZ2 TIMER data to int")
+        if False:
+            # This doesn't quite work yet
+            # I think RWData stuff probably needs to be updated
+            printd("Compressing and moving LoZ2 JP ROM data to int")
+            compressed_len = self.external.compress(0xB_0000, 0x1E000)
+            self.internal.asm(0xF702, b_w_memcpy_inflate_asm)
+            self.move_to_int(0xB_0000, compressed_len, 0xFD1C)
+
+        printd("Compressing and moving LoZ2 TIMER data to int")
         compressed_len = self.external.compress(0xD_0000, 0x2000)
-        self.internal.asm(
-            0xF430, "b.w #" + hex(0xFFFFFFFE & self.internal.address("memcpy_inflate"))
-        )
+        self.internal.asm(0xF430, b_w_memcpy_inflate_asm)
         self.move_to_int(0xD_0000, compressed_len, 0xFCF8)
 
         if self.args.no_la:

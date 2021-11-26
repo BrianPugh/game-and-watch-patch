@@ -1,4 +1,5 @@
 from .compression import lzma_compress
+from .exception import InvalidAsmError
 
 
 def twos_compliment(value, bits):
@@ -166,7 +167,13 @@ class FirmwarePatchMixin:
         data : str
             Assembly instructions
         """
-        encoding, _ = self._ks.asm(data)
+        data = data.strip()
+        if data.startswith(("b.w")):
+            encoding, _ = self._ks.asm(data, self.FLASH_BASE + offset)
+            if encoding is None:
+                raise InvalidAsmError
+        else:
+            encoding, _ = self._ks.asm(data)
         print(f'    "{data}" -> {[hex(x) for x in encoding]}')
         if size:
             assert len(encoding) == size

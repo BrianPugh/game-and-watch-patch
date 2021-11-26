@@ -30,6 +30,7 @@ This repo contains custom code as well as a patching utility to add additional f
 ### Zelda (`PATCH_PARAMS="--device=zelda"`)
 * No extra features currently implemented, just compatible with retro-go
 * External flash savings to come in the future.
+* See [the zelda document for more information](docs/zelda.md).
 
 # Usage
 Place your `internal_flash_backup_${DEVICE}.bin` and `flash_backup_${DEVICE}.bin` in the root of this
@@ -74,7 +75,7 @@ make -j8 INTFLASH_BANK=2 flash
 
 ### Retro Go (Zelda)
 
-This assumes you have upgraded the external flash to something larger than 4MB. Currently zelda CFW requires 4MB of external flash (to be reduced at some point in the future).
+This assumes you have upgraded the external flash to something larger than 4MB. See  [the zelda document for using retro-go with the stock 4MB flash chip](docs/zelda.md).
 
 ```
 # in this repo

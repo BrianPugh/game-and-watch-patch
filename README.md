@@ -80,7 +80,8 @@ This assumes you have upgraded the external flash to something larger than 4MB. 
 ```
 # in this repo
 make clean
-make PATCH_PARAMS="--device=zelda" flash_patched
+# Note: only set the LARGE_FLASH=1 if you have a >=64MB chip!
+make PATCH_PARAMS="--device=zelda" LARGE_FLASH=1 flash_patched
 
 # in the retro-go repo
 make clean

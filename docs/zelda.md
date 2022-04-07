@@ -19,7 +19,7 @@ Run the following in this repo:
 
 ```bash
 make clean
-make PATCH_PARAMS="--device=zelda --extended --no-la --no-sleep-images --extended" flash
+make PATCH_PARAMS="--device=zelda --extended --no-la --no-sleep-images --extended" flash_patched
 ```
 
 

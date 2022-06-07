@@ -2,5 +2,5 @@ Pillow
 colorama
 keystone-engine
 numpy
-pycrypto
+pycryptodome
 pyelftools

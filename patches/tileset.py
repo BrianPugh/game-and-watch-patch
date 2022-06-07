@@ -39,7 +39,7 @@ def bytes_to_tilemap(data, palette=None, bpp=8, width=256):
         for b in data:
             shift = 8 - bpp
             while shift >= 0:
-                nibbles.append(b >> shift & (2 ** bpp - 1))
+                nibbles.append(b >> shift & (2**bpp - 1))
                 shift -= bpp
             # nibbles.append((b >> 4) | (offset << 4))
             # nibbles.append((b & 0xF) | (offset << 4))

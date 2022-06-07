@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/psf/black
-    rev: 21.9b0
+    rev: 22.3.0
     hooks:
       - id: black
 
@@ -10,14 +10,14 @@ repos:
       - id: flake8
 
   - repo: https://github.com/PyCQA/isort
-    rev: 5.9.3
+    rev: 5.10.1
     hooks:
       - id: isort
         args: ["--profile", "black"]
         additional_dependencies: [toml]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.1
+    rev: v4.3.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer

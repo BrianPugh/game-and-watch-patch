@@ -11,6 +11,7 @@
 
 #define MSP_ADDRESS 0x08000000
 
+#define BANK_1_STACK_2_ADDRESS 0x08020000
 #define BANK_2_ADDRESS 0x08100000
 #define BOOTLOADER_MAGIC 0x544F4F42  // "BOOT"
 #define BOOTLOADER_MAGIC_ADDRESS ((uint32_t *)0x2001FFF8)
@@ -44,11 +45,6 @@ void bootloader(){
 
     start_app(stock_Reset_Handler, *(uint32_t *) MSP_ADDRESS);
     while(1);
-}
-
-static inline void start_bank_2() {
-    set_bootloader(BANK_2_ADDRESS);
-    NVIC_SystemReset();
 }
 
 
@@ -97,12 +93,17 @@ gamepad_t read_buttons() {
     gamepad = stock_read_buttons();
 
 
+    if((gamepad & GAMEPAD_RIGHT) && (gamepad & GAMEPAD_GAME)){
+        set_bootloader(BANK_1_STACK_2_ADDRESS);
+        NVIC_SystemReset();
+    }
 #if CLOCK_ONLY
     if(gamepad & GAMEPAD_GAME){
 #else
     if((gamepad & GAMEPAD_LEFT) && (gamepad & GAMEPAD_GAME)){
 #endif
-        start_bank_2();
+        set_bootloader(BANK_2_ADDRESS);
+        NVIC_SystemReset();
     }
 
 #if ENABLE_SMB1_GRAPHIC_MODS

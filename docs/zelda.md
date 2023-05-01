@@ -67,5 +67,5 @@ make tables/zelda3_assets.dat
 cd ..
 python3 ./scripts/bundle_all_assets.py
 python3 ./scripts/update_all_assets.py
-make -j8 INTFLASH_BANK=2 EXTFLASH_SIZE=1794336 EXTFLASH_OFFSET=860160 ADAPTER=stlink GNW_TARGET=zelda flash
+make -j8 INTFLASH_BANK=2 EXTFLASH_SIZE=1703936 EXTFLASH_OFFSET=868352 ADAPTER=stlink GNW_TARGET=zelda flash
 ```

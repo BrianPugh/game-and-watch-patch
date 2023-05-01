@@ -37,13 +37,13 @@ Start      End        Description
 
 0xD0000    0xD2000    LoZ2 Timer stuff?
 
-0xD2000    0x1F4C00   LA ROMs
+0xD2000    0x1F4C00   LA ROMs (1,190,912 bytes)
 
-0x1f4c00   0x288120   The 11 Backdrop Images
+0x1f4c00   0x288120   The 11 Backdrop Images (603,424 bytes)
 
 0x288120   0x325490   ???
 
-0x325490   0x3e8000   Empty
+0x325490   0x3e8000   Empty  (797,552 bytes)
 
 0x3e8000   0x3F0000   Launched LA, didn't save. Generic GB stuff?
 0x3F0000   0x400000   Empty

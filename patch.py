@@ -74,6 +74,11 @@ def main():
         help="Enable OTFDEC for the main extflash binary.",
     )
     parser.add_argument(
+        "--triple-boot",
+        action="store_true",
+        help="Enable RIGHT+GAME to launch 0x08020000.",
+    )
+    parser.add_argument(
         "--compression-ratio",
         type=float,
         default=1.4,

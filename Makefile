@@ -81,6 +81,10 @@ ifneq (,$(findstring --debug, $(PATCH_PARAMS)))
 	C_DEFS += -DDEBUG
 endif
 
+ifneq (,$(findstring --triple-boot, $(PATCH_PARAMS)))
+	C_DEFS += -DTRIPLE_BOOT
+endif
+
 ADAPTER ?= stlink
 
 LARGE_FLASH ?= 0

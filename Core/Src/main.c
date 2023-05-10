@@ -93,10 +93,12 @@ gamepad_t read_buttons() {
     gamepad = stock_read_buttons();
 
 
+#if TRIPLE_BOOT
     if((gamepad & GAMEPAD_RIGHT) && (gamepad & GAMEPAD_GAME)){
         set_bootloader(BANK_1_STACK_2_ADDRESS);
         NVIC_SystemReset();
     }
+#endif
 #if CLOCK_ONLY
     if(gamepad & GAMEPAD_GAME){
 #else

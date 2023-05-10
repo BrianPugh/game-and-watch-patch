@@ -40,7 +40,7 @@ Run the following in this repo:
 
 ```bash
 make clean
-make PATCH_PARAMS="--device=zelda --no-la --no-sleep-images" flash
+make PATCH_PARAMS="--device=zelda --no-la --no-sleep-images --triple-boot" flash
 ```
 
 This will setup storage in the following way:
@@ -62,10 +62,5 @@ make -j8 INTFLASH_ADDRESS=0x08020000 EXTFLASH_SIZE=794624 EXTFLASH_OFFSET=330137
 In the Zelda3 repo, after copying `zelda3.sfc` to `zelda3/tables/zelda3.sfc`, run the following commands:
 
 ```bash
-cd zelda3
-make tables/zelda3_assets.dat
-cd ..
-python3 ./scripts/bundle_all_assets.py
-python3 ./scripts/update_all_assets.py
 make -j8 INTFLASH_BANK=2 EXTFLASH_SIZE=1703936 EXTFLASH_OFFSET=868352 ADAPTER=stlink GNW_TARGET=zelda flash
 ```

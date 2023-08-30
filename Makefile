@@ -336,7 +336,7 @@ help:
 	@echo "Commandline arguments:"
 	@echo "    PATCH_PARAMS - Options to pass to the python patching utility."
 	@echo "                   Most options go here and will start with two dashes."
-	@echo "    ADAPTER - One of {stlink, jlink, rpi}. Defaults to stlink."
+	@echo "    ADAPTER - One of {stlink, jlink, rpi, pico}. Defaults to stlink."
 	@echo ""
 	@echo "Example:"
 	@echo "    make PATCH_PARAMS=\"--sleep-time=120 --slim\" flash_patched_ext"

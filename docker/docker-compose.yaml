@@ -2,7 +2,7 @@ version: "3"
 services:
   game-and-watch-patch:
     container_name: game-and-watch-patch
-    image: game-and-watch-patch:latest
+    image: BrianPugh/game-and-watch-patch:latest
     network_mode: host
     restart: "no"
     privileged: true
@@ -16,4 +16,3 @@ services:
       - -c
       - |
         while true; do sleep 10; done;
-

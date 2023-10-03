@@ -88,7 +88,37 @@ make clean
 # In this example, I'm assuming you have a 64MB flash chip (60 = 64 - 4)
 make -j8 EXTFLASH_SIZE_MB=60 EXTFLASH_OFFSET=4194304 INTFLASH_BANK=2 flash
 ```
+## Build and flash using Docker
 
+<details>
+  <summary>
+    If you are familiar with Docker and prefer a solution where you don't have to manually install toolchains and so on, expand this section and read on.
+  </summary>
+  To reduce the number of potential pitfalls in installation of various software, a Dockerfile is provided containing everything needed to compile and flash Custom Firmware (CFW) to your Nintendo® Game & Watch™ system.
+  This Dockerfile is written tageting an x86-64 machine running Linux.
+
+  Steps to flash from a docker container (running on Linux, e.g. Archlinux or Ubuntu):
+
+  ```bash
+  # Go into the docker directory of this repo.
+  cd docker/
+
+  # Pull the pre-built docker image.
+  docker pull brianpugh/game-and-watch-patch:latest
+
+  # When done, use the image to create a container with the attached docker-compose.yaml file.
+  # You have to edit the compose file and set the path to the directory with your firmware backup (volumes section of the file).
+  docker compose up -d
+
+  # This will create and run a container game-and-watch-patch.
+  # The firmware backup files will be mounted into /tmp/firmware of the container.
+  # Now, go inside the container copy the backup files and proceed as described above in the Usage section.
+  docker exec -it game-and-watch-patch /bin/bash
+  ```
+
+If you run into permission issues, [ensure that your user is in the docker group.](https://docs.docker.com/engine/install/linux-postinstall/)
+
+</details>
 
 
 # Troubleshooting/FAQ:

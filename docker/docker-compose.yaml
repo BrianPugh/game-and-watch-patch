@@ -1,0 +1,18 @@
+version: "3"
+services:
+  game-and-watch-patch:
+    container_name: game-and-watch-patch
+    image: brianpugh/game-and-watch-patch:latest
+    network_mode: host
+    restart: "no"
+    privileged: true
+    environment:
+      - PATH=/opt/openocd-git/bin:/opt/gcc-arm-none-eabi-10.3-2021.10/bin:$PATH
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - </path/to/your/flash/backup>:/tmp/firmware
+    command:
+      - /bin/bash
+      - -c
+      - |
+        while true; do sleep 10; done;

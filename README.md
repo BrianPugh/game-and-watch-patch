@@ -104,7 +104,7 @@ make -j8 EXTFLASH_SIZE_MB=60 EXTFLASH_OFFSET=4194304 INTFLASH_BANK=2 flash
   cd docker/
 
   # Pull the pre-built docker image.
-  docker pull game-and-watch-patch:latest
+  docker pull brianpugh/game-and-watch-patch:latest
 
   # When done, use the image to create a container with the attached docker-compose.yaml file.
   # You have to edit the compose file and set the path to the directory with your firmware backup (volumes section of the file).

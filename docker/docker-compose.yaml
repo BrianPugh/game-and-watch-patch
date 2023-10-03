@@ -2,7 +2,7 @@ version: "3"
 services:
   game-and-watch-patch:
     container_name: game-and-watch-patch
-    image: BrianPugh/game-and-watch-patch:latest
+    image: brianpugh/game-and-watch-patch:latest
     network_mode: host
     restart: "no"
     privileged: true

@@ -41,11 +41,12 @@ Start      End        Description
 
 0x1f4c00   0x288120   The 11 Backdrop Images (603,424 bytes)
 
-0x288120   0x325490   ???
+0x288120   0x325490   External FW Data (643,952 bytes)
 
-0x325490   0x3e8000   Empty  (797,552 bytes)
+0x325490   0x3E0000   Empty  (764,784 bytes)
 
-0x3e8000   0x3F0000   Launched LA, didn't save. Generic GB stuff?
+0x3E0000   0x3E8000   Cleared when you reset the GW
+0x3E8000   0x3F0000   Launched LA, didn't save. Generic GB stuff?
 0x3F0000   0x400000   Empty
 """
 
@@ -323,7 +324,7 @@ class ZeldaGnW(Device, name="zelda"):
         if self.args.no_la:
             printi("Removing Link's Awakening (All Languages)")
             self.external.clear_range(0xD2000, 0x1F4C00)
-            # TODO: disable LA in the gnw menu.
+            # TODO: disable LA in the gnw menu, it's currently causing problems/BSODs.
             # TODO: make this work with moving stuff around, currently just
             # removing to free up an island of space.
 

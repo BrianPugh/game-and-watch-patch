@@ -97,9 +97,53 @@ class ZeldaGnW(Device, name="zelda"):
             action="store_true",
             help="Remove the 5 sleeping images.",
         )
+        group.add_argument(
+            "--loz1",
+            type=Path,
+            default="build/loz1.nes",
+            help="Override LoZ1 ROM with your own file.",
+        )
+        group.add_argument(
+            "--loz1j",
+            type=Path,
+            default=None,
+            help="Override Japanese LoZ1 (FDS) ROM with your own file.",
+        )
+        group.add_argument(
+            "--loz2",
+            type=Path,
+            default="build/loz2.nes",
+            help="Override LoZ2 ROM with your own file.",
+        )
 
         self.args = parser.parse_args()
         return self.args
+
+    def _flash_roms(self):
+        # English Zelda 1
+        loz1_addr, loz1_size = 0x3_0000, 0x2_0000
+        loz1 = self.args.loz1.read_bytes()
+        # Remove the NES header
+        if loz1[0] == 0x4e:
+          loz1 = loz1[16:]
+        self.external[loz1_addr : loz1_addr + loz1_size] = loz1
+
+        # Japanese Zelda 1 (FDS)
+        if self.args.loz1j:
+          loz1j_addr, loz1j_size = 0x5_0000, 0x2_0000
+          loz1j = self.args.loz1j.read_bytes()
+          # Remove the NES header
+          if loz1j[0] == 0x46:
+            loz1j = loz1j[16:]
+          self.external[loz1j_addr : loz1j_addr + loz1j_size] = loz1j
+
+        # English Zelda 2
+        loz2_addr, loz2_size = 0x7_0000, 0x4_0000
+        loz2 = self.args.loz2.read_bytes()
+        # Remove the NES header
+        if loz2[0] == 0x4e:
+          loz2 = loz2[16:]
+        self.external[loz2_addr : loz2_addr + loz2_size] = loz2
 
     def _dump_roms(self):
         # English Zelda 1
@@ -281,6 +325,8 @@ class ZeldaGnW(Device, name="zelda"):
 
         if False:
             self._erase_roms()
+
+        self._flash_roms()
 
         self._erase_savedata()
 

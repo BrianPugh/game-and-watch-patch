@@ -100,7 +100,7 @@ class ZeldaGnW(Device, name="zelda"):
         group.add_argument(
             "--loz1",
             type=Path,
-            default="build/loz1.nes",
+            default=None,
             help="Override LoZ1 ROM with your own file.",
         )
         group.add_argument(
@@ -112,7 +112,7 @@ class ZeldaGnW(Device, name="zelda"):
         group.add_argument(
             "--loz2",
             type=Path,
-            default="build/loz2.nes",
+            default=None,
             help="Override LoZ2 ROM with your own file.",
         )
 
@@ -121,12 +121,13 @@ class ZeldaGnW(Device, name="zelda"):
 
     def _flash_roms(self):
         # English Zelda 1
-        loz1_addr, loz1_size = 0x3_0000, 0x2_0000
-        loz1 = self.args.loz1.read_bytes()
-        # Remove the NES header
-        if loz1[0] == 0x4E:
-            loz1 = loz1[16:]
-        self.external[loz1_addr : loz1_addr + loz1_size] = loz1
+        if self.args.loz1:
+            loz1_addr, loz1_size = 0x3_0000, 0x2_0000
+            loz1 = self.args.loz1.read_bytes()
+            # Remove the NES header
+            if loz1[0] == 0x4E:
+                loz1 = loz1[16:]
+            self.external[loz1_addr : loz1_addr + loz1_size] = loz1
 
         # Japanese Zelda 1 (FDS)
         if self.args.loz1j:
@@ -138,12 +139,13 @@ class ZeldaGnW(Device, name="zelda"):
             self.external[loz1j_addr : loz1j_addr + loz1j_size] = loz1j
 
         # English Zelda 2
-        loz2_addr, loz2_size = 0x7_0000, 0x4_0000
-        loz2 = self.args.loz2.read_bytes()
-        # Remove the NES header
-        if loz2[0] == 0x4E:
-            loz2 = loz2[16:]
-        self.external[loz2_addr : loz2_addr + loz2_size] = loz2
+        if self.args.loz2:
+            loz2_addr, loz2_size = 0x7_0000, 0x4_0000
+            loz2 = self.args.loz2.read_bytes()
+            # Remove the NES header
+            if loz2[0] == 0x4E:
+                loz2 = loz2[16:]
+            self.external[loz2_addr : loz2_addr + loz2_size] = loz2
 
     def _dump_roms(self):
         # English Zelda 1

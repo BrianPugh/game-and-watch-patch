@@ -66,6 +66,8 @@ endif
 PATCH_PARAMS ?=
 
 GNW_DEVICE := $(shell $(PYTHON) -m scripts.device_from_patch_params $(PATCH_PARAMS))
+GNW_DEVICE_LOWER := $(shell echo "$(GNW_DEVICE)" | tr 'A-Z' 'a-z')
+
 C_DEFS += -DGNW_DEVICE_$(GNW_DEVICE)=1
 
 ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
@@ -246,14 +248,14 @@ dump_ext:
 	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt; dump_image \"dump_ext.bin\" 0x90000000 0x100000; resume; exit;"
 .PHONY: dump_ext
 
-flash_stock_int: internal_flash_backup_$(GNW_DEVICE).bin
+flash_stock_int: internal_flash_backup_$(GNW_DEVICE_LOWER).bin
 	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
 		-c "init; halt;" \
 		-c "program $< 0x08000000 $(PROGRAM_VERIFY);" \
 		-c "reset; exit;"
 .PHONY: flash_stock_int
 
-flash_stock_ext: flash_backup_$(GNW_DEVICE).bin
+flash_stock_ext: flash_backup_$(GNW_DEVICE_LOWER).bin
 	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
 		-c "init; halt;" \
 		-c "program $< 0x90000000 $(PROGRAM_VERIFY);" \

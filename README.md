@@ -28,7 +28,7 @@ This repo contains custom code as well as a patching utility to add additional f
 * See [the mario document for more information](docs/mario.md).
 
 ### Zelda (`PATCH_PARAMS="--device=zelda"`)
-* No extra features currently implemented, just compatible with retro-go
+* Ability to remove the second beep in TIME/CLOCK via `--no-beep`
 * External flash savings to come in the future.
 * See [the zelda document for more information](docs/zelda.md).
 

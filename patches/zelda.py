@@ -363,7 +363,7 @@ class ZeldaGnW(Device, name="zelda"):
 
         if self.args.no_beep:
             # Disable TIME/CLOCK second beep
-            self.external.nop(0x0032002C, 4)
+            self.external.nop(0x32002E, 1)
 
         if False:
             # This doesn't quite work yet

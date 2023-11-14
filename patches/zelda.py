@@ -117,9 +117,14 @@ class ZeldaGnW(Device, name="zelda"):
         )
 
         group.add_argument(
-            "--no-beep",
+            "--no-second-beep",
             action="store_true",
             help="Remove the second beep in TIME/CLOCK.",
+        )
+        group.add_argument(
+            "--no-hour-tune",
+            action="store_true",
+            help="Remove the hour tune in TIME/CLOCK.",
         )
         self.args = parser.parse_args()
         return self.args
@@ -361,7 +366,11 @@ class ZeldaGnW(Device, name="zelda"):
             self.internal.nop(0x1653A, 1)
             self.internal.nop(0x1653C, 1)
 
-        if self.args.no_beep:
+        if self.args.no_hour_tune:
+            # Disable TIME/CLOCK hour tune
+            self.external[0x320025] = 0xE0  # Change 'bne' to 'b'. Will replace the 'hour tune' with a 'second beep'
+
+        if self.args.no_second_beep:
             # Disable TIME/CLOCK second beep
             self.external.nop(0x32002E, 1)
 

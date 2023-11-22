@@ -390,7 +390,10 @@ class ZeldaGnW(Device, name="zelda"):
         if self.args.no_la:
             printi("Removing Link's Awakening (All Languages)")
             self.external.clear_range(0xD2000, 0x1F4C00)
-            # TODO: disable LA in the gnw menu, it's currently causing problems/BSODs.
+            self.external[0x315B54] = 0x00  # Ignore LA EN menu selection
+            self.external[0x315B58] = 0x00  # Ignore LA FR menu selection
+            self.external[0x315B5C] = 0x00  # Ignore LA DE menu selection
+            self.external[0x315B60] = 0x00  # Ignore LA JP menu selection
             # TODO: make this work with moving stuff around, currently just
             # removing to free up an island of space.
 

@@ -368,7 +368,8 @@ class ZeldaGnW(Device, name="zelda"):
 
         if self.args.no_hour_tune:
             # Disable TIME/CLOCK hour tune
-            self.external[0x320025] = 0xE0  # Change 'bne' to 'b'. Will replace the 'hour tune' with a 'second beep'
+            # Change 'bne' to 'b'. Will replace the 'hour tune' with a 'second beep'
+            self.external[0x320025] = 0xE0
 
         if self.args.no_second_beep:
             # Disable TIME/CLOCK second beep

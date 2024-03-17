@@ -33,17 +33,19 @@ This repo contains custom code as well as a patching utility to add additional f
 * See [the zelda document for more information](docs/zelda.md).
 
 # Usage
-Place your `internal_flash_backup_${DEVICE}.bin` and `flash_backup_${DEVICE}.bin` in the root of this
-repo. To extract these from your gnw system, see the [game and watch backup repo](https://github.com/ghidraninja/game-and-watch-backup).
-For example, if we are patching the `mario` game and watch, we need the files
-`internal_flash_backup_mario.bin` and `flash_backup_mario.bin` in the root
-directory of this project.
+This repo uses the [gnwmanager cli tool](https://github.com/BrianPugh/gnwmanager/blob/main/tutorials/installation.md). See it's instructions on how to install.
 
-Install python dependencies (>=python3.6 required) via:
+Install game-and-watch-patch python dependencies (>=python3.6 required) via:
 
 ```
 pip3 install -r requirements.txt
 ```
+
+Place your `internal_flash_backup_${DEVICE}.bin` and `flash_backup_${DEVICE}.bin` in the root of this
+repo. To extract these from your gnw system, see the [gnwmanager unlock tutorial](https://github.com/BrianPugh/gnwmanager/blob/main/tutorials/unlock.md).
+For example, if we are patching the `mario` game and watch, we need the files
+`internal_flash_backup_mario.bin` and `flash_backup_mario.bin` in the root
+directory of this project.
 
 See the appropriate section below for your device model.
 

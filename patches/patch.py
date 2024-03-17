@@ -1,3 +1,9 @@
+import inspect
+import json
+from contextlib import suppress
+from pathlib import Path
+
+from .compact_json_encoder import CompactJSONEncoder
 from .compression import lzma_compress
 from .exception import InvalidAsmError
 
@@ -8,6 +14,52 @@ def twos_compliment(value, bits):
     else:
         # Two's Compliment
         return (1 << bits) + value
+
+
+class CachedKeystone:
+    """Keystone can be annoying to install; so we just cache the responses for end-users."""
+
+    def __init__(self, path="patches/keystone_cache.json"):
+        self.path = Path(path)
+
+        self._ks = None
+        with suppress(ImportError):
+            from keystone import KS_ARCH_ARM, KS_MODE_THUMB, Ks
+
+            self._ks = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
+            self._sig = inspect.signature(self._ks.asm)
+
+        self._cache = {}
+        with suppress(FileNotFoundError):
+            with self.path.open("r") as f:
+                self._cache = json.load(f)
+
+    def asm(self, *args, **kwargs):
+        key = str(args) + json.dumps(kwargs, sort_keys=True)
+        with suppress(KeyError):
+            return self._cache[key]
+
+        if self._ks is None:
+            raise RuntimeError(
+                "Un-cached instruction, and keystone is not installed. "
+                "If you are an end-user, please open up a github issue or report this in the discord. "
+                "If you are a developer, please pip install keystone-engine."
+            )
+
+        value = self._ks.asm(*args, **kwargs)[0]
+
+        if value is None:
+            raise InvalidAsmError
+
+        self._cache[key] = value
+
+        self.path.parent.mkdir(exist_ok=True, parents=True)
+        with self.path.open("w") as f:
+            json.dump(
+                self._cache, f, sort_keys=True, indent="\t", cls=CompactJSONEncoder
+            )
+
+        return value
 
 
 class FirmwarePatchMixin:
@@ -155,9 +207,7 @@ class FirmwarePatchMixin:
         try:
             return self._ks_inst
         except AttributeError:
-            from keystone import KS_ARCH_ARM, KS_MODE_THUMB, Ks
-
-            self._ks_inst = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
+            self._ks_inst = CachedKeystone()
         return self._ks_inst
 
     def asm(self, offset: int, data: str, size=None) -> int:
@@ -169,11 +219,9 @@ class FirmwarePatchMixin:
         """
         data = data.strip()
         if data.startswith(("b.w")):
-            encoding, _ = self._ks.asm(data, self.FLASH_BASE + offset)
-            if encoding is None:
-                raise InvalidAsmError
+            encoding = self._ks.asm(data, self.FLASH_BASE + offset)
         else:
-            encoding, _ = self._ks.asm(data)
+            encoding = self._ks.asm(data)
         print(f'    "{data}" -> {[hex(x) for x in encoding]}')
         if size:
             assert len(encoding) == size

@@ -1,7 +1,6 @@
 *.pyc
 *.bin
 *.DS_Store
-Drivers/
 build/
 dump.txt
 tileset_palette_*.png

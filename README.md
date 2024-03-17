@@ -33,29 +33,21 @@ This repo contains custom code as well as a patching utility to add additional f
 * See [the zelda document for more information](docs/zelda.md).
 
 # Usage
-Place your `internal_flash_backup_${DEVICE}.bin` and `flash_backup_${DEVICE}.bin` in the root of this
-repo. To extract these from your gnw system, see the [game and watch backup repo](https://github.com/ghidraninja/game-and-watch-backup).
-For example, if we are patching the `mario` game and watch, we need the files
-`internal_flash_backup_mario.bin` and `flash_backup_mario.bin` in the root
-directory of this project.
+This repo uses the [gnwmanager cli tool](https://github.com/BrianPugh/gnwmanager/blob/main/tutorials/installation.md). See it's instructions on how to install.
 
-Install python dependencies (>=python3.6 required) via:
+Install game-and-watch-patch python dependencies (>=python3.6 required) via:
 
 ```
 pip3 install -r requirements.txt
 ```
 
-Download STM32 Driver files:
+Place your `internal_flash_backup_${DEVICE}.bin` and `flash_backup_${DEVICE}.bin` in the root of this
+repo. To extract these from your gnw system, see the [gnwmanager unlock tutorial](https://github.com/BrianPugh/gnwmanager/blob/main/tutorials/unlock.md).
+For example, if we are patching the `mario` game and watch, we need the files
+`internal_flash_backup_mario.bin` and `flash_backup_mario.bin` in the root
+directory of this project.
 
-```
-make download_sdk
-```
-
-The default programmer interface is `stlink`, you can chose a different interface via the `ADAPTER` variable. For example, `ADAPTER=rpi`.
-
-NOTE: if you are flashing a 64MB chip, add `LARGE_FLASH=1` to your `make` command!
-
-I recommend pressing the power button at the same time you press enter. Note that the same configuration parameters have to be passed to each `make` command.
+See the appropriate section below for your device model.
 
 For additional configuration options, run `make help`.
 
@@ -66,7 +58,7 @@ Since most people are going to be using this with retro-go, want the minimum amo
 ```
 # in this repo
 make clean
-make PATCH_PARAMS="--device=mario --internal-only" flash_patched
+make PATCH_PARAMS="--device=mario --internal-only" flash
 
 # in the retro-go repo
 make clean
@@ -80,8 +72,7 @@ This assumes you have upgraded the external flash to something larger than 4MB. 
 ```
 # in this repo
 make clean
-# Note: only set the LARGE_FLASH=1 if you have a >=64MB chip!
-make PATCH_PARAMS="--device=zelda" LARGE_FLASH=1 flash_patched
+make PATCH_PARAMS="--device=zelda" flash
 
 # in the retro-go repo
 make clean
@@ -123,18 +114,7 @@ If you run into permission issues, [ensure that your user is in the docker group
 
 # Troubleshooting/FAQ:
 
-### `Error: FSIZE in DCR(1) doesn't match actual capacity.` while flashing.
-If you receive this error, you can safely ignore it. It doesn't impact flashing or the final device at all.
-
-### Unable to install python dependency `keystone-engine` on rpi3
-If you are unable to install `keystone-engine` on a raspberry pi 3, try:
-1. Update the GPU RAM to 16MB from `raspi-config`
-2. Build and install keystone-engine from source (should take ~15 minutes):
-```
-git clone https://github.com/keystone-engine/keystone
-cd keystone/bindings/python/
-python3 -m pip install .
-```
+All previous common problems have been solved 😎
 
 # Development
 Main stages to developing a feature:

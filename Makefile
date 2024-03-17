@@ -43,8 +43,7 @@ endif
 HEX = $(CP) -O ihex
 BIN = $(CP) -O binary -S
 ECHO  = echo
-OPENOCD ?= openocd
-GDB ?= $(PREFIX)gdb
+GNWMANAGER ?= gnwmanager
 PYTHON ?= python3
 
 #######################################
@@ -87,16 +86,6 @@ ifneq (,$(findstring --triple-boot, $(PATCH_PARAMS)))
 	C_DEFS += -DTRIPLE_BOOT
 endif
 
-ADAPTER ?= stlink
-
-LARGE_FLASH ?= 0
-export LARGE_FLASH  # Used in stm32h7x_spiflash.cfg
-ifeq ($(LARGE_FLASH), 0)
-PROGRAM_VERIFY="verify"
-else
-# Currently verify is broken for large chips
-PROGRAM_VERIFY=""
-endif
 
 #######################################
 # CFLAGS
@@ -216,80 +205,49 @@ FORCE: ;
 
 .EXPORT_ALL_VARIABLES:
 
-openocd_dump_image:
-	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
-		-c "init;" \
-		-c "halt;" \
-		-c "dump_image dump_image.bin 0x90000000 0x400000;" \
-		-c "exit;"
-.PHONY: openocd_dump_image
-
-reset:
-	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; reset; exit"
-.PHONY: reset
-
-erase_int:
-	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt; flash erase_address 0x08000000 131072; resume; exit"
-.PHONY: erase_int
-
-$(BUILD_DIR)/dummy.bin:
-	$(PYTHON) -c "with open('$@', 'wb') as f: f.write(b'\xFF'*1048576)"
-
-erase_ext: $(BUILD_DIR)/dummy.bin
-	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
-		-c "init;" \
-		-c "halt;" \
-		-c "program $< 0x90000000 $(PROGRAM_VERIFY);" \
-		-c "exit;"
-	make reset
-.PHONY: erase_ext
-
-dump_ext:
-	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt; dump_image \"dump_ext.bin\" 0x90000000 0x100000; resume; exit;"
-.PHONY: dump_ext
-
-flash_stock_int: internal_flash_backup_$(GNW_DEVICE_LOWER).bin
-	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
-		-c "init; halt;" \
-		-c "program $< 0x08000000 $(PROGRAM_VERIFY);" \
-		-c "reset; exit;"
-.PHONY: flash_stock_int
-
-flash_stock_ext: flash_backup_$(GNW_DEVICE_LOWER).bin
-	${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
-		-c "init; halt;" \
-		-c "program $< 0x90000000 $(PROGRAM_VERIFY);" \
-		-c "exit;"
-	make reset
-.PHONY: flash_stock_ext
-
-flash_stock: flash_stock_ext flash_stock_int reset
-.PHONY: flash_stock
-
+##################
+# PATCH BUILDING #
+##################
 $(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin &: $(BUILD_DIR)/$(TARGET).bin patch.py $(shell find patches -type f)
 	$(PYTHON) patch.py $(PATCH_PARAMS)
 
 patch: $(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin
 .PHONY: patch
 
+##################
+# STOCK FLASHING #
+##################
+flash_stock_int: internal_flash_backup_$(GNW_DEVICE_LOWER).bin
+	$(GNWMANAGER) flash bank1 $< -- start bank1
+.PHONY: flash_stock_int
+
+flash_stock_ext: flash_backup_$(GNW_DEVICE_LOWER).bin
+	$(GNWMANAGER) flash ext $< -- start bank1
+.PHONY: flash_stock_ext
+
+flash_stock: internal_flash_backup_$(GNW_DEVICE_LOWER).bin flash_backup_$(GNW_DEVICE_LOWER).bin
+	$(GNWMANAGER) flash ext flash_backup_$(GNW_DEVICE_LOWER).bin \
+		-- flash bank1 internal_flash_backup_$(GNW_DEVICE_LOWER).bin \
+		-- start bank1
+.PHONY: flash_stock
+
+##################
+# PATCH FLASHING #
+##################
 flash_patched_int: build/internal_flash_patched.bin
-	$(OPENOCD) -f openocd/interface_"$(ADAPTER)".cfg \
-		-c "init; halt;" \
-		-c "program $< 0x08000000 $(PROGRAM_VERIFY);" \
-		-c "reset; exit;"
+	$(GNWMANAGER) flash bank1 $< -- start bank1
 .PHONY: flash_patched_int
 
 flash_patched_ext: build/external_flash_patched.bin
 	if [ -s $< ]; then \
-		${OPENOCD} -f "openocd/interface_$(ADAPTER).cfg" \
-		-c "init; halt;" \
-		-c "program $< 0x90000000 $(PROGRAM_VERIFY);" \
-		-c "exit;" \
-		&& make reset; \
+		$(GNWMANAGER) flash ext $< -- start bank1 \
 	fi
 .PHONY: flash_patched_ext
 
-flash_patched: flash_patched_int flash_patched_ext
+flash_patched: build/internal_flash_patched.bin build/external_flash_patched.bin
+	$(GNWMANAGER) flash ext build/external_flash_patched.bin \
+		-- flash bank1 build/internal_flash_patched.bin \
+		-- start bank1
 .PHONY: flash_patched
 
 flash: flash_patched
@@ -306,39 +264,12 @@ flash_notify: flash notify
 flash_stock_notify: flash_stock notify
 .PHONY: flash_stock_notify
 
-
-dump:
-	arm-none-eabi-objdump -xDSs build/gw_patch.elf > dump.txt && vim dump.txt
-.PHONY: dump
-
-# Starts openocd and attaches to the target. To be used with 'flash_intflash_nc' and 'gdb'
-openocd:
-	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg -c "init; halt"
-.PHONY: openocd
-
-gdb: $(BUILD_DIR)/$(TARGET).elf
-	$(GDB) $< -ex "target extended-remote :3333"
-.PHONY: gdb
-
-start_bank_2:
-	$(OPENOCD) -f openocd/interface_$(ADAPTER).cfg \
-		-c 'init; reset halt' \
-		-c 'set MSP 0x[string range [mdw 0x08100000] 12 19]' \
-		-c 'set PC 0x[string range [mdw 0x08100004] 12 19]' \
-		-c 'echo "Setting MSP -> $$MSP"' \
-		-c 'echo "Setting PC -> $$PC"' \
-		-c 'reg msp $$MSP' \
-		-c 'reg pc $$PC' \
-		-c 'resume;exit'
-.PHONY: start_bank_2
-
 help:
 	@$(PYTHON) patch.py --help
 	@echo ""
 	@echo "Commandline arguments:"
 	@echo "    PATCH_PARAMS - Options to pass to the python patching utility."
 	@echo "                   Most options go here and will start with two dashes."
-	@echo "    ADAPTER - One of {stlink, jlink, rpi, pico}. Defaults to stlink."
 	@echo ""
 	@echo "Example:"
 	@echo "    make PATCH_PARAMS=\"--sleep-time=120 --slim\" flash_patched_ext"

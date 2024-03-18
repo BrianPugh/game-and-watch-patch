@@ -17,17 +17,14 @@ def twos_compliment(value, bits):
 
 
 class CachedKeystone:
-    """Keystone can be annoying to install; so we just cache the responses for end-users."""
-
     def __init__(self, path="patches/keystone_cache.json"):
         self.path = Path(path)
 
         self._ks = None
-        with suppress(ImportError):
-            from keystone import KS_ARCH_ARM, KS_MODE_THUMB, Ks
+        from keystone import KS_ARCH_ARM, KS_MODE_THUMB, Ks
 
-            self._ks = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
-            self._sig = inspect.signature(self._ks.asm)
+        self._ks = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
+        self._sig = inspect.signature(self._ks.asm)
 
         self._cache = {}
         with suppress(FileNotFoundError):

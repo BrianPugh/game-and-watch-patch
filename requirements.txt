@@ -3,3 +3,4 @@ colorama
 numpy
 pycryptodome
 pyelftools
+keystone-engine

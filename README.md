@@ -114,7 +114,15 @@ If you run into permission issues, [ensure that your user is in the docker group
 
 # Troubleshooting/FAQ:
 
-All previous common problems have been solved 😎
+### Unable to install python dependency `keystone-engine` on rpi3
+If you are unable to install `keystone-engine` on a raspberry pi 3, try:
+1. Update the GPU RAM to 16MB from `raspi-config`
+2. Build and install keystone-engine from source (should take ~15 minutes):
+```
+git clone https://github.com/keystone-engine/keystone
+cd keystone/bindings/python/
+python3 -m pip install .
+```
 
 # Development
 Main stages to developing a feature:

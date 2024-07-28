@@ -5,7 +5,7 @@ In order to fit other ROMs alongside the stock firmware data, a few sacrifices h
 1. Remove all sleeping images.
 2. Remove all languages of Link's Awakening.
 
-With these consessions, 2 of the following 3 will fit at the same time:
+With these concessions, 2 of the following 3 will fit at the same time:
 
 1. Oracle of Ages
 2. Oracle of Seasons

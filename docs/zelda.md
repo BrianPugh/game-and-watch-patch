@@ -5,7 +5,7 @@ In order to fit other ROMs alongside the stock firmware data, a few sacrifices h
 1. Remove all sleeping images.
 2. Remove all languages of Link's Awakening.
 
-With these consessions, 2 of the following 3 will fit at the same time:
+With these concessions, 2 of the following 3 will fit at the same time:
 
 1. Oracle of Ages
 2. Oracle of Seasons
@@ -27,7 +27,7 @@ make PATCH_PARAMS="--device=zelda --no-la --no-sleep-images" flash
 
 ```bash
 make clean
-make -j8 INTFLASH_BANK=2 EXTFLASH_SIZE=1794336 EXTFLASH_OFFSET=860160 ADAPTER=stlink GNW_TARGET=zelda flash
+make -j8 INTFLASH_BANK=2 EXTFLASH_SIZE=1794048 EXTFLASH_OFFSET=860160 ADAPTER=stlink GNW_TARGET=zelda flash
 ```
 
 

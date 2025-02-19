@@ -79,6 +79,11 @@ def main():
         help="Enable RIGHT+GAME to launch 0x08020000.",
     )
     parser.add_argument(
+        "--sd-bootloader",
+        action="store_true",
+        help="Change target dual boot to 0x08032000.",
+    )
+    parser.add_argument(
         "--compression-ratio",
         type=float,
         default=1.4,
@@ -139,7 +144,9 @@ def main():
     device.internal[novel_code_start:] = patch[novel_code_start:]
     del patch
 
-    if args.extended:
+    if args.sd_bootloader:
+        device.internal.extend(b"\x00" * 0x12000)
+    elif args.extended:
         device.internal.extend(b"\x00" * 0x20000)
 
     print(Fore.BLUE)

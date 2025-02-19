@@ -86,6 +86,10 @@ ifneq (,$(findstring --triple-boot, $(PATCH_PARAMS)))
 	C_DEFS += -DTRIPLE_BOOT
 endif
 
+ifneq (,$(findstring --sd-bootloader, $(PATCH_PARAMS)))
+	C_DEFS += -DSD_BOOTLOADER
+endif
+
 
 #######################################
 # CFLAGS

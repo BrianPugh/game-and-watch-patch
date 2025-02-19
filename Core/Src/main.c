@@ -13,6 +13,8 @@
 
 #define BANK_1_STACK_2_ADDRESS 0x08020000
 #define BANK_2_ADDRESS 0x08100000
+#define SD_BOOTLOADER_ADDRESS 0x08032000
+
 #define BOOTLOADER_MAGIC 0x544F4F42  // "BOOT"
 #define BOOTLOADER_MAGIC_ADDRESS ((uint32_t *)0x2001FFF8)
 #define BOOTLOADER_JUMP_ADDRESS ((uint32_t **)0x2001FFFC)
@@ -104,7 +106,11 @@ gamepad_t read_buttons() {
 #else
     if((gamepad & GAMEPAD_LEFT) && (gamepad & GAMEPAD_GAME)){
 #endif
+#if SD_BOOTLOADER
+        set_bootloader(SD_BOOTLOADER_ADDRESS);
+#else
         set_bootloader(BANK_2_ADDRESS);
+#endif
         NVIC_SystemReset();
     }
 

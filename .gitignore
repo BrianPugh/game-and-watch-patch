@@ -12,3 +12,4 @@ captures/
 .gdbinit
 *.ips
 ips/
+.venv

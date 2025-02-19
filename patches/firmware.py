@@ -1,4 +1,6 @@
 import hashlib
+import struct
+from dataclasses import dataclass
 
 from colorama import Fore, Style
 from Crypto.Cipher import AES
@@ -12,7 +14,7 @@ from .exception import (
     ParsingError,
 )
 from .patch import FirmwarePatchMixin
-from .utils import round_down_word, round_up_word
+from .utils import round_down_word, round_up_page, round_up_word
 
 
 def _val_to_color(val):
@@ -38,6 +40,47 @@ class Lookup(dict):
             )
         substrs.append("}")
         return "\n".join(substrs)
+
+
+@dataclass
+class HeaderMetaData:
+    """4 bytes of data that can be stored at the hdmi-cec handler in the vector-table (0x01B8)"""
+
+    external_flash_size: int  # Actual size in bytes (will be divided by 4096 for storage)
+    is_mario: bool  # 1 bit
+    is_zelda: bool  # 1 bit
+
+    def pack(self) -> bytes:
+        # Convert size to 4K blocks (right shift by 12)
+        blocks_4k = round_up_page(self.external_flash_size) >> 12
+
+        # Ensure the shifted value fits in 3 bytes
+        if not (0 <= blocks_4k < (1 << 24)):
+            raise ValueError(
+                "external_flash_size must fit in 3 bytes when divided by 4096"
+            )
+
+        # Pack the flags into a single byte
+        flags = (int(self.is_mario) << 0) | (int(self.is_zelda) << 1)
+
+        # Pack as little-endian:
+        # - First 3 bytes: external_flash_size
+        # - Last byte: flags
+        return struct.pack("<I", (blocks_4k & 0xFFFFFF) | (flags << 24))
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "HeaderMetaData":
+        # Unpack the 32-bit value
+        [value] = struct.unpack("<I", data)
+
+        # Extract fields
+        # Convert from 4K blocks back to bytes (left shift by 12)
+        external_flash_size = (value & 0xFFFFFF) << 12
+        flags = (value >> 24) & 0xFF
+        is_mario = bool(flags & (1 << 0))
+        is_zelda = bool(flags & (1 << 1))
+
+        return cls(external_flash_size, is_mario, is_zelda)
 
 
 class Firmware(FirmwarePatchMixin, bytearray):
@@ -675,8 +718,23 @@ class Device:
         return new_loc
 
     def __call__(self):
+        from . import MarioGnW, ZeldaGnW
+
         self.int_pos = self.internal.empty_offset
-        return self.patch()
+        out = self.patch()
+        is_mario, is_zelda = False, False
+        if isinstance(self, MarioGnW):
+            is_mario = True
+        elif isinstance(self, ZeldaGnW):
+            is_zelda = True
+        metadata = HeaderMetaData(
+            external_flash_size=len(self.external),
+            is_mario=is_mario,
+            is_zelda=is_zelda,
+        )
+        # hdmi-cec = 0x01B8; not used in the gnw hardware.
+        self.internal.replace(0x01B8, metadata.pack())
+        return out
 
     def patch(self):
         """Device specific argument parsing and patching routine.

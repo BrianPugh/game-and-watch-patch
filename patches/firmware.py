@@ -42,13 +42,19 @@ class Lookup(dict):
         return "\n".join(substrs)
 
 
+METADATA_MAGIC = 0x4  # chosen because no real executable code starts with address 0x4
+
+
 @dataclass
 class HeaderMetaData:
     """4 bytes of data that can be stored at the hdmi-cec handler in the vector-table (0x01B8)"""
 
     external_flash_size: int  # Actual size in bytes (will be divided by 4096 for storage)
+
+    # 4 LSb are used for MAGIC
     is_mario: bool  # 1 bit
     is_zelda: bool  # 1 bit
+    # 2 MSb are free
 
     def pack(self) -> bytes:
         # Convert size to 4K blocks (right shift by 12)
@@ -61,7 +67,7 @@ class HeaderMetaData:
             )
 
         # Pack the flags into a single byte
-        flags = (int(self.is_mario) << 0) | (int(self.is_zelda) << 1)
+        flags = METADATA_MAGIC | (int(self.is_mario) << 4) | (int(self.is_zelda) << 5)
 
         # Pack as little-endian:
         # - First 3 bytes: external_flash_size
@@ -77,8 +83,10 @@ class HeaderMetaData:
         # Convert from 4K blocks back to bytes (left shift by 12)
         external_flash_size = (value & 0xFFFFFF) << 12
         flags = (value >> 24) & 0xFF
-        is_mario = bool(flags & (1 << 0))
-        is_zelda = bool(flags & (1 << 1))
+        if (flags & 0x0F) != METADATA_MAGIC:
+            raise ValueError("Invalid Magic.")
+        is_mario = bool(flags & (1 << 4))
+        is_zelda = bool(flags & (1 << 5))
 
         return cls(external_flash_size, is_mario, is_zelda)
 

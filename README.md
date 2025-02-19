@@ -139,9 +139,10 @@ At this location we store the following data:
 ```C
 struct {
   external_flash_size: 24; // This value * 4096 is the amount of external flash used by this firmware.
+  must_be_4: 4; // "magic" value that would never be valid in any real hdmi-cec firmware. 0x4 is in the hardware perhipheral space.
   is_mario: 1;  // This is the mario firmware.
   is_zelda: 1;  // This is the zelda firmware.
-  _unused: 6;   // Reserved for future use. All 0 for now.
+  _unused: 2;   // Reserved for future use. All 0 for now.
 }
 ```
 

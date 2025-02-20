@@ -131,6 +131,22 @@ Main stages to developing a feature:
 3. Implement your own function, possibly in `Core/Src/main.c`. There's a good chance your custom function will call the function in (2). You will also probably have to add `-Wl,--undefined=my_custom_function` to `LDFLAGS` in the Makefile so that it doesn't get optimized out as unreachable code.
 4. Add a patch definition to `patches/patches.py`.
 
+### Protocols
+We store information about how much external flash this firmware uses at internal-flash offset `0x01B8`.
+This location is in the HDMI-CEC handler in the vector-table; this is unused for all game-and-watch purposes, so serves as a safe, standardized spot to put a bit of data.
+At this location we store the following data:
+
+```C
+struct {
+  external_flash_size: 24; // This value * 4096 is the amount of external flash used by this firmware.
+  must_be_4: 4; // "magic" value that would never be valid in any real hdmi-cec firmware. 0x4 is in the hardware perhipheral space.
+  is_mario: 1;  // This is the mario firmware.
+  is_zelda: 1;  // This is the zelda firmware.
+  _unused: 2;   // Reserved for future use. All 0 for now.
+}
+```
+
+
 # Journal
 This is my first time ever developing patches for a closed source binary. [I documented my journey in hopes that it helps other people](docs/journal.md). If you have any recommendations, tips, tricks, or anything like that, please leave a github issue and I'll update the documentation!
 

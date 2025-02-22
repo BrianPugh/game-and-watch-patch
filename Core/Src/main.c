@@ -18,6 +18,9 @@
 #define BOOTLOADER_MAGIC 0x544F4F42  // "BOOT"
 #define BOOTLOADER_MAGIC_ADDRESS ((uint32_t *)0x2001FFF8)
 #define BOOTLOADER_JUMP_ADDRESS ((uint32_t **)0x2001FFFC)
+
+static void MX_RTC_Init(RTC_HandleTypeDef *hrtc);
+
 static void  __attribute__((naked)) start_app(void (* const pc)(void), uint32_t sp) {
     __asm("           \n\
           msr msp, r1 /* load r1 into MSP */\n\
@@ -42,6 +45,24 @@ void bootloader(){
         *BOOTLOADER_MAGIC_ADDRESS = 0;
         uint32_t sp = (*BOOTLOADER_JUMP_ADDRESS)[0];
         uint32_t pc = (*BOOTLOADER_JUMP_ADDRESS)[1];
+        start_app((void (* const)(void)) pc, (uint32_t) sp);
+    }
+    HAL_Init();
+    __HAL_RCC_CRS_CLK_ENABLE();
+    HAL_PWR_EnableBkUpAccess();   // Enable backup domain access
+    __HAL_RCC_RTC_ENABLE();       // Enable RTC clock
+    RTC_HandleTypeDef hrtc;
+    MX_RTC_Init(&hrtc);
+    uint32_t rtc_backup_value = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0);
+    if(rtc_backup_value == BOOTLOADER_MAGIC){
+#if SD_BOOTLOADER
+        uint32_t sp = *((uint32_t*)SD_BOOTLOADER_ADDRESS);
+        uint32_t pc = *((uint32_t*)SD_BOOTLOADER_ADDRESS + 1);
+#else
+        uint32_t sp = *((uint32_t*)BANK_2_ADDRESS);
+        uint32_t pc = *((uint32_t*)BANK_2_ADDRESS + 1);
+#endif
+
         start_app((void (* const)(void)) pc, (uint32_t) sp);
     }
 
@@ -207,6 +228,37 @@ gnw_mode_t get_gnw_mode(){
     else return GNW_MODE_CLOCK;
 }
 #endif
+
+/**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(RTC_HandleTypeDef *hrtc)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+  /** Initialize RTC Only
+  */
+  hrtc->Instance = RTC;
+  hrtc->Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc->Init.AsynchPrediv = 127; // Recommended value from application note for LSE, the higher the value the better the accuracy and power consumption
+  hrtc->Init.SynchPrediv = 255; // Recommended value from application note for LSE
+  hrtc->Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc->Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc->Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  hrtc->Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  HAL_RTC_Init(hrtc);
+
+  /* USER CODE BEGIN Check_RTC_BKUP */
+  return; // Retain RTC values on boot
+}
 
 
 void NMI_Handler(void) {

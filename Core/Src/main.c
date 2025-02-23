@@ -15,9 +15,15 @@
 #define BANK_2_ADDRESS 0x08100000
 #define SD_BOOTLOADER_ADDRESS 0x08032000
 
+// Other software (like retro-go) should set this value
 #define BOOTLOADER_MAGIC 0x544F4F42  // "BOOT"
+
+// Intended for internal-use only; bypasses other checks
+#define BOOTLOADER_MAGIC_FORCE 0x45435246  // "FRCE"
+
 #define BOOTLOADER_MAGIC_ADDRESS ((uint32_t *)0x2001FFF8)
 #define BOOTLOADER_JUMP_ADDRESS ((uint32_t **)0x2001FFFC)
+
 static void  __attribute__((naked)) start_app(void (* const pc)(void), uint32_t sp) {
     __asm("           \n\
           msr msp, r1 /* load r1 into MSP */\n\
@@ -26,7 +32,7 @@ static void  __attribute__((naked)) start_app(void (* const pc)(void), uint32_t 
 }
 
 static inline void set_bootloader(uint32_t address){
-    *BOOTLOADER_MAGIC_ADDRESS = BOOTLOADER_MAGIC;
+    *BOOTLOADER_MAGIC_ADDRESS = BOOTLOADER_MAGIC_FORCE;
     *BOOTLOADER_JUMP_ADDRESS = (uint32_t *)address;
 }
 
@@ -38,10 +44,54 @@ static inline void set_bootloader(uint32_t address){
  * So to run that app, set those values and execute a reset.
  */
 void bootloader(){
+    if(*BOOTLOADER_MAGIC_ADDRESS == BOOTLOADER_MAGIC_FORCE) {
+        *BOOTLOADER_MAGIC_ADDRESS = 0;
+        uint32_t sp = (*BOOTLOADER_JUMP_ADDRESS)[0];
+        uint32_t pc = (*BOOTLOADER_JUMP_ADDRESS)[1];
+        start_app((void (* const)(void)) pc, (uint32_t) sp);
+    }
+
+    HAL_Init();
+
+    HAL_PWR_EnableBkUpAccess();
+    __HAL_RCC_RTC_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+
+    RTC_HandleTypeDef hrtc = {0};
+    hrtc.Instance = RTC;
+    // Note: Don't need to call HAL_RTC_Init() since we're just reading backup register
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = BTN_GAME_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;  // Button connects to GND.
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+
+    HAL_GPIO_Init(BTN_GAME_GPIO_Port, &GPIO_InitStruct);
+
+    if(HAL_GPIO_ReadPin(BTN_GAME_GPIO_Port, BTN_GAME_Pin) == GPIO_PIN_RESET) {
+        // If GAME is pressed: reset all triggers that might cause us to dual-boot.
+        *BOOTLOADER_MAGIC_ADDRESS = 0;
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0);
+    }
+
     if(*BOOTLOADER_MAGIC_ADDRESS == BOOTLOADER_MAGIC) {
         *BOOTLOADER_MAGIC_ADDRESS = 0;
         uint32_t sp = (*BOOTLOADER_JUMP_ADDRESS)[0];
         uint32_t pc = (*BOOTLOADER_JUMP_ADDRESS)[1];
+        start_app((void (* const)(void)) pc, (uint32_t) sp);
+    }
+
+
+    if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) == BOOTLOADER_MAGIC){
+#if SD_BOOTLOADER
+        uint32_t sp = *((uint32_t*)SD_BOOTLOADER_ADDRESS);
+        uint32_t pc = *((uint32_t*)SD_BOOTLOADER_ADDRESS + 1);
+#else
+        uint32_t sp = *((uint32_t*)BANK_2_ADDRESS);
+        uint32_t pc = *((uint32_t*)BANK_2_ADDRESS + 1);
+#endif
+
         start_app((void (* const)(void)) pc, (uint32_t) sp);
     }
 
@@ -101,16 +151,19 @@ gamepad_t read_buttons() {
         NVIC_SystemReset();
     }
 #endif
+
 #if CLOCK_ONLY
     if(gamepad & GAMEPAD_GAME){
 #else
     if((gamepad & GAMEPAD_LEFT) && (gamepad & GAMEPAD_GAME)){
 #endif
+
 #if SD_BOOTLOADER
         set_bootloader(SD_BOOTLOADER_ADDRESS);
 #else
         set_bootloader(BANK_2_ADDRESS);
 #endif
+
         NVIC_SystemReset();
     }
 
@@ -207,7 +260,6 @@ gnw_mode_t get_gnw_mode(){
     else return GNW_MODE_CLOCK;
 }
 #endif
-
 
 void NMI_Handler(void) {
     __BKPT(0);

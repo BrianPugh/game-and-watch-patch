@@ -36,6 +36,11 @@ static inline void set_bootloader(uint32_t address){
     *BOOTLOADER_JUMP_ADDRESS = (uint32_t *)address;
 }
 
+/*Light sanity checks on what a good stack-pointer and program counter look like */
+static inline bool is_valid(uint32_t pc, uint32_t sp){
+    return ((sp >> 24) == 0x20 ) && ((pc >> 24) == 0x08);
+}
+
 /**
  * Executed on boot; will jump to a non-default program if:
  *     1. the value at `BOOTLOADER_MAGIC_ADDRESS` is `BOOTLOADER_MAGIC`
@@ -48,6 +53,7 @@ void bootloader(){
         *BOOTLOADER_MAGIC_ADDRESS = 0;
         uint32_t sp = (*BOOTLOADER_JUMP_ADDRESS)[0];
         uint32_t pc = (*BOOTLOADER_JUMP_ADDRESS)[1];
+        if (!is_valid(pc, sp)) goto start_ofw;
         start_app((void (* const)(void)) pc, (uint32_t) sp);
     }
 
@@ -79,6 +85,7 @@ void bootloader(){
         *BOOTLOADER_MAGIC_ADDRESS = 0;
         uint32_t sp = (*BOOTLOADER_JUMP_ADDRESS)[0];
         uint32_t pc = (*BOOTLOADER_JUMP_ADDRESS)[1];
+        if (!is_valid(pc, sp)) goto start_ofw;
         start_app((void (* const)(void)) pc, (uint32_t) sp);
     }
 
@@ -92,9 +99,11 @@ void bootloader(){
         uint32_t pc = *((uint32_t*)BANK_2_ADDRESS + 1);
 #endif
 
+        if (!is_valid(pc, sp)) goto start_ofw;
         start_app((void (* const)(void)) pc, (uint32_t) sp);
     }
 
+start_ofw:
     start_app(stock_Reset_Handler, *(uint32_t *) MSP_ADDRESS);
     while(1);
 }
@@ -157,14 +166,19 @@ gamepad_t read_buttons() {
 #else
     if((gamepad & GAMEPAD_LEFT) && (gamepad & GAMEPAD_GAME)){
 #endif
-
+        uint32_t *target_address;
 #if SD_BOOTLOADER
-        set_bootloader(SD_BOOTLOADER_ADDRESS);
+        target_address = SD_BOOTLOADER_ADDRESS;
 #else
-        set_bootloader(BANK_2_ADDRESS);
+        target_address = BANK_2_ADDRESS;
 #endif
+        uint32_t sp = *target_address;
+        uint32_t pc = *(target_address + 1);
 
-        NVIC_SystemReset();
+        if(is_valid(pc, sp)){
+            set_bootloader(target_address);
+            NVIC_SystemReset();
+        }
     }
 
 #if ENABLE_SMB1_GRAPHIC_MODS

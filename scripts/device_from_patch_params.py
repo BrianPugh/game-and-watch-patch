@@ -7,7 +7,7 @@ from patches import Device
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--device", default="mario")
+    parser.add_argument("--device", default="mario", choices=["mario", "zelda"])
     args, _ = parser.parse_known_args()
     device = args.device.upper()
     print(device)

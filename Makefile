@@ -53,7 +53,17 @@ endif
 HEX = $(CP) -O ihex
 BIN = $(CP) -O binary -S
 ECHO  = echo
-GNWMANAGER ?= gnwmanager
+
+FORCE_PYOCD ?= 0
+GNWMANAGER_DEBUG ?= 0
+GNWMANAGER_PATH ?= gnwmanager
+GNWMANAGERVERBOSITY := $(if $(filter 1,$(GNWMANAGER_DEBUG)),--verbosity debug,)
+ifeq ($(FORCE_PYOCD),1)
+GNWMANAGER = $(GNWMANAGER_PATH) $(GNWMANAGERVERBOSITY) -b pyocd
+else
+GNWMANAGER = $(GNWMANAGER_PATH) $(GNWMANAGERVERBOSITY)
+endif
+
 PYTHON ?= python3
 
 #######################################

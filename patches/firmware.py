@@ -486,7 +486,15 @@ class Device:
         cls.name = name
         cls.registry[name] = cls
 
-    def __init__(self, internal_bin, internal_elf, external_bin):
+    def __init__(
+        self,
+        internal_bin,
+        internal_elf,
+        external_bin,
+        *,
+        should_attempt_move_ext_to_int: bool = True,
+        ext_base_offset: int = 0,
+    ):
         self.internal = self.Int(internal_bin, internal_elf)
         self.external = self.Ext(external_bin)
         self.compressed_memory = self.FreeMemory()
@@ -500,6 +508,8 @@ class Device:
         self.ext_offset = 0
         self.int_pos = 0
         self.compressed_memory_pos = 0
+        self.should_attempt_move_ext_to_int = should_attempt_move_ext_to_int
+        self.ext_base_offset = ext_base_offset
 
     def _move_copy(
         self, dst, dst_offset: int, src, src_offset: int, size: int, delete: bool
@@ -633,16 +643,29 @@ class Device:
         return new_loc
 
     def move_ext_external(self, ext, size, reference):
-        """Explicitly just moves ext->ext data"""
+        """Explicitly just moves ext->ext data.
+
+        When ``ext_base_offset`` is set, the data stays at its current byte
+        position inside the external buffer (the on-disk file is unchanged)
+        and only the symbolic destination address in the lookup table is
+        shifted. The file is then meant to be flashed at chip offset
+        ``ext_base_offset``.
+        """
+        delta = self.ext_offset + self.ext_base_offset
         if isinstance(ext, (bytes, bytearray)):
             self.external[self.ext_offset : self.ext_offset + size] = ext
+        elif self.ext_base_offset:
+            for i in range(size):
+                self.lookup[self.external.FLASH_BASE + ext + i] = (
+                    self.external.FLASH_BASE + ext + i + delta
+                )
         else:
             self.external.move(ext, self.ext_offset, size=size)
 
         if reference is not None:
             self.internal.lookup(reference)
 
-        new_loc = ext + self.ext_offset
+        new_loc = ext + delta
 
         return new_loc
 
@@ -654,6 +677,8 @@ class Device:
         This is the primary moving function for data that is already compressed
         or is incompressible.
         """
+        if not self.should_attempt_move_ext_to_int:
+            return self.move_ext_external(ext, size, reference)
         try:
             new_loc = self.move_to_int(ext, size, reference)
             if isinstance(ext, int):
@@ -673,6 +698,8 @@ class Device:
 
         This is the primary moving method for any compressible data.
         """
+        if not self.should_attempt_move_ext_to_int:
+            return self.move_ext_external(ext, size, reference)
         current_len = self.compressed_memory_compressed_len()
 
         try:
@@ -736,7 +763,7 @@ class Device:
         elif isinstance(self, ZeldaGnW):
             is_zelda = True
         metadata = HeaderMetaData(
-            external_flash_size=len(self.external),
+            external_flash_size=self.ext_base_offset + len(self.external),
             is_mario=is_mario,
             is_zelda=is_zelda,
         )

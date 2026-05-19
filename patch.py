@@ -92,6 +92,16 @@ def main():
         "Otherwise, will fallback to internal flash, then external "
         "flash.",
     )
+    parser.add_argument(
+        "--ext-offset",
+        type=lambda s: int(s, 0),
+        default=0,
+        help="Byte offset within the external flash chip where this firmware's "
+        "ext data lives. When > 0, disables relocation-to-internal optimizations "
+        "and shifts all internal references to ext by this amount. "
+        "Example: 0x1000000 puts mario ext at 16MB into a 64MB chip. "
+        "Must be a multiple of 4096. Incompatible with --encrypt.",
+    )
 
     debugging = parser.add_argument_group("Debugging")
     debugging.add_argument(
@@ -107,8 +117,18 @@ def main():
     args.int_firmware = Path(f"internal_flash_backup_{args.device}.bin")
     args.ext_firmware = Path(f"flash_backup_{args.device}.bin")
 
+    if args.ext_offset:
+        if args.ext_offset % 0x1000:
+            parser.error("--ext-offset must be a multiple of 4096 (0x1000)")
+        if args.encrypt:
+            parser.error("--ext-offset is incompatible with --encrypt")
+
     device = Device.registry[args.device](
-        args.int_firmware, args.elf, args.ext_firmware
+        args.int_firmware,
+        args.elf,
+        args.ext_firmware,
+        should_attempt_move_ext_to_int=(args.ext_offset == 0),
+        ext_base_offset=args.ext_offset,
     )
     args = device.argparse(parser)
     device.crypt()  # Decrypt the external firmware

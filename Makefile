@@ -84,6 +84,15 @@ endif
 
 PATCH_PARAMS ?=
 
+# Byte offset within the external flash chip where the patched ext data should
+# live. When non-zero, the patcher disables relocation-to-internal optimizations
+# and shifts ext-flash references by EXT_OFFSET; the flash target writes the
+# binary at the same chip offset via gnwmanager's positional offset argument.
+EXT_OFFSET ?= 0
+ifneq ($(EXT_OFFSET),0)
+PATCH_PARAMS += --ext-offset $(EXT_OFFSET)
+endif
+
 GNW_DEVICE := $(shell $(PYTHON) -m scripts.device_from_patch_params $(PATCH_PARAMS))
 GNW_DEVICE_LOWER := $(shell echo "$(GNW_DEVICE)" | tr 'A-Z' 'a-z')
 
@@ -264,12 +273,12 @@ flash_patched_int: build/internal_flash_patched.bin
 
 flash_patched_ext: build/external_flash_patched.bin
 	if [ -s $< ]; then \
-		$(GNWMANAGER) flash ext $< -- start bank1 \
+		$(GNWMANAGER) flash ext $< $(EXT_OFFSET) -- start bank1 \
 	fi
 .PHONY: flash_patched_ext
 
 flash_patched: build/internal_flash_patched.bin build/external_flash_patched.bin
-	$(GNWMANAGER) flash ext build/external_flash_patched.bin \
+	$(GNWMANAGER) flash ext build/external_flash_patched.bin $(EXT_OFFSET) \
 		-- flash bank1 build/internal_flash_patched.bin \
 		-- start bank1
 .PHONY: flash_patched

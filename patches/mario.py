@@ -712,19 +712,21 @@ class MarioGnW(Device, name="mario"):
 
             self.ext_offset -= 8192
         else:
+            nvram_a = 0xFF000 + self.ext_offset + self.ext_base_offset
+            nvram_b = 0xFE000 + self.ext_offset + self.ext_base_offset
             printi("Update NVRAM read addresses")
             self.internal.asm(
                 0x4856,
                 "ite ne; "
-                f"movne.w r4, #{hex(0xff000 + self.ext_offset)}; "
-                f"moveq.w r4, #{hex(0xfe000 + self.ext_offset)}",
+                f"movne.w r4, #{hex(nvram_a)}; "
+                f"moveq.w r4, #{hex(nvram_b)}",
             )
             printi("Update NVRAM write addresses")
             self.internal.asm(
                 0x48C0,
                 "ite ne; "
-                f"movne.w r4, #{hex(0xff000 + self.ext_offset)}; "
-                f"moveq.w r4, #{hex(0xfe000 + self.ext_offset)}",
+                f"movne.w r4, #{hex(nvram_a)}; "
+                f"moveq.w r4, #{hex(nvram_b)}",
             )
 
         # Finally, shorten the firmware

@@ -168,15 +168,15 @@ gamepad_t read_buttons() {
 #endif
         uint32_t *target_address;
 #if SD_BOOTLOADER
-        target_address = SD_BOOTLOADER_ADDRESS;
+        target_address = (uint32_t *)SD_BOOTLOADER_ADDRESS;
 #else
-        target_address = BANK_2_ADDRESS;
+        target_address = (uint32_t *)BANK_2_ADDRESS;
 #endif
         uint32_t sp = *target_address;
         uint32_t pc = *(target_address + 1);
 
         if(is_valid(pc, sp)){
-            set_bootloader(target_address);
+            set_bootloader((uint32_t)target_address);
             NVIC_SystemReset();
         }
     }

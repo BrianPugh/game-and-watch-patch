@@ -25,6 +25,23 @@ cross-region calls and literal pools resolve. Function symbols come from the
 `.syms` file plus auto-detected vector-table handlers, `ldr.w pc, [pc]`
 veneers, and literal-pool pointers to external-flash function prologues.
 
+## Code references (`xrefs.py`)
+
+```bash
+python tools/re/xrefs.py --device=mario [--units] [--json build/re/mario_xrefs.json]
+```
+
+Recursive-descent disassembly (capstone) of internal flash, the ITCM code and
+the external-flash code, seeded from the vector table, the static-constructor
+table, `.syms` and every Thumb pointer it finds. It prints what relocating
+internal code has to handle: byte classification, the units that must move
+together (armcc shares literal pools across a module), the branches between
+units, and every absolute or self-relative reference into internal code
+(vector table, constructors, RWDATA table, literal pools, pointer tables in
+flash, ITCM/external veneers, DTCM `.data`). It also lists `push` prologues
+nothing references: dead code, or reached some way it doesn't model. Mario
+only so far (`LAYOUT` in the script).
+
 Hopper's pseudocode for large, heavily-predicated functions (e.g. Mario's
 `main_loop_tick`) can explode in size; read the objdump assembly instead.
 

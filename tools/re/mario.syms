@@ -115,8 +115,8 @@
 # vector table: 146 handlers. Static-ctor table 0x08017e00-0x08017e18: 6 self-relative entries. RWDATA table 0x080180a4: self-relative offsets.
 0x00001e5c data itcm_veneers                          # rwdata0 starts with `ldr.w pc, [pc]` veneers into internal flash (aeabi_*, memcpy_bytes, 0x08004cb9-0x08004cd9 accessors on ctx 0x20010400)
 0x900c0210 data ext_veneers                           # 9 `ldr.w pc, [pc]` veneers from external code into internal flash; ext code literals also point at 0x0800061c (s8 table)
-0x080004a0 data fn_table_0x80004a0                    # 48 thumb fn pointers into 0x08015000-0x08015e00; base loaded at 0x08016594
-0x080005b8 data fn_table_0x80005b8                    # 12 thumb fn pointers into 0x0800e23b-0x0800e7b3; region base 0x08000530 loaded at 0x0800eb6c
+0x080004a0 data fn_table_0x80004a0                    # 36 thumb fn pointers into 0x08015091-0x08015dcd (0x08015dcd repeats as a default); base loaded at 0x08016594
+0x08000530 data fn_table_0x8000530                    # 59 thumb fn pointers into 0x0800d825-0x0800e7b3 (the 0x0800d39c module); base loaded at 0x0800eb6c
 0x08006010 func adr_jump_table_dispatch               # adr r0, tbl; ldr r1, [r0, r5, lsl #2]; bx r1 -- absolute targets inline (0x08006020); also 0x08005e7c
 # --- external flash (decrypted)
 0x900aace4 data iconset_4bpp                          # 256px wide, 16x16 tiles, 0x80 B/tile

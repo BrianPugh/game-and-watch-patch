@@ -166,6 +166,11 @@ class MarioGnW(Device, name="mario"):
             action="store_true",
             help="Remove the 5 sleeping images.",
         )
+        group.add_argument(
+            "--no-factory-test",
+            action="store_true",
+            help="Remove the factory CHARGE AND KEY TEST screen (~5KB of internal code).",
+        )
 
         group = parser.add_argument_group("High level flash savings flags")
         group.add_argument(
@@ -220,6 +225,7 @@ class MarioGnW(Device, name="mario"):
         if self.args.slim:
             self.args.no_mario_song = True
             self.args.no_sleep_images = True
+            self.args.no_factory_test = True
 
         return self.args
 
@@ -229,6 +235,21 @@ class MarioGnW(Device, name="mario"):
 
         printi("Intercept button presses for macros.")
         self.internal.bl(0x6B52, "read_buttons")
+
+        if self.args.no_factory_test:
+            printi("Remove the factory CHARGE AND KEY TEST (g_gnw_mode 0x01).")
+            # game_reload: never enter test mode on the magic boot value.
+            self.internal.b(0x66D2, 0x66DA)
+            # Its static constructor -> an existing `bx lr`.
+            ctor_entry, bx_lr = 0x1_7E08, 0x659A
+            self.internal.replace(
+                ctor_entry, ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF, size=4
+            )
+            # main_loop_tick calls, each guarded by g_gnw_mode == 1.
+            for call in (0x6CC4, 0x6DBC, 0x70E4, 0x711C):
+                self.internal.nop(call, 2)
+            # Thunks, constructor, body and literal pools.
+            self.free_int(0x1_1A94, 0x1_2EE4)
 
         if self.args.game_select_dual_boot:
             printi("Add dual-boot entry to the game-select menu.")
@@ -776,7 +797,9 @@ class MarioGnW(Device, name="mario"):
         self.internal.add(0x1_06EC, self.ext_offset)
         self.external.shorten(self.ext_offset)
 
-        internal_remaining_free = len(self.internal) - self.int_pos
+        internal_remaining_free = (
+            len(self.internal) - self.int_pos + self.int_hole_space
+        )
         compressed_memory_free = (
             len(self.compressed_memory) - self.compressed_memory_pos
         )

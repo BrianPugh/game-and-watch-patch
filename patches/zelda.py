@@ -413,7 +413,9 @@ class ZeldaGnW(Device, name="zelda"):
             0x1B070, data_offset=self.int_pos
         )
 
-        internal_remaining_free = len(self.internal) - self.int_pos
+        internal_remaining_free = (
+            len(self.internal) - self.int_pos + self.int_hole_space
+        )
         compressed_memory_free = (
             len(self.compressed_memory) - self.compressed_memory_pos
         )

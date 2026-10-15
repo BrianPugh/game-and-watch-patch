@@ -59,3 +59,19 @@ SMB2, BALL and the pause menu, then lists regions that still hold the marker
 GWemu fills some buffers (e.g. audio) in some runs only, so run it more than
 once and trust only regions that are free every time. Results are recorded in
 `tools/re/mario.syms`.
+
+## Function coverage
+
+```bash
+build/gwprov-venv/bin/python tools/emu/coverage.py --gwemu-bin /path/to/gwemu
+```
+
+Breaks on every stock function entry from reset and records the first mode
+(boot, clock, SMB1, BALL, pause, SMB2) each one runs in, then lists the
+largest never-run ranges. That's how the factory test (`--no-factory-test`)
+was found. "Never ran" isn't proof of dead code: check callers first, and
+re-run this after removing code (removed ranges are filled with `udf`, so a
+missed path faults).
+
+GWemu only honors breakpoints set while the target is halted, and resuming
+from an armed breakpoint re-hits it; the tool clears, steps and re-arms.

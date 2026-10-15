@@ -16,6 +16,18 @@
 0x08010df4 func mode_is_game_or_clock_bits            # mode == (mode & 0xc038)
 0x08004b60 func memcpy_bytes                          # (dst, src, n) byte loop
 0x0800661c func game_reload                           # on g_state_transition==1: memcpy(ITCM 0, ext 0x90000000, 0x1e5c), then memcpy(ITCM 0x2cb4, ext 0x900f5858, 0) -- length 0, so the ext block is dead
+# --- factory "CHARGE AND KEY TEST" (g_gnw_mode 0x01; confirmed by forcing the mode in GWemu)
+# 0x080066d4 (in game_reload) enters factory test: game_reload: if boot arg r6 == 0xffff00ff, g_gnw_mode = 1
+0x08011a94 func factory_test_init_thunk               # -> 0x08011abe with ctx 0x20010bdc
+0x08011abe func factory_test_init                     # runs every boot (resets ctx, draw color 0x5555)
+0x08011a9a func factory_test_tick_thunk               # -> 0x08011b0c; called from main_loop_tick @0x08006cc4 when mode==1
+0x08011aa4 func factory_test_thunk_b                  # -> 0x08011eb4; main_loop_tick @0x08006dbc when mode==1
+0x08011aac func factory_test_thunk_c                  # -> 0x08012a98; main_loop_tick @0x0800711c
+0x08011ab4 func factory_test_thunk_d                  # -> 0x08012cf4; main_loop_tick @0x080070e4 when mode==1
+0x08011b0c func factory_test_tick                     # 0x08011b0c-0x08012ee4 (5080 B) never runs outside mode 1; no other callers
+0x08016f40 func draw_set_color565
+0x08016f48 func draw_set_color_rgb                    # (r, g, b) -> RGB565
+0x080114fc func mode04_tick_UNVERIFIED                # called when (mode & 0xc6) == 0x04 (mario song?); forcing mode 4 in GWemu faults
 # --- overlay UI (pause/settings + game-select share one slide-in overlay)
 0x0800c4f0 func ui_init
 0x0800c4be func ui_expand_1bpp_font

@@ -194,6 +194,16 @@ class MarioGnW(Device, name="mario"):
             help="Remove the factory CHARGE AND KEY TEST screen (~5KB of internal code).",
         )
 
+        group = parser.add_argument_group("Experimental")
+        group.add_argument(
+            "--relocate-stock",
+            type=lambda s: int(s, 0),
+            metavar="ADDR",
+            help="Run the stock firmware relocated to this bank-2 address "
+            "(e.g. 0x08120000), written to a separate bank-2 image. "
+            "Tests stock-code relocation; see tools/emu/README.md.",
+        )
+
         group = parser.add_argument_group("High level flash savings flags")
         group.add_argument(
             "--slim",
@@ -252,6 +262,15 @@ class MarioGnW(Device, name="mario"):
         return self.args
 
     def patch(self):
+        if self.args.relocate_stock:
+            from .relocate import Relocation
+
+            printi(f"Relocate the stock firmware to 0x{self.args.relocate_stock:08X}.")
+            # Everything below the init table (0x0801807c), vector table included.
+            self.relocation = Relocation(
+                self, 0x0800_0000, 0x0801_807C, self.args.relocate_stock
+            )
+
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
         self.internal.replace(0x4, "bootloader")
 
@@ -841,6 +860,9 @@ class MarioGnW(Device, name="mario"):
         # The memcpy to this address is all zero, so i guess its not used?
         self.external.replace(0xF5858, b"\x00" * 34728)  # refence at internal 0x7210
         self.ext_offset -= 34728
+
+        if self.relocation:
+            self.relocation.fix_ram_images()
 
         if self.compressed_memory_pos:
             # Compress and copy over compressed_memory

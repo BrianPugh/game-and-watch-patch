@@ -30,8 +30,8 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from patches import Device  # noqa: E402
+from patches import xrefs  # noqa: E402
 from patches.compression import lz77_decompress  # noqa: E402
-from tools.re import xrefs  # noqa: E402
 
 INT_BASE = xrefs.INT_BASE
 EXT_BASE = xrefs.EXT_BASE
@@ -81,7 +81,8 @@ def main():
         raise SystemExit("Only --delta 0x100000 (bank 2) is wired up for GWemu so far.")
 
     with contextlib.redirect_stdout(io.StringIO()):
-        internal, code, cls, refs, other, _ = xrefs.analyze(args.device)
+        a = xrefs.analyze(args.device)
+    internal, refs = a.internal, a.refs
     device_cls = Device.registry[args.device]
     key = internal[device_cls.Int.KEY_OFFSET : device_cls.Int.KEY_OFFSET + 16]
     nonce = internal[device_cls.Int.NONCE_OFFSET : device_cls.Int.NONCE_OFFSET + 8]
@@ -107,8 +108,8 @@ def main():
     counts = {}
     for r in refs:
         kind, src, target = r["kind"], r["src"], r["target"]
-        if "self-relative" in kind:
-            continue  # Moves with the image.
+        if "self-relative" in kind or kind == "pc-offset literal":
+            continue  # Source and target both move with the image.
         if "verify" in kind and not kind.startswith("data pointer in flash"):
             continue  # Pointer-like data words outside code; left alone.
         if kind in (

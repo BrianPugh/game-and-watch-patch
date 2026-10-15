@@ -14,7 +14,7 @@ from .exception import (
     ParsingError,
 )
 from .patch import FirmwarePatchMixin
-from .utils import printd, round_down_word, round_up_page, round_up_word
+from .utils import printd, printi, round_down_word, round_up_page, round_up_word
 
 
 def _val_to_color(val):
@@ -503,6 +503,9 @@ class Device:
         self.compressed_memory_pos = 0
         # [start, end) internal offsets of removed stock code, reusable for data.
         self.int_holes = []
+        # patches.relocate.Relocation when stock code is moved; bank2 holds it.
+        self.relocation = None
+        self.bank2 = bytearray()
 
     def _move_copy(
         self, dst, dst_offset: int, src, src_offset: int, size: int, delete: bool
@@ -772,6 +775,9 @@ class Device:
         )
         # hdmi-cec = 0x01B8; not used in the gnw hardware.
         self.internal.replace(0x01B8, metadata.pack())
+        if self.relocation:
+            counts = self.relocation.apply()
+            printi(f"Relocated stock code; fixed {counts}")
         return out
 
     def patch(self):

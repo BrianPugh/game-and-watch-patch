@@ -39,6 +39,8 @@ REPO = Path(__file__).resolve().parents[2]
 READ_BUTTONS_RETURN = 0x08006B56
 
 GNW_MODE = 0x20001044
+STATE_TRANSITION = 0x2000103D  # u8; 0 = idle
+UI_STATE = 0x20010694  # u8; 0 = no overlay, 5 = overlay open
 UI_GAME_SELECT_CHOICE = 0x20010698
 BANK2 = 0x08100000
 BANK2_SPIN_PC = BANK2 + 8
@@ -107,8 +109,13 @@ def make_profile(profile: Path, bank2: Path, internal: Path, external: Path):
     )
 
 
-def make_bank2(path: Path, kind: str):
+def make_bank2(path: Path, kind: str, base: Path = None):
+    """Bank 2: ``base`` (or erased flash), with a tiny image or erased header at 0."""
     data = bytearray(b"\xff" * 0x40000)
+    if base is not None:
+        image = base.read_bytes()
+        data[: len(image)] = image
+    data[:16] = b"\xff" * 16
     if kind == "spin":
         # Initial SP, reset vector -> 0x08100008 (Thumb), then `b .`.
         data[0:8] = struct.pack("<II", 0x2002_0000, BANK2_SPIN_PC | 1)
@@ -145,6 +152,32 @@ class Driver:
         self.dbg.backend.write_register("r0", 0)
         self.dbg.resume()
 
+    def read8(self, addr: int) -> int:
+        self.dbg.halt()
+        value = self.dbg.backend.read_memory(addr, 1)[0]
+        self.dbg.resume()
+        return value
+
+    def wait_until(self, condition, what: str, max_frames: int = 600, step: int = 10):
+        """Run idle frames until ``condition()``; animations don't take a
+        fixed number of frames (relocated builds needed different counts)."""
+        for _ in range(0, max_frames, step):
+            if condition():
+                return
+            self.frames("", step)
+        raise RuntimeError(f"timed out waiting for {what}")
+
+    def press_until(self, buttons: str, condition, what: str, tries: int = 10):
+        """Tap ``buttons`` until ``condition()``; the firmware ignores some
+        presses (e.g. GAME during a clock animation)."""
+        for _ in range(tries):
+            self.tap(buttons, settle=10)
+            try:
+                return self.wait_until(condition, what, max_frames=120)
+            except RuntimeError:
+                pass
+        raise RuntimeError(f"{buttons} never led to {what}")
+
     def read16(self, addr: int) -> int:
         self.dbg.halt()
         value = struct.unpack("<H", self.dbg.backend.read_memory(addr, 2))[0]
@@ -168,14 +201,26 @@ def run(driver: Driver, bank2: str) -> bool:
     # every frame's input is injected; never let the firmware run un-driven
     # mid-sequence or the "release" of the stuck button registers as a press.
     driver.frames("", 30)
-    driver.tap("TIME", settle=90)  # Leave the first-boot "PRESS TIME" screen.
+    driver.tap("TIME", settle=30)  # Leave the first-boot "PRESS TIME" screen.
+    driver.wait_until(
+        lambda: driver.read8(STATE_TRANSITION) == 0 and driver.read8(UI_STATE) == 0,
+        "the clock",
+    )
     driver.shot("01_clock")
-    driver.tap("GAME", settle=40)  # Menu slide-in.
+    # Retry only until the overlay reacts; a second GAME while it slides in
+    # would close it again.
+    driver.press_until("GAME", lambda: driver.read8(UI_STATE) != 0, "the overlay")
+    driver.wait_until(lambda: driver.read8(UI_STATE) == 5, "the game-select menu")
     driver.shot("02_menu")
 
     ok = True
     for i in range(3):
-        driver.tap("DOWN")
+        before = driver.read16(UI_GAME_SELECT_CHOICE)
+        driver.press_until(
+            "DOWN",
+            lambda: driver.read16(UI_GAME_SELECT_CHOICE) != before,
+            "the cursor to move",
+        )
         driver.shot(f"03_down{i + 1}")
     choice = driver.read16(UI_GAME_SELECT_CHOICE)
 
@@ -221,14 +266,28 @@ def main():
     parser.add_argument(
         "--external", type=Path, default=REPO / "build/external_flash_patched.bin"
     )
+    parser.add_argument(
+        "--bank2-image",
+        type=Path,
+        help="Bank-2 contents (e.g. build/internal_flash_patched_bank2.bin from "
+        "--relocate-stock); the --bank2 header goes over its first bytes.",
+    )
+    parser.add_argument(
+        "--stock-offset",
+        type=lambda s: int(s, 0),
+        default=0,
+        help="How far the stock firmware was relocated (--relocate-stock minus 0x08000000).",
+    )
     args = parser.parse_args()
+    global READ_BUTTONS_RETURN
+    READ_BUTTONS_RETURN += args.stock_offset
 
     work = args.work_dir.resolve()
     out_dir = work / f"shots_{args.bank2}"
     out_dir.mkdir(parents=True, exist_ok=True)
     profile = work / "mario-profile"
     bank2 = work / f"bank2_{args.bank2}.bin"
-    make_bank2(bank2, args.bank2)
+    make_bank2(bank2, args.bank2, args.bank2_image)
     make_profile(profile, bank2, args.internal.resolve(), args.external.resolve())
 
     start_instance(str(profile), headless=True, gwemu_bin=str(args.gwemu_bin.resolve()))

@@ -93,6 +93,12 @@
 #   AHB 0x3001fbf0-0x30020000 (1040 B) also unused
 #   AHB 0x300145b0-0x3001e000 (39504 B): tail of our linker RAM region (__RAM_ORIGIN__/__RAM_LENGTH__) beyond our .data/.bss/stack; stock never writes it
 #   AHB 0x30000000-0x30010000 and AXI 0x2408efe0-0x24098fe0: written in some runs only (look like audio buffers); treat as used. Re-run: tools/emu/ram_probe.py
+# --- startup / frame pacing
+0x08017b20 func SystemInit                            # first call from stock_Reset_Handler (literal 0x08017a4c); sets SCB->VTOR = 0x08000000 via `mov.w r2, #0x8000000` @0x08017b76
+0x08017ff8 func stock_main_entry                      # stock_Reset_Handler tail-jumps here (literal 0x08017a50)
+0x08013b56 func HAL_LTDC_IRQHandler                   # via vector104 (LTDC IRQ88) thunk @0x08017aa6, handle 0x2001085c; line IRQ -> 0x0801739a (empty), reload IRQ -> ltdc_reload_callback
+0x08010b5e func ltdc_reload_callback                  # sets g_frame_ready = 1
+0x20010f1c data g_frame_ready                         # main_loop_tick waits on it with wfi @0x080070cc, clears it @0x08010b14
 # --- compiler runtime (armcc __aeabi_*); reached from ITCM/external code through veneers
 0x08002b84 func aeabi_memset                          # (dst, n, c)
 0x08004d5c func aeabi_memclr                          # (dst, n) -> aeabi_memset with c=0
@@ -117,8 +123,10 @@
 0x900c0210 data ext_veneers                           # 9 `ldr.w pc, [pc]` veneers from external code into internal flash; ext code literals also point at 0x0800061c (s8 table)
 0x080004a0 data fn_table_0x80004a0                    # 36 thumb fn pointers into 0x08015091-0x08015dcd (0x08015dcd repeats as a default); base loaded at 0x08016594
 0x08000530 data fn_table_0x8000530                    # 59 thumb fn pointers into 0x0800d825-0x0800e7b3 (the 0x0800d39c module); base loaded at 0x0800eb6c
+0x0800b758 func ext_table_stubs_0x800b758             # 0x0800b758-0x0800b801: tiny handlers reached only through ext_fn_table_0x900a9ce4
 0x08006010 func adr_jump_table_dispatch               # adr r0, tbl; ldr r1, [r0, r5, lsl #2]; bx r1 -- absolute targets inline (0x08006020); also 0x08005e7c
 # --- external flash (decrypted)
+0x900a9ce4 data ext_fn_table_0x900a9ce4               # 18 thumb fn pointers (20-byte records) into ext_table_stubs_0x800b758; inside the 8352-B blob at 0x900a8c44 the patcher moves to SRAM3 (ref 0x0800bc44)
 0x900aace4 data iconset_4bpp                          # 256px wide, 16x16 tiles, 0x80 B/tile
 0x900aebe4 data ui_font_1bpp                          # 0x2c 8x8 glyphs, expanded by ui_expand_1bpp_font
 0x200010b4 data g_input                               # +6: u16 buttons held last frame (main_loop_tick stores read_buttons() result here)

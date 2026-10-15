@@ -51,6 +51,18 @@ LAYOUT = {
         "itcm_from_ext": 0x1E5C,
         # External-flash code (ends where the sleep images start).
         "ext_code": (0x900C_0000, 0x900C_58F8),
+        # External-flash ROMs and media; pointer-like words in them are false positives.
+        "ext_skip": [
+            (0x9000_1E60, 0x9000_BE60),  # SMB1 ROM
+            (0x9001_2D44, 0x9009_8B84),  # mario song
+            (0x9009_8B84, 0x900A_8B84),  # clock tileset
+            (0x900A_EC58, 0x900B_EC58),  # SMB2 ROM
+            (0x900C_58F8, 0x900F_4D18),  # sleep images
+            (
+                0x900F_5858,
+                0x900F_DF00,
+            ),  # ITCM overlay game_reload copies 0 bytes of (dead)
+        ],
     },
 }
 
@@ -256,6 +268,12 @@ def analyze(device):
     def in_int(a):
         return INT_BASE + VECTOR_TABLE_END <= a < code_end
 
+    image_end = INT_BASE + len(internal.rstrip(b"\xff"))
+
+    def in_image(a):
+        # The used image, plus the bank end (stock compares the image end against it).
+        return INT_BASE <= a <= image_end or a == INT_BASE + len(internal)
+
     # ITCM image: external-flash prefix plus the ITCM rwdata block.
     itcm_dst, itcm_data = next((dst, data) for dst, data in rwdata if dst < 0x0001_0000)
     itcm = bytearray(itcm_dst + len(itcm_data))
@@ -305,17 +323,63 @@ def analyze(device):
         for src, lit, sz in c.pcrel:
             if sz == 4 and c.contains(lit):
                 v = u32(c.mem, c.base, lit)
-                if in_int(v & ~1):
-                    seeds.add(v)
+                if in_image(v):
+                    if v & 1 and in_int(v & ~1):
+                        seeds.add(v)
                     refs.append({"kind": f"{name} literal", "src": lit, "target": v})
         for src, t, _, _ in c.branches:
             if in_int(t):
                 refs.append({"kind": f"{name} direct branch", "src": src, "target": t})
+    # Remaining external data (e.g. the NES emulator's handler table at 0x900a9ce4).
+    covered = set()
+    for c in other.values():
+        for a, (sz, _, _) in c.insns.items():
+            covered.update(range(a, a + sz))
+        for lit, sz in c.literals().items():
+            covered.update(range(lit, lit + sz))
+    skip = layout["ext_skip"] + [
+        layout["ext_code"],
+        (EXT_BASE, EXT_BASE + layout["itcm_from_ext"]),
+    ]
+    candidates = {}
+    for o in range(0, len(external) - 3, 4):
+        a = EXT_BASE + o
+        v = struct.unpack_from("<I", external, o)[0]
+        if (
+            in_image(v)
+            and a not in covered
+            and not any(lo <= a < hi for lo, hi in skip)
+        ):
+            candidates[a] = v
+    code_ptrs = {a for a, v in candidates.items() if v & 1 and in_int(v & ~1)}
+    # Isolated pointer-like words are usually code or pixel bytes; tables come in runs.
+    # Accept runs, then grow to pointers whose targets cluster with accepted ones.
+    accepted = {
+        a
+        for a in code_ptrs
+        if any(b in code_ptrs for b in range(a - 32, a + 33, 4) if b != a)
+    }
+    while True:
+        near = {
+            a
+            for a in code_ptrs - accepted
+            if any(abs(candidates[a] - candidates[b]) <= 0x100 for b in accepted)
+        }
+        if not near:
+            break
+        accepted |= near
+    for a, v in sorted(candidates.items()):
+        if a in accepted:
+            seeds.add(v)
+            refs.append({"kind": "external data pointer", "src": a, "target": v})
+        else:
+            refs.append({"kind": "external data word (verify)", "src": a, "target": v})
     for dst, data in dtcm:
         for o in range(0, len(data) - 3, 4):
             v = struct.unpack_from("<I", data, o)[0]
-            if in_int(v & ~1):
-                seeds.add(v)
+            if in_image(v):
+                if v & 1 and in_int(v & ~1):
+                    seeds.add(v)
                 refs.append({"kind": "DTCM .data", "src": dst + o, "target": v})
 
     # Internal flash, iterated: Thumb pointers in literals or unknown bytes become seeds.
@@ -347,13 +411,21 @@ def analyze(device):
     cls = classify(code)
     for lit, sz in code.literals().items():
         v = iword(lit) if sz == 4 else 0
-        if INT_BASE <= v < INT_BASE + len(internal):
+        if in_image(v):
             refs.append({"kind": "literal", "src": lit, "target": v})
     for lo, hi in unknown_runs(cls, code.lo):
         for o in range((lo + 3) & ~3, hi - 3, 4):
             v = iword(o)
             if v & 1 and (v & ~1) in code.insns:
                 refs.append({"kind": "pointer in flash data", "src": o, "target": v})
+            elif in_image(v):
+                refs.append(
+                    {
+                        "kind": "data pointer in flash data (verify)",
+                        "src": o,
+                        "target": v,
+                    }
+                )
 
     unreferenced = []
     ctor_lo, ctor_hi = layout["ctor_table"]

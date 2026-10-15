@@ -42,6 +42,22 @@ flash, ITCM/external veneers, DTCM `.data`). It also lists `push` prologues
 nothing references: dead code, or reached some way it doesn't model. Mario
 only so far (`LAYOUT` in the script).
 
+## Relocation test (`shift_image.py`)
+
+```bash
+python tools/re/shift_image.py --device=mario          # -> build/re/shift/
+build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu
+```
+
+Moves the whole stock image to bank 2 (`0x08100000`) using the `xrefs.py`
+map: every absolute reference gets the offset added, plus the `SCB->VTOR`
+immediate in `SystemInit`. Relative branches and PC-relative loads need no
+change. The rwdata blocks are re-encoded as literal-only LZ77 so the ITCM and
+DTCM pointers inside them can be patched. Bank 1 keeps only the vector table
+and is otherwise `udf`, so any reference the map misses faults. This is the
+completeness test for the map (and the first building block for running
+2 stock firmwares side by side).
+
 Hopper's pseudocode for large, heavily-predicated functions (e.g. Mario's
 `main_loop_tick`) can explode in size; read the objdump assembly instead.
 

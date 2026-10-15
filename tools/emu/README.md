@@ -77,3 +77,16 @@ missed path faults).
 
 GWemu only honors breakpoints set while the target is halted, and resuming
 from an armed breakpoint re-hits it; the tool clears, steps and re-arms.
+
+## Relocated stock image
+
+```bash
+python tools/re/shift_image.py --device=mario
+build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu
+```
+
+Boots the stock image relocated to bank 2 (see `tools/re/README.md`) and
+plays the `coverage.py` phases with input injected at the shifted
+`read_buttons` return. A phase fails if that site stops being reached (fault
+or hang) or the CPU is caught in bank 1. `--images build/re/shift/stock --delta 0`
+runs the same steps on unshifted images to check the harness itself.

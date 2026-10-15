@@ -100,6 +100,17 @@ gnw_mode_t get_gnw_mode();
 
 void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n);
 
+/**
+ * Returns `true` if the dual-boot target (bank 2, or the SD bootloader) has a
+ * plausible vector table.
+ */
+bool dual_boot_target_valid();
+
+/**
+ * Reset into the dual-boot target. Returns only if the target is invalid.
+ */
+void launch_dual_boot();
+
 #ifdef __cplusplus
 }
 #endif

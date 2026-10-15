@@ -1,0 +1,62 @@
+# addr        kind  name                              # notes
+# --- core / previously known (Core/Inc/stock_firmware_mario.h, patches/mario.py)
+0x08017a44 func stock_Reset_Handler
+0x08010d48 func read_buttons                          # returns gamepad bitmask (GAMEPAD_* in stock_firmware_common.h)
+0x08010dc2 func is_usb_connected
+0x080063a0 func sleep
+0x08010e10 func prepare_clock_rom
+0x08018004 func lz77_decompress_rwdata
+0x08017dc8 func bss_rwdata_init
+# --- main loop
+0x080067e8 func main_loop_tick                        # top-level state machine; one call per frame
+0x0800653e func reset_idle_timers
+0x08006560 func set_emulator_frame_callback
+0x08012ee4 func mode_is_game_only                     # mode == (mode & 0xc030)
+0x08012f00 func mode_is_clock_or_game
+0x08010df4 func mode_is_game_or_clock_bits            # mode == (mode & 0xc038)
+# --- overlay UI (pause/settings + game-select share one slide-in overlay)
+0x0800c4f0 func ui_init
+0x0800c4be func ui_expand_1bpp_font
+0x0800ca00 func ui_handle_input                       # (held, pressed); called once at 0x08006c7e
+0x0800c584 func ui_open_overlay                       # (is_game_select); GAME->1 @0x08006cf6, PAUSE->0 @0x08006f94
+0x0800c5b6 func ui_overlay_reset
+0x0800c5d2 func ui_close_overlay_save_settings        # writes brightness/volume to nvram (ids 6,7)
+0x0800c604 func ui_begin_transition_cover             # ui_state=7
+0x0800c62e func ui_begin_transition_uncover           # ui_state=9
+0x0800c69c func ui_get_transition_pending
+0x0800c6b2 func ui_clear_transition_pending
+0x0800c6de func ui_get_state
+0x0800c6e6 func ui_cursor_wrap_step
+0x0800c716 func ui_slider_step
+0x0800c74a func ui_reset_blink
+0x0800c858 func game_select_handle_input              # called once at 0x0800cb18
+0x0800648e func game_select_next                      # DOWN: SMB1->SMB2->BALL->SMB1; called once at 0x0800c89c
+0x080064a8 func game_select_prev                      # UP; called once at 0x0800c894
+0x0800c8d8 func settings_clock_handle_input
+0x0800c990 func settings_game_handle_input
+0x0800d01c func ui_render_overlay                     # per-frame overlay renderer; called at 0x08007070
+0x0800cca2 func game_select_draw                      # called once at 0x0800d236
+0x0800cd60 func settings_clock_draw
+0x0800ceb6 func settings_game_draw
+0x0800c360 func ui_tile_ptr                           # idx<0x30: RAM font glyph; else iconset tile (idx-0x30)
+0x0800c37c func ui_draw_tile16
+0x0800c3ae func ui_draw_tile_string                   # (dst, tile_idx_bytes, n)
+0x0800c3d0 func ui_blit_4bpp                          # (dst, src, w, h, pal_hi_nibble); src stride 256px
+0x0800c468 func ui_format_time_digits
+0x0800cb9e func ui_set_dirty_rect                     # (rect*, x, y, w, h)
+0x0800cc06 func ui_draw_panel                         # (dst, w, h, color)
+# --- RAM
+0x20001034 data g_state                               # main game-state struct
+0x2000103d data g_state_transition                    # g_state+9: 0 idle,1/2 reload,3 begin switch,4 covering,5 uncovering
+0x20001044 data g_gnw_mode                            # u16: 0x02 clock,0x04 mario-song,0x08 BALL,0x10 SMB1,0x20 SMB2,0x40 first-boot "PRESS TIME" screen (observed 0x52 in GWemu); 0x80 UNVERIFIED (set on 3-min idle -> likely sleep-screen); 0x01 UNKNOWN (no sleep, skips UI)
+0x20010694 data ui_state                              # 0 none, 4 opening (c584), 5 open, 6 closing (c5d2), 7 cover-start (c604), 9 uncover-start (c62e); 8 = cover done (main loop waits for it); exact animation sub-states UNVERIFIED
+0x20010698 data ui_game_select_choice                 # u16 mode value under cursor
+0x2001069a data ui_is_game_select                     # 1 = game-select overlay, 0 = settings overlay
+0x200106a0 data ui_blink_counter
+0x200106a5 data ui_req_clock                          # set by TIME in game-select
+0x200106a6 data ui_req_switch_game                    # set by A in game-select if choice != current
+0x20010f18 data ui_font_ptr
+# --- external flash (decrypted)
+0x900aace4 data iconset_4bpp                          # 256px wide, 16x16 tiles, 0x80 B/tile
+0x900aebe4 data ui_font_1bpp                          # 0x2c 8x8 glyphs, expanded by ui_expand_1bpp_font
+0x200010b4 data g_input                               # +6: u16 buttons held last frame (main_loop_tick stores read_buttons() result here)

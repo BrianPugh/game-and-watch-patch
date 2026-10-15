@@ -247,3 +247,94 @@ def decode_backdrop(data):
     im = Image.open(BytesIO(out))
 
     return im, idx
+
+
+# Nibble roles in the stock game-select menu icons (sampled from the SMB1 icon).
+_ICON_HIGHLIGHT = 5  # Top/left frame edge and text.
+_ICON_BACKGROUND = 6
+_ICON_SHADOW = 7  # Bottom/right frame edge.
+_ICON_TEXT_SHADOW = 0
+
+
+def _default_bitmap_font():
+    from PIL import ImageFont
+
+    # Pillow >= 10.1 returns a scalable (anti-aliased) font from load_default().
+    loader = getattr(ImageFont, "load_default_imagefont", ImageFont.load_default)
+    return loader()
+
+
+def _ink(text, font):
+    """Render ``text`` at 1x and crop it to its inked pixels."""
+    from PIL import ImageDraw
+
+    left, top, right, bottom = font.getbbox(text)
+    img = Image.new("1", (right - left, bottom - top))
+    ImageDraw.Draw(img).text((-left, -top), text, fill=1, font=font)
+    return img.crop(img.getbbox())
+
+
+def _wrap_words(words, font, max_width):
+    lines = []
+    for word in words:
+        if lines and _ink(f"{lines[-1]} {word}", font).width <= max_width:
+            lines[-1] = f"{lines[-1]} {word}"
+        else:
+            lines.append(word)
+    return lines
+
+
+def render_label_icon(label: str, width: int = 96, height: int = 48) -> bytes:
+    """Render a game-select menu icon containing ``label``.
+
+    The icon mimics the stock menu icons' frame and colors, and is returned
+    as linear 4bpp (high nibble first) pixel data, ``width * height // 2`` bytes.
+
+    Raises
+    ------
+    ValueError
+        If the label cannot fit, even at 1x scale.
+    """
+    font = _default_bitmap_font()
+    words = label.split()
+    inner_w, inner_h = width - 6, height - 6
+    line_spacing = 2
+
+    for scale in (3, 2, 1):
+        lines = [
+            _ink(line, font) for line in _wrap_words(words, font, inner_w // scale)
+        ]
+        line_h = max(line.height for line in lines)
+        text_w = max(line.width for line in lines)
+        text_h = len(lines) * line_h + (len(lines) - 1) * line_spacing
+        if text_w * scale <= inner_w and text_h * scale <= inner_h:
+            break
+    else:
+        raise ValueError(f'Label "{label}" does not fit in a {width}x{height} icon.')
+
+    # Stack the lines at 1x, then scale up with nearest-neighbor to keep it crisp.
+    mask = Image.new("1", (text_w, text_h))
+    for i, line in enumerate(lines):
+        mask.paste(
+            line,
+            (
+                (text_w - line.width) // 2,
+                i * (line_h + line_spacing) + line_h - line.height,
+            ),
+        )
+    mask = mask.resize((text_w * scale, text_h * scale), Image.NEAREST)
+    text = np.array(mask, dtype=bool)
+
+    icon = np.full((height, width), _ICON_BACKGROUND, dtype=np.uint8)
+    icon[0, :] = _ICON_HIGHLIGHT
+    icon[:, 0] = _ICON_HIGHLIGHT
+    icon[-1, :] = _ICON_SHADOW
+    icon[1:, -1] = _ICON_SHADOW
+
+    x0 = (width - text.shape[1]) // 2
+    y0 = (height - text.shape[0]) // 2
+    h, w = text.shape
+    icon[y0 + 1 : y0 + 1 + h, x0 + 1 : x0 + 1 + w][text] = _ICON_TEXT_SHADOW
+    icon[y0 : y0 + h, x0 : x0 + w][text] = _ICON_HIGHLIGHT
+
+    return bytes((icon[:, 0::2] << 4) | icon[:, 1::2])

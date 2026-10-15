@@ -1,0 +1,24 @@
+# Symbol map for the Zelda G&W stock firmware.
+# Format: <addr> <func|data> <name>  # notes
+# Consumed by tools/re/build_elf.py. Addresses/names/notes only; no firmware bytes.
+#
+# --- core / previously known (Core/Inc/stock_firmware_zelda.h, patches/zelda.py)
+0x0801ad48 func stock_Reset_Handler
+0x08016808 func read_buttons
+# --- game-select menu (external flash). Same code lineage as Mario's overlay UI.
+0x90315b30 func menu_variant_to_app_id              # variant id 1..9 -> app id (6,7,8,9,11,12,13,14,5; else 15). zelda.py --no-la zeroes the LA immediates
+0x90315b6c func menu_app_id_to_variant              # inverse of menu_variant_to_app_id
+0x90315baa func menu_app_id_to_row
+0x90315bd2 func menu_select_variant_for_app         # (row, app) -> stores chosen variant of row
+0x90315c10 func menu_init_selection_from_app
+0x90315c3c func menu_open
+0x90315d04 func ui_cursor_wrap_step                 # identical logic to Mario 0x0800c6e6
+0x90315d34 func ui_slider_step                      # identical logic to Mario 0x0800c716
+0x90315d68 func ui_reset_blink
+0x90315d74 func ui_cursor_wrap_step_dir             # like ui_cursor_wrap_step but returns -1/+1 direction (drives carousel slide)
+0x90315f6e func game_select_handle_input            # (held, pressed): UP/DOWN over 5 fixed rows, LEFT/RIGHT slides variant carousel, A switches
+0x903165e8 func game_select_draw_row_carousel       # uses slide offset (ui+0x28), thresholds 104/184
+0x9030d920 func memcpy_like                         # (dst, src, n); UNVERIFIED
+0x902df1b0 data menu_rows                           # 5 rows x 11 bytes: [count, variant ids...]: {0,1} {2,3} {4,5,6,7} {8} {9}
+0x2001a7bc data ui_state                            # overlay UI struct; +0x28 s16 carousel slide offset, +0x2a row cursor, +0x2d chosen variant per row
+0x2000ab9f data current_app_id                      # UNVERIFIED

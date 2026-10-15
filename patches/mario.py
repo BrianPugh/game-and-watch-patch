@@ -10,6 +10,7 @@ from .firmware import Device, ExtFirmware, Firmware, IntFirmware
 from .tileset import (
     bytes_to_tilemap,
     decode_backdrop,
+    png_to_icon_4bpp,
     render_label_icon,
     tilemap_to_bytes,
 )
@@ -91,11 +92,19 @@ class MarioGnW(Device, name="mario"):
             help="Add an entry to the GAME menu that launches the dual-boot target "
             "(same as LEFT+GAME). Only shown if a valid target is flashed.",
         )
-        group.add_argument(
+        mgroup = group.add_mutually_exclusive_group()
+        mgroup.add_argument(
+            "--game-select-dual-boot-icon",
+            type=Path,
+            default=Path(__file__).parent / "assets" / "retro_go_icon.png",
+            help="96x48 image for the dual-boot menu entry; colors are mapped to the "
+            "nearest menu palette color. Defaults to a Retro-Go logo.",
+        )
+        mgroup.add_argument(
             "--game-select-dual-boot-label",
             type=str,
-            default="DUAL BOOT",
-            help="Text drawn on the dual-boot menu entry's icon.",
+            default=None,
+            help="Instead of an image, draw this text on the dual-boot menu entry's icon.",
         )
 
         group = parser.add_argument_group("ROM Hacks and Graphical Mods")
@@ -228,9 +237,13 @@ class MarioGnW(Device, name="mario"):
             self.internal.bl(0xC89C, "game_select_next")
             self.internal.bl(0xCB18, "game_select_handle_input")
             self.internal.bl(0xD236, "game_select_draw")
+            if self.args.game_select_dual_boot_label:
+                icon = render_label_icon(self.args.game_select_dual_boot_label)
+            else:
+                icon = png_to_icon_4bpp(self.args.game_select_dual_boot_icon)
             self.internal.replace(
                 self.internal.address("GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
-                render_label_icon(self.args.game_select_dual_boot_label),
+                icon,
             )
 
         printi("Mute clock audio on first boot.")

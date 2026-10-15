@@ -62,7 +62,7 @@ def gwprov(*args):
     subprocess.run([str(exe), *map(str, args)], check=True, stdout=subprocess.DEVNULL)
 
 
-def make_profile(profile: Path, bank2: Path):
+def make_profile(profile: Path, bank2: Path, internal: Path, external: Path):
     """Stock Mario profile with our patched images swapped in."""
     gwprov("backups", "add", REPO / "binaries")
     if not (profile / "flash-map.yaml").exists():
@@ -87,7 +87,7 @@ def make_profile(profile: Path, bank2: Path):
         "add",
         "bank1",
         "Patched",
-        REPO / "build/internal_flash_patched.bin",
+        internal,
         "--offset",
         0,
     )
@@ -98,7 +98,7 @@ def make_profile(profile: Path, bank2: Path):
         "add",
         "bank0",
         "Patched",
-        REPO / "build/external_flash_patched.bin",
+        external,
         "--offset",
         0,
     )
@@ -215,6 +215,12 @@ def main():
     )
     parser.add_argument("--bank2", choices=("spin", "erased"), default="spin")
     parser.add_argument("--work-dir", type=Path, default=REPO / "build/emu")
+    parser.add_argument(
+        "--internal", type=Path, default=REPO / "build/internal_flash_patched.bin"
+    )
+    parser.add_argument(
+        "--external", type=Path, default=REPO / "build/external_flash_patched.bin"
+    )
     args = parser.parse_args()
 
     work = args.work_dir.resolve()
@@ -223,7 +229,7 @@ def main():
     profile = work / "mario-profile"
     bank2 = work / f"bank2_{args.bank2}.bin"
     make_bank2(bank2, args.bank2)
-    make_profile(profile, bank2)
+    make_profile(profile, bank2, args.internal.resolve(), args.external.resolve())
 
     start_instance(str(profile), headless=True, gwemu_bin=str(args.gwemu_bin.resolve()))
     pid = next(r["pid"] for r in instances() if r["profile"] == str(profile))

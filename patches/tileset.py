@@ -338,3 +338,52 @@ def render_label_icon(label: str, width: int = 96, height: int = 48) -> bytes:
     icon[y0 : y0 + h, x0 : x0 + w][text] = _ICON_HIGHLIGHT
 
     return bytes((icon[:, 0::2] << 4) | icon[:, 1::2])
+
+
+# Colors of the overlay UI palette entries 0xF0-0xFF (indexed by icon nibble), as
+# rendered by GWemu 0.0.23 from the stock firmware's LCD color lookup table.
+GAME_SELECT_PALETTE = [
+    (0x00, 0x00, 0x00),  # 0: black (panel background)
+    (0xFF, 0xFF, 0xFF),  # 1: white (panel border)
+    (0x00, 0xF8, 0x00),  # 2: green
+    (0xDB, 0x2B, 0x00),  # 3: red
+    (0xFF, 0x4C, 0x34),  # 4: red-orange (cursor)
+    (0xFE, 0xC7, 0xB4),  # 5: pink (SMB icon text)
+    (0xC4, 0x48, 0x1C),  # 6: orange (SMB icon background)
+    (0x73, 0x3E, 0x2B),  # 7: brown (SMB icon shadow)
+    (0x05, 0x05, 0x05),  # 8: near-black
+    (0xB3, 0x2D, 0x46),  # 9: crimson (BALL icon frame)
+    (0xB6, 0xC7, 0xC4),  # 10: light gray (BALL icon screen)
+    (0x83, 0x95, 0x92),  # 11: gray
+    (0x0A, 0x0B, 0x0B),  # 12: near-black
+    (0xB3, 0xC3, 0xC1),  # 13: light gray
+    (0xB4, 0xC4, 0xC1),  # 14: light gray
+    (0xFF, 0x57, 0xD6),  # 15: magenta
+]
+
+
+def png_to_icon_4bpp(path, width: int = 96, height: int = 48) -> bytes:
+    """Convert an image to a game-select menu icon.
+
+    Each pixel is mapped to the nearest color in ``GAME_SELECT_PALETTE``; for
+    exact results, draw the image using only those colors. Returned as linear
+    4bpp (high nibble first) pixel data, ``width * height // 2`` bytes.
+
+    Raises
+    ------
+    BadImageError
+        If the image isn't ``width x height``.
+    """
+    from .exception import BadImageError
+
+    with Image.open(path) as img:
+        if img.size != (width, height):
+            raise BadImageError(
+                f"Icon {path} must be {width}x{height}; got {img.size[0]}x{img.size[1]}."
+            )
+        rgb = np.asarray(img.convert("RGB"), dtype=np.int32)
+
+    palette = np.array(GAME_SELECT_PALETTE, dtype=np.int32)
+    distances = ((rgb[:, :, None, :] - palette[None, None, :, :]) ** 2).sum(axis=-1)
+    icon = distances.argmin(axis=-1).astype(np.uint8)
+    return bytes((icon[:, 0::2] << 4) | icon[:, 1::2])

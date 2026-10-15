@@ -17,7 +17,9 @@
 0x08004b60 func memcpy_bytes                          # (dst, src, n) byte loop
 0x0800661c func game_reload                           # on g_state_transition==1: memcpy(ITCM 0, ext 0x90000000, 0x1e5c), then memcpy(ITCM 0x2cb4, ext 0x900f5858, 0) -- length 0, so the ext block is dead
 # --- sleep images (5x 320x240 GIF-style LZW, ext 0x900c58f8-0x900f4d18; patches/mario.py)
-0x080108cc func sleep_image_tick                      # called from main_loop_tick @0x08007032 when g_gnw_mode & 0x80 (idle sleep screen) or (mode & 0xc0)==0x40 (first-boot PRESS TIME screen, juggling image); ctx 0x20010760 ([0]=image 1..5, [4]=frame, [8]=copy); tail-calls the decoder @0x08010938 (hooked to sleep_image_inflate)
+0x080108cc func sleep_image_tick                      # called from main_loop_tick @0x08007032 when g_gnw_mode & 0x80 (idle sleep screen) or (mode & 0xc0)==0x40 (first-boot PRESS TIME screen, juggling image); ctx 0x20010760 ([0]=image index, see sleep_image_reason; [4]=frame, [8]=copy); tail-calls the decoder @0x08010938 (hooked to sleep_image_inflate)
+0x0800c6c0 func sleep_image_start                     # (index): stores index at 0x20010760, resets frame/copy; called with 1 on first boot (0x080066ee) and from ui_begin_transition_uncover
+0x2001075c data sleep_image_reason                    # 4 bytes, set when sleep starts (main_loop_tick @0x08006c1a): [0]=1, [1]=came from SMB1/SMB2, [2]=came from BALL; [3] refreshed every frame from 0x08011a3c's output (BCD hour? UNVERIFIED). ui_begin_transition_uncover picks image 3 (SMB), 5 (BALL), 4 ([3]==0x12), 6 ([3]==0x23), else 2
 0x080169cc func gif_decode                            # (src, dst) -> u8 error; full LZW decode to RGB565 in one call; dictionary in ITCM 0x8000. Decoder 0x08016764-0x080169f0 has no other callers; patcher frees it
 0x080167f0 func gif_decode_init
 0x08016886 func gif_decode_pass                       # called 4x by gif_decode, each up to (n+1)/4 of the pixels

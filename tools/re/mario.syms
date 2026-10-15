@@ -30,9 +30,21 @@
 0x08011aac func factory_test_thunk_c                  # -> 0x08012a98; main_loop_tick @0x0800711c
 0x08011ab4 func factory_test_thunk_d                  # -> 0x08012cf4; main_loop_tick @0x080070e4 when mode==1
 0x08011b0c func factory_test_tick                     # 0x08011b0c-0x08012ee4 (5080 B) never runs outside mode 1; no other callers
+# --- mario song (g_gnw_mode 0x04; module 0x08010fac-0x08011a24, freed by --no-mario-song)
+# main_loop_tick @0x08006fc4: after 300 frames (--mario-song-time) on the sleep screen, g_gnw_mode = (mode & 0xc038) | 4
+0x08010fac func mario_song_ctor                       # static ctor (table entry 0x08017e04); ctx 0x2001099c
+0x08011328 func mario_song_stop                       # also called by the factory test @0x08011d20
+0x08011430 func mario_song_start                      # main_loop_tick @0x08006980 when mode 4 and not started
+0x08011486 func mario_song_poll                       # main_loop_tick @0x08007008; returns 0 -> main loop begins a switch (g_state_transition = 3)
+0x080114fc func mario_song_tick                       # main_loop_tick @0x08006dae when (mode & 0xc6) == 0x04
+0x080113ce func mario_song_tick_late                  # main_loop_tick @0x08007112, end of frame
+# 0x08011a00: literal pool of 7 external banner pointers; 0x0801199c: audio pointer (patches/mario.py)
+# --- drawing library (0x08016f30-0x08017394 plus its vsnprintf/memchr 0x080173ea-0x08017a30); only the song and factory test use it
+0x08016f30 func draw_ctor                             # static ctor (table entry 0x08017e10); zeroes the cursor at 0x200010d8
+0x08016f38 func draw_set_target
 0x08016f40 func draw_set_color565
 0x08016f48 func draw_set_color_rgb                    # (r, g, b) -> RGB565
-0x080114fc func mode04_tick_UNVERIFIED                # called when (mode & 0xc6) == 0x04 (mario song?); forcing mode 4 in GWemu faults
+0x08017370 func draw_printf                           # (fmt, ...) -> vsnprintf @0x08017408
 # --- overlay UI (pause/settings + game-select share one slide-in overlay)
 0x0800c4f0 func ui_init
 0x0800c4be func ui_expand_1bpp_font

@@ -165,7 +165,7 @@ class MarioGnW(Device, name="mario"):
         group.add_argument(
             "--no-mario-song",
             action="store_true",
-            help="Remove the mario song easter egg.",
+            help="Remove the mario song easter egg (~540KB of external data, ~2.7KB of internal code).",
         )
         group.add_argument(
             "--no-sleep-images",
@@ -256,6 +256,34 @@ class MarioGnW(Device, name="mario"):
                 self.internal.nop(call, 2)
             # Thunks, constructor, body and literal pools.
             self.free_int(0x1_1A94, 0x1_2EE4)
+
+        if self.args.no_mario_song:
+            printi("Remove the mario song code (g_gnw_mode 0x04).")
+            # Mode 4 is never entered (see the 0x6FC8 patch below); these are
+            # main_loop_tick's calls, each guarded by (g_gnw_mode & 0xC6) == 4.
+            for call in (0x6980, 0x6DAE, 0x7008, 0x7112):
+                self.internal.nop(call, 2)
+            # Its static constructor -> an existing `bx lr`.
+            ctor_entry, bx_lr = 0x1_7E04, 0x659A
+            self.internal.replace(
+                ctor_entry, ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF, size=4
+            )
+            if not self.args.no_factory_test:
+                # The factory test stops the song; nothing to stop now.
+                self.internal.nop(0x1_1D20, 2)
+            # Constructor, body and literal pools.
+            self.free_int(0x1_0FAC, 0x1_1A24)
+
+        if self.args.no_mario_song and self.args.no_factory_test:
+            printi("Remove the drawing library only used by the song and factory test.")
+            ctor_entry, bx_lr = 0x1_7E10, 0x659A
+            self.internal.replace(
+                ctor_entry, ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF, size=4
+            )
+            # Constructor, primitives and the text printf.
+            self.free_int(0x1_6F30, 0x1_7394)
+            # Its vsnprintf and helpers, down to memchr.
+            self.free_int(0x1_73EA, 0x1_7A30)
 
         if self.args.game_select_dual_boot:
             printi("Add dual-boot entry to the game-select menu.")

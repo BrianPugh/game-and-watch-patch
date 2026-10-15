@@ -90,6 +90,9 @@ GNW_DEVICE_LOWER := $(shell echo "$(GNW_DEVICE)" | tr 'A-Z' 'a-z')
 
 C_DEFS += -DGNW_DEVICE_$(GNW_DEVICE)=1
 
+# Smaller (~1.8KB), slower LZMA decoder; internal flash matters more than speed.
+C_DEFS += -D_LZMA_SIZE_OPT
+
 ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
 	C_DEFS += -DCLOCK_ONLY
 endif

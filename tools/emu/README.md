@@ -45,3 +45,17 @@ see `tools/re/mario.syms`) and overwrites `r0` with the desired button mask.
 Run a whole sequence within one session. Once injection stops, the firmware
 sees the emulator's stuck TIME again, which registers as a fresh TIME press
 (closing menus / switching to the clock).
+
+## RAM probe
+
+```bash
+make PATCH_PARAMS="--device=mario"
+build/gwprov-venv/bin/python tools/emu/ram_probe.py --gwemu-bin /path/to/gwemu
+```
+
+Fills RAM with a marker at the stock `Reset_Handler`, plays clock, SMB1,
+SMB2, BALL and the pause menu, then lists regions that still hold the marker
+(never written by the stock firmware). Our own `.data`/`.bss`/stack is skipped.
+GWemu fills some buffers (e.g. audio) in some runs only, so run it more than
+once and trust only regions that are free every time. Results are recorded in
+`tools/re/mario.syms`.

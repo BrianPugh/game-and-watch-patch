@@ -14,6 +14,8 @@
 0x08012ee4 func mode_is_game_only                     # mode == (mode & 0xc030)
 0x08012f00 func mode_is_clock_or_game
 0x08010df4 func mode_is_game_or_clock_bits            # mode == (mode & 0xc038)
+0x08004b60 func memcpy_bytes                          # (dst, src, n) byte loop
+0x0800661c func game_reload                           # on g_state_transition==1: memcpy(ITCM 0, ext 0x90000000, 0x1e5c), then memcpy(ITCM 0x2cb4, ext 0x900f5858, 0) -- length 0, so the ext block is dead
 # --- overlay UI (pause/settings + game-select share one slide-in overlay)
 0x0800c4f0 func ui_init
 0x0800c4be func ui_expand_1bpp_font
@@ -56,6 +58,12 @@
 0x200106a5 data ui_req_clock                          # set by TIME in game-select
 0x200106a6 data ui_req_switch_game                    # set by A in game-select if choice != current
 0x20010f18 data ui_font_ptr
+# RAM never written by stock fw (GWemu canary probe 2026-10-15: boot, clock, SMB1, SMB2, BALL, pause menu; mario song / sleep images / nvram UNVERIFIED)
+0x00002cc0 data itcm_unused                           # to 0x00008000 (21312 B)
+#   AHB 0x3001e0c0-0x3001f800 (5952 B) also unused (AHB SRAM is not mapped in the RE ELF)
+#   AHB 0x3001fbf0-0x30020000 (1040 B) also unused
+#   AHB 0x300145b0-0x3001e000 (39504 B): tail of our linker RAM region (__RAM_ORIGIN__/__RAM_LENGTH__) beyond our .data/.bss/stack; stock never writes it
+#   AHB 0x30000000-0x30010000 and AXI 0x2408efe0-0x24098fe0: written in some runs only (look like audio buffers); treat as used. Re-run: tools/emu/ram_probe.py
 # --- external flash (decrypted)
 0x900aace4 data iconset_4bpp                          # 256px wide, 16x16 tiles, 0x80 B/tile
 0x900aebe4 data ui_font_1bpp                          # 0x2c 8x8 glyphs, expanded by ui_expand_1bpp_font

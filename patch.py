@@ -183,6 +183,12 @@ def main():
     )
     print(f"        Free: {compressed_memory_remaining_free} bytes")
     print(f"    External Firmware Used: {len(device.external)} bytes")
+    # Relocated data spills between regions, so per-region "Free" depends on
+    # placement order. The total is the number to minimize.
+    print(
+        f"    Total Footprint (internal + external): "
+        f"{len(device.internal) - internal_remaining_free + len(device.external)} bytes"
+    )
     print(Style.RESET_ALL)
 
 

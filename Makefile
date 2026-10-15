@@ -197,6 +197,11 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=read_buttons \
 		  -Wl,--undefined=rwdata_inflate \
 
+# These flags all imply --no-sleep-images, leaving sleep_image_inflate unused.
+ifeq (,$(filter --no-sleep-images --slim --internal-only --clock-only,$(PATCH_PARAMS)))
+LDFLAGS += -Wl,--undefined=sleep_image_inflate
+endif
+
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/internal_flash_patched.bin
 

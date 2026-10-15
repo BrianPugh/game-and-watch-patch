@@ -12,8 +12,10 @@ tooling, so keep it in its own venv:
 
 ```bash
 python3 -m venv build/gwprov-venv
-build/gwprov-venv/bin/pip install 'gwprov[dist,media] @ git+https://github.com/slash-proc/gwprov'
+build/gwprov-venv/bin/pip install 'gwprov[dist,media] @ git+https://github.com/slash-proc/gwprov' numpy
 ```
+
+numpy lets scripts import `patches` (e.g. `patches.tileset`) from this venv.
 
 Download a GWemu build from the
 [releases page](https://github.com/slash-proc/gwemu/releases) (e.g.

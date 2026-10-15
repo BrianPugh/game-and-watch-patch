@@ -16,6 +16,11 @@
 0x08010df4 func mode_is_game_or_clock_bits            # mode == (mode & 0xc038)
 0x08004b60 func memcpy_bytes                          # (dst, src, n) byte loop
 0x0800661c func game_reload                           # on g_state_transition==1: memcpy(ITCM 0, ext 0x90000000, 0x1e5c), then memcpy(ITCM 0x2cb4, ext 0x900f5858, 0) -- length 0, so the ext block is dead
+# --- sleep images (5x 320x240 GIF-style LZW, ext 0x900c58f8-0x900f4d18; patches/mario.py)
+0x080108cc func sleep_image_tick                      # called from main_loop_tick @0x08007032 when g_gnw_mode & 0x80 (idle sleep screen) or (mode & 0xc0)==0x40 (first-boot PRESS TIME screen, juggling image); ctx 0x20010760 ([0]=image 1..5, [4]=frame, [8]=copy); tail-calls the decoder @0x08010938 (hooked to sleep_image_inflate)
+0x080169cc func gif_decode                            # (src, dst) -> u8 error; full LZW decode to RGB565 in one call; dictionary in ITCM 0x8000. Decoder 0x08016764-0x080169f0 has no other callers; patcher frees it
+0x080167f0 func gif_decode_init
+0x08016886 func gif_decode_pass                       # called 4x by gif_decode, each up to (n+1)/4 of the pixels
 # --- factory "CHARGE AND KEY TEST" (g_gnw_mode 0x01; confirmed by forcing the mode in GWemu)
 # 0x080066d4 (in game_reload) enters factory test: game_reload: if boot arg r6 == 0xffff00ff, g_gnw_mode = 1
 0x08011a94 func factory_test_init_thunk               # -> 0x08011abe with ctx 0x20010bdc
@@ -62,7 +67,7 @@
 # --- RAM
 0x20001034 data g_state                               # main game-state struct
 0x2000103d data g_state_transition                    # g_state+9: 0 idle,1/2 reload,3 begin switch,4 covering,5 uncovering
-0x20001044 data g_gnw_mode                            # u16: 0x02 clock,0x04 mario-song,0x08 BALL,0x10 SMB1,0x20 SMB2,0x40 first-boot "PRESS TIME" screen (observed 0x52 in GWemu); 0x80 UNVERIFIED (set on 3-min idle -> likely sleep-screen); 0x01 UNKNOWN (no sleep, skips UI)
+0x20001044 data g_gnw_mode                            # u16: 0x02 clock,0x04 mario-song,0x08 BALL,0x10 SMB1,0x20 SMB2,0x40 first-boot "PRESS TIME" screen (observed 0x52 in GWemu); 0x80 idle sleep screen (set on 3-min idle; seen in GWemu with --sleep-time=5); 0x01 UNKNOWN (no sleep, skips UI)
 0x20010694 data ui_state                              # 0 none, 4 opening (c584), 5 open, 6 closing (c5d2), 7 cover-start (c604), 9 uncover-start (c62e); 8 = cover done (main loop waits for it); exact animation sub-states UNVERIFIED
 0x20010698 data ui_game_select_choice                 # u16 mode value under cursor
 0x2001069a data ui_is_game_select                     # 1 = game-select overlay, 0 = settings overlay

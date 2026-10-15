@@ -21,6 +21,7 @@ from .utils import (
     printi,
     round_down_word,
     round_up_page,
+    round_up_word,
     seconds_to_frames,
 )
 
@@ -69,6 +70,11 @@ class MarioGnW(Device, name="mario"):
             default=None,
             help="Go to sleep after this many seconds of inactivity.. "
             "Valid range: [1, 1092]",
+        )
+        group.add_argument(
+            "--sleep-on-usb",
+            action="store_true",
+            help="Allow sleeping while USB is connected (stock never sleeps on USB power).",
         )
 
         group.add_argument(
@@ -291,6 +297,13 @@ class MarioGnW(Device, name="mario"):
         if self.args.disable_sleep:
             printi("Disable sleep timer")
             self.internal.replace(0x6C40, 0x91, size=1)
+
+        if self.args.sleep_on_usb:
+            printi("Allow sleeping while USB is connected.")
+            # main_loop_tick's idle timer reset (0x6BEE) and wake-from-sleep
+            # (0x6BA6) both fire when is_usb_connected() or there's input.
+            for call in (0x6BA6, 0x6BEE):
+                self.internal.asm(call, "movs r0, #0; nop", size=4)
 
         if self.args.mario_song_time:
             printi(f"Setting Mario Song time to {self.args.mario_song_time} seconds.")
@@ -721,6 +734,10 @@ class MarioGnW(Device, name="mario"):
             img, _ = decode_backdrop(self.external[index:])
             img.save(build_dir / f"backdrop_{name}.png")
 
+        # The stock GIF decoder's only caller is the tail call at 0x10938, which
+        # is either hooked below or unreachable once the images are deleted.
+        self.free_int(0x1_6764, 0x1_69F0)
+
         if self.args.no_sleep_images:
             # Images Notes:
             #    * In-between images are just zeros.
@@ -738,7 +755,40 @@ class MarioGnW(Device, name="mario"):
                 self.internal.replace(reference, b"\x00" * 4)  # Erase image references
             self.ext_offset -= total_image_length
         else:
-            self.move_ext(0xC58F8, total_image_length, references)
+            printe("Recompressing sleeping images.")
+            # Replace the stock GIF decoder (tail-called at 0x10938) with ours.
+            self.internal.asm(
+                0x10938,
+                "b.w #"
+                + hex(0xFFFFFFFE & self.internal.address("sleep_image_inflate")),
+            )
+            # Each image's literal pool reference, keyed by its ext offset.
+            literals = {
+                self.internal.int(ref) - self.external.FLASH_BASE: ref
+                for ref in references
+            }
+            starts = sorted(literals)
+            ends = starts[1:] + [0xC58F8 + total_image_length]
+            for start, end in zip(starts, ends):
+                # LZMA over the raw 8-bit indices is ~23% smaller than the LZW.
+                img, _ = decode_backdrop(self.external[start:])
+                if img.size != (320, 240):
+                    raise InvalidStockRomError(
+                        f"Unexpected sleep image size {img.size}."
+                    )
+                palette_size = self.external[start + 4]
+                palette = self.external[start + 6 : start + 6 + 2 * palette_size]
+                blob = bytes(palette).ljust(512, b"\x00") + lzma_compress(
+                    bytes(img.get_flattened_data())
+                )
+                blob = blob.ljust(round_up_word(len(blob)), b"\x00")
+                print(f"    {end - start} -> {len(blob)} bytes")
+                # Placing each blob at its image's original offset lets the
+                # literal pool reference relocate through the normal lookup.
+                self.external.clear_range(start, end)
+                self.external[start : start + len(blob)] = blob
+                self.move_ext(start, len(blob), literals[start])
+                self.ext_offset -= end - start - len(blob)
 
         # Definitely at least contains part of the TIME graphic on startup screen.
         self.move_to_compressed_memory(0xF4D18, 2880, 0x10960)

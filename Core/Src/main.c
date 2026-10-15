@@ -246,6 +246,32 @@ void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n){
     return dst;
 }
 
+#if GNW_DEVICE_MARIO
+#define SLEEP_IMAGE_PIXELS (320 * 240)
+
+/**
+ * Replaces the stock GIF decoder for the sleep images.
+ *
+ * src is a 256-entry RGB565 palette followed by the LZMA-compressed 8-bit
+ * pixel indices. The indices are inflated into the back half of the RGB565
+ * dst frame and expanded front-to-back; pixel i's write ends at byte 2i+1,
+ * before index i+1 at byte SLEEP_IMAGE_PIXELS+i+1, so no unread index is
+ * clobbered.
+ *
+ * @return 0 (stock decoder's success status).
+ */
+uint8_t sleep_image_inflate(const uint8_t *src, uint16_t *dst){
+    const uint16_t *palette = (const uint16_t *)src;
+    uint8_t *indices = (uint8_t *)dst + SLEEP_IMAGE_PIXELS;
+
+    memcpy_inflate(indices, src + 256 * sizeof(uint16_t), SLEEP_IMAGE_PIXELS);
+    for(uint32_t i = 0; i < SLEEP_IMAGE_PIXELS; i++){
+        dst[i] = palette[indices[i]];
+    }
+    return 0;
+}
+#endif
+
 /**
  * This gets hooked into the rwdata/bss init table.
  */

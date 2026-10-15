@@ -25,6 +25,7 @@ if __name__ == "__main__":
     new_ld = f"""
 __STOCK_ROM_END__ = 0x{device.Int.STOCK_ROM_END:08X};
 """
+
     if device.name == "mario":
         new_ld += f"""
 __RAM_ORIGIN__ = 0x30010000;
@@ -40,3 +41,19 @@ __RAM_LENGTH__ = 68308;
     if new_ld != old_ld:
         ld_path.parent.mkdir(exist_ok=True)
         ld_path.write_text(new_ld)
+
+    # Stock functions our C code calls, as absolute Thumb function symbols, so
+    # ld emits plain BLs and each use is a relocation the patcher can follow.
+    syms_path = Path("build/stock_symbols.s")
+    new_syms = ".syntax unified\n.thumb\n"
+    for name, addr in sorted(device.Int.STOCK_SYMBOLS.items()):
+        new_syms += (
+            f".global {name}\n.type {name}, %function\n.set {name}, 0x{addr:08X}\n"
+        )
+    try:
+        old_syms = syms_path.read_text()
+    except FileNotFoundError:
+        old_syms = ""
+    if new_syms != old_syms:
+        syms_path.parent.mkdir(exist_ok=True)
+        syms_path.write_text(new_syms)

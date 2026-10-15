@@ -43,6 +43,22 @@ class MarioGnW(Device, name="mario"):
         RWDATA_LEN = 36
         RWDATA_ITCM_IDX = 0
         RWDATA_DTCM_IDX = 1
+        # Stock functions our C code calls, as Thumb addresses. They become
+        # absolute symbols (generated build/stock_symbols.s) so the ELF records
+        # each use as a relocation, which the patcher needs to relocate stock code.
+        STOCK_SYMBOLS = {
+            "stock_Reset_Handler": 0x0801_7A45,
+            "stock_read_buttons": 0x0801_0D49,
+            "is_usb_connected": 0x0801_0DC3,
+            "stock_sleep": 0x0800_63A1,
+            "stock_prepare_clock_rom": 0x0801_0E11,
+            "stock_game_select_handle_input": 0x0800_C859,
+            "ui_tile_ptr": 0x0800_C361,
+            "ui_draw_tile16": 0x0800_C37D,
+            "ui_blit_4bpp": 0x0800_C3D1,
+            "ui_set_dirty_rect": 0x0800_CB9F,
+            "ui_draw_panel": 0x0800_CC07,
+        }
 
     class Ext(ExtFirmware):
         STOCK_ROM_SHA1_HASH = "eea70bb171afece163fb4b293c5364ddb90637ae"

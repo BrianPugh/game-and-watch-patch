@@ -383,6 +383,7 @@ class IntFirmware(Firmware):
     RWDATA_LEN = 0
     RWDATA_ITCM_IDX = None
     RWDATA_DTCM_IDX = None
+    STOCK_SYMBOLS = {}
 
     def __init__(self, firmware, elf):
         super().__init__(firmware)

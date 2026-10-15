@@ -178,6 +178,13 @@ def main():
         f"    Internal Firmware Used:  {len(device.internal) - internal_remaining_free} bytes"
     )
     print(f"        Free: {internal_remaining_free} bytes")
+    if device.int_holes:
+        holes = ", ".join(
+            f"{end - start}" for start, end in device.int_holes if end > start
+        )
+        print(
+            f"        Unused freed stock code: {device.int_hole_space} bytes ({holes})"
+        )
     print(
         f"    Compressed Memory Used: {len(device.compressed_memory) - compressed_memory_remaining_free} bytes"
     )

@@ -93,6 +93,31 @@
 #   AHB 0x3001fbf0-0x30020000 (1040 B) also unused
 #   AHB 0x300145b0-0x3001e000 (39504 B): tail of our linker RAM region (__RAM_ORIGIN__/__RAM_LENGTH__) beyond our .data/.bss/stack; stock never writes it
 #   AHB 0x30000000-0x30010000 and AXI 0x2408efe0-0x24098fe0: written in some runs only (look like audio buffers); treat as used. Re-run: tools/emu/ram_probe.py
+# --- compiler runtime (armcc __aeabi_*); reached from ITCM/external code through veneers
+0x08002b84 func aeabi_memset                          # (dst, n, c)
+0x08004d5c func aeabi_memclr                          # (dst, n) -> aeabi_memset with c=0
+0x08017bb0 func aeabi_l2d_UNVERIFIED                  # int64 -> double (clz + exponent bias)
+0x08017bf8 func aeabi_uldivmod                        # 64-bit unsigned divide/modulo
+0x08017d04 func aeabi_llsl
+0x08017d28 func aeabi_llsr
+0x08013e36 func rand_lcg                              # state = state * 1664525 + 1013904223; returns state >> 11
+0x20010f20 data g_rand_state
+# --- LCD panel over SPI2 (ops table in DTCM .data at 0x20000fdc)
+0x20000fdc data lcd_panel_ops                         # fn ptrs at +0x0 power_on, +0x8 init_seq, +0xc cmd_28, +0x28 width, +0x2c height
+0x08013926 func lcd_panel_power_on_UNVERIFIED         # GPIOB MODER / GPIOD BSRR toggles
+0x080139ac func lcd_panel_init_seq                    # command/data sequence (0xdd, 0x01, 0xd0, 0xa0, ...) over SPI2
+0x080139e6 func lcd_panel_cmd_28_UNVERIFIED           # sends command 0x28 (MIPI DCS display-off?)
+0x080139e8 func lcd_spi_write_cmd_UNVERIFIED
+0x080139f0 func lcd_spi_write_data_UNVERIFIED         # same as cmd with bit 0x80 set
+0x08013a4c func lcd_get_width                         # returns 320
+0x08013a52 func lcd_get_height                        # returns 240
+# --- absolute code references outside internal-flash code (what an internal-code relocator must patch)
+# vector table: 146 handlers. Static-ctor table 0x08017e00-0x08017e18: 6 self-relative entries. RWDATA table 0x080180a4: self-relative offsets.
+0x00001e5c data itcm_veneers                          # rwdata0 starts with `ldr.w pc, [pc]` veneers into internal flash (aeabi_*, memcpy_bytes, 0x08004cb9-0x08004cd9 accessors on ctx 0x20010400)
+0x900c0210 data ext_veneers                           # 9 `ldr.w pc, [pc]` veneers from external code into internal flash; ext code literals also point at 0x0800061c (s8 table)
+0x080004a0 data fn_table_0x80004a0                    # 48 thumb fn pointers into 0x08015000-0x08015e00; base loaded at 0x08016594
+0x080005b8 data fn_table_0x80005b8                    # 12 thumb fn pointers into 0x0800e23b-0x0800e7b3; region base 0x08000530 loaded at 0x0800eb6c
+0x08006010 func adr_jump_table_dispatch               # adr r0, tbl; ldr r1, [r0, r5, lsl #2]; bx r1 -- absolute targets inline (0x08006020); also 0x08005e7c
 # --- external flash (decrypted)
 0x900aace4 data iconset_4bpp                          # 256px wide, 16x16 tiles, 0x80 B/tile
 0x900aebe4 data ui_font_1bpp                          # 0x2c 8x8 glyphs, expanded by ui_expand_1bpp_font

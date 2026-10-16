@@ -1,4 +1,6 @@
+import contextlib
 import hashlib
+import io
 import struct
 from dataclasses import dataclass
 
@@ -497,6 +499,110 @@ class Device:
         # patches.relocate.Relocation when stock code is moved; bank2 holds it.
         self.relocation = None
         self.bank2 = bytearray()
+        # (internal offset, value, ext lo, ext hi) of every reference a move
+        # names; fix_ext_refs() checks them against the scan.
+        self.expected_refs = []
+        self.ext_refs_fixed = False
+        self._stock_map = None
+
+    @property
+    def stock_map(self):
+        """``patches.xrefs.Analysis`` of the stock firmware (from the backups)."""
+        if self._stock_map is None:
+            from . import xrefs
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self._stock_map = xrefs.analyze(self.name)
+        return self._stock_map
+
+    def locate(self, addr):
+        """(buffer, offset) holding the data that was at stock ``addr`` now."""
+        addr = self.lookup.get(addr, addr)
+        for fw in (self.internal, self.compressed_memory, self.external):
+            if fw.FLASH_BASE <= addr < fw.FLASH_BASE + len(fw):
+                return fw, addr - fw.FLASH_BASE
+        return None, None
+
+    def _ref_site(self, src):
+        """(buffer, offset) of the stock word at run-time address ``src``, or
+        (None, None) if the patcher removed it."""
+        base = self.internal.FLASH_BASE
+        if base <= src < base + len(self.internal):
+            if any(base + s <= src < base + e for s, e in self.int_freed):
+                return None, None
+            return self.internal, src - base
+        rw = self.internal.rwdata
+        for data, dst in zip(rw.datas, rw.dsts):
+            if dst <= src < dst + len(data):
+                return data, src - dst
+        return self.locate(src)
+
+    def _expect_refs(self, reference, ext, size):
+        """Record the internal offsets a move names as its references."""
+        if reference is None:
+            return
+        lo = hi = None
+        if isinstance(ext, int):
+            lo = self.external.FLASH_BASE + ext
+            hi = lo + size
+        for off in reference if isinstance(reference, list) else [reference]:
+            self.expected_refs.append((off, self.internal.int(off), lo, hi))
+
+    def fix_ext_refs(self):
+        """Point every reference into moved external data at its new place.
+
+        Call it once, after the last move and before the rwdata and SRAM3
+        images are compressed. ``patches/xrefs.py`` finds the references in
+        the stock firmware; a move's ``reference`` argument is only checked
+        against that scan, except in our code, which the scan doesn't cover.
+        """
+        from .xrefs import ext_refs
+
+        base = self.internal.FLASH_BASE
+        refs = {r["src"]: r for r in ext_refs(self.stock_map)}
+        for off, value, lo, hi in self.expected_refs:
+            src = base + off
+            if off >= self.internal.STOCK_ROM_END:
+                refs[src] = {"kind": "our pointer", "src": src, "target": value}
+                continue
+            r = refs.get(src)
+            if (
+                r is None
+                or r["kind"].endswith("(verify)")
+                or not (lo is None or lo <= r["target"] < hi)
+            ):
+                raise ValueError(
+                    f"0x{src:08X} (0x{value:08X}) isn't a reference into the moved "
+                    f"data the scan in patches/xrefs.py found"
+                )
+
+        counts = {}
+        for src, r in sorted(refs.items()):
+            kind, target = r["kind"], r["target"]
+            new = self.lookup.get(target)
+            if new is None:
+                continue
+            if kind.endswith("(verify)"):
+                raise ValueError(
+                    f"{kind} at 0x{src:08X} points into moved data (0x{target:08X}); "
+                    f"classify it in patches/xrefs.py LAYOUT"
+                )
+            buf, off = self._ref_site(src)
+            if buf is None:
+                continue
+            cur = int.from_bytes(buf[off : off + 4], "little")
+            if cur == 0:  # erased by a patch
+                continue
+            if cur != target:
+                raise ValueError(
+                    f"{kind} at 0x{src:08X} is 0x{cur:08X}, not the stock "
+                    f"0x{target:08X}; it can't be relocated"
+                )
+            buf[off : off + 4] = new.to_bytes(4, "little")
+            counts[kind] = counts.get(kind, 0) + 1
+        self.ext_refs_fixed = True
+        printd(f"Fixed references into moved external data: {counts}")
+        return counts
 
     def _move_copy(
         self, dst, dst_offset: int, src, src_offset: int, size: int, delete: bool
@@ -580,35 +686,6 @@ class Device:
             out -= self.internal.rwdata.compressed_len
         return out
 
-    def rwdata_lookup(self, lower, size):
-        lower += self.external.FLASH_BASE
-        upper = lower + size
-
-        for i in range(0, len(self.internal.rwdata[self.internal.RWDATA_DTCM_IDX]), 4):
-            val = int.from_bytes(
-                self.internal.rwdata[self.internal.RWDATA_DTCM_IDX][i : i + 4], "little"
-            )
-            if lower <= val < upper:
-                new_val = self.lookup[val]
-                print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
-                self.internal.rwdata[self.internal.RWDATA_DTCM_IDX][
-                    i : i + 4
-                ] = new_val.to_bytes(4, "little")
-
-    def rwdata_ref(self, addr):
-        """Relocate the pointer at runtime address ``addr`` in an rwdata block
-        (e.g. an ITCM literal, which a range scan would confuse with code)."""
-        rwdata = self.internal.rwdata
-        for data, dst in zip(rwdata.datas, rwdata.dsts):
-            if dst <= addr and addr + 4 <= dst + len(data):
-                i = addr - dst
-                val = int.from_bytes(data[i : i + 4], "little")
-                new_val = self.lookup[val]
-                print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
-                data[i : i + 4] = new_val.to_bytes(4, "little")
-                return
-        raise KeyError(f"0x{addr:08X} isn't in an rwdata block")
-
     def rwdata_erase(self, lower, size):
         """
         Erasing no longer used references makes it compress better.
@@ -666,8 +743,7 @@ class Device:
             self._move_ext_to_int(ext, new_loc, size=size)
             print(f"    move_ext_to_int {hex(ext)} -> {hex(new_loc)}")
 
-        if reference is not None:
-            self.internal.lookup(reference)
+        self._expect_refs(reference, ext, size)
 
         return new_loc
 
@@ -678,8 +754,7 @@ class Device:
         else:
             self.external.move(ext, self.ext_offset, size=size)
 
-        if reference is not None:
-            self.internal.lookup(reference)
+        self._expect_refs(reference, ext, size)
 
         new_loc = ext + self.ext_offset
 
@@ -756,8 +831,7 @@ class Device:
         print(
             f"    move_to_compressed_memory {hex(ext)} -> {hex(self.compressed_memory_pos)}"
         )
-        if reference is not None:
-            self.internal.lookup(reference)
+        self._expect_refs(reference, ext, size)
         new_loc = self.compressed_memory_pos
         self.compressed_memory_pos += round_up_word(size)
         self.ext_offset -= round_down_word(size)
@@ -769,6 +843,8 @@ class Device:
 
         self.int_pos = self.internal.empty_offset
         out = self.patch()
+        if self.lookup and not self.ext_refs_fixed:
+            raise RuntimeError("patch() moved external data without fix_ext_refs()")
         is_mario, is_zelda = False, False
         if isinstance(self, MarioGnW):
             is_mario = True

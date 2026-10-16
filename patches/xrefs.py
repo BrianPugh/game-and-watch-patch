@@ -79,6 +79,16 @@ LAYOUT = {
                 0x900F_DF00,
             ),  # ITCM overlay game_reload copies 0 bytes of (dead)
         ],
+        # External data that holds pointers into external flash (ext_refs).
+        "ext_pointer_tables": [
+            (0x900B_F4A0, 0x900B_F838),  # clock scene table: 46 x 5 pointers
+        ],
+        # Pointer-like words that aren't pointers (ext_refs ignores them).
+        "not_ext_pointers": [
+            # Code the descent doesn't reach (unrolled `strb.w r9, [r0, #n]`).
+            (0x0801_4360, 0x0801_45EA),
+            (0x9000_BE60, 0x9001_2D44),  # clock scenes and BALL graphics
+        ],
     },
     "zelda": {
         "ctor_table": (0x0801_B0BC, 0x0801_B0D4),
@@ -334,6 +344,7 @@ class Analysis:
     other: dict  # name -> Code for the ITCM and external code
     unreferenced: list  # push prologues nothing references
     layout: dict
+    rwdata: list  # extract_rwdata(): [(dst, data), ...]
 
 
 def itcm_image(layout, external, rwdata):
@@ -566,7 +577,9 @@ def analyze(device, internal=None, external=None, repo=REPO):
             ):
                 unreferenced.append(a)
                 break
-    return Analysis(internal, external, code, cls, refs, other, unreferenced, layout)
+    return Analysis(
+        internal, external, code, cls, refs, other, unreferenced, layout, rwdata
+    )
 
 
 def is_prologue(mem, addr):
@@ -628,3 +641,84 @@ def units(code):
         else:
             merged.append([lo, hi])
     return merged
+
+
+def ext_refs(a):
+    """Every stock word that points into external flash.
+
+    Returns ``{"kind", "src", "target"}`` dicts. ``src`` is where the word is
+    at run time: internal or external flash, or ITCM/DTCM for the rwdata
+    blocks. A word in an ITCM/DTCM copy of external flash is reported at its
+    external address. ``... (verify)`` kinds are pointer-like data words that
+    are probably not pointers. ``pc-offset literal`` words hold offsets, so
+    they're left out.
+    """
+    layout = a.layout
+    ext_end = EXT_BASE + len(a.external)
+    not_ptrs = layout.get("not_ext_pointers", [])
+    tables = layout.get("ext_pointer_tables", [])
+
+    def inside(x, ranges):
+        return any(lo <= x < hi for lo, hi in ranges)
+
+    out = []
+
+    def add(kind, src, v):
+        if EXT_BASE <= v < ext_end and not inside(src, not_ptrs):
+            out.append({"kind": kind, "src": src, "target": v})
+
+    def iword(x):
+        return u32(a.internal, INT_BASE, x)
+
+    # Internal flash.
+    for x in range(INT_BASE, INT_BASE + VECTOR_TABLE_END, 4):
+        add("vector-table word", x, iword(x))
+    pc_offset_lits = {lit for lit, _, _ in a.code.pc_offsets}
+    for lit, sz in a.code.literals().items():
+        if sz == 4 and lit not in pc_offset_lits:
+            add("literal", lit, iword(lit))
+    for lo, hi in unknown_runs(a.cls, a.code.lo):
+        for x in range((lo + 3) & ~3, hi - 3, 4):
+            add("flash data", x, iword(x))
+
+    # ITCM: only literals; the rest of the rwdata block is code.
+    def runtime_src(addr, copies):
+        for src, dst, n in copies:
+            if dst <= addr < dst + n:
+                return src + addr - dst
+        return addr
+
+    itcm = a.other["ITCM"]
+    for lit, sz in itcm.literals().items():
+        if sz == 4:
+            src = runtime_src(lit, layout.get("itcm_copies", []))
+            add("ITCM literal", src, u32(itcm.mem, 0, lit))
+
+    # DTCM .data: plain data, every word.
+    dtcm = [(dst, dst, data) for dst, data in a.rwdata if dst >= 0x2000_0000]
+    dtcm += [
+        (dst, src, a.external[src - EXT_BASE : src - EXT_BASE + n])
+        for src, dst, n in layout.get("dtcm_copies", [])
+    ]
+    for _, src, data in dtcm:
+        for o in range(0, len(data) - 3, 4):
+            add("DTCM .data", src + o, struct.unpack_from("<I", data, o)[0])
+
+    # External flash: code literals, known tables, then everything else as (verify).
+    ext = a.other["external"]
+    covered = set()
+    for lit, sz in ext.literals().items():
+        covered.update(range(lit, lit + sz))
+        if sz == 4:
+            add("external literal", lit, u32(a.external, EXT_BASE, lit))
+    for x, (sz, _, _) in ext.insns.items():
+        covered.update(range(x, x + sz))
+    skip = layout["ext_skip"] + copy_sources(layout)
+    for x in range(EXT_BASE, ext_end - 3, 4):
+        if x in covered or inside(x, skip):
+            continue
+        kind = (
+            "external pointer table" if inside(x, tables) else "external data (verify)"
+        )
+        add(kind, x, u32(a.external, EXT_BASE, x))
+    return out

@@ -105,8 +105,7 @@ class Relocation:
         self.device = device
         self.lo, self.hi, self.dst = lo, hi, dst
         self.delta = dst - lo
-        with contextlib.redirect_stdout(io.StringIO()):
-            self.map = xrefs.analyze(device.name)
+        self.map = device.stock_map
         self.counts = {}
 
     def moves(self, addr):
@@ -126,15 +125,6 @@ class Relocation:
             struct.pack_into("<I", buf, off, v + self.delta)
             self._count(kind)
 
-    def _locate(self, addr):
-        """(buffer, offset) holding the data that was at stock ``addr`` now."""
-        d = self.device
-        addr = d.lookup.get(addr, addr)
-        for fw in (d.internal, d.compressed_memory, d.external):
-            if fw.FLASH_BASE <= addr < fw.FLASH_BASE + len(fw):
-                return fw, addr - fw.FLASH_BASE
-        return None, None
-
     def fix_ram_images(self):
         """Fix pointers in data that ends up compressed: rwdata blocks, SRAM3."""
         rw = self.device.internal.rwdata
@@ -150,7 +140,7 @@ class Relocation:
                         f"{kind} at 0x{src:08X} isn't in an rwdata block"
                     )
             elif kind in ("external literal", "external data pointer"):
-                buf, off = self._locate(src)
+                buf, off = self.device.locate(src)
                 if buf is None:
                     raise NotImplementedError(f"can't locate {kind} at 0x{src:08X}")
                 self._fix_abs(buf, off, kind)

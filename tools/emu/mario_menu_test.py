@@ -66,7 +66,7 @@ def gwprov(*args):
 
 def make_profile(profile: Path, bank2: Path, internal: Path, external: Path):
     """Stock Mario profile with our patched images swapped in."""
-    gwprov("backups", "add", REPO / "binaries")
+    gwprov("backups", "add", REPO)
     if not (profile / "flash-map.yaml").exists():
         gwprov("profile", "create", "-m", profile)
         gwprov("profile", profile, "edit", "remove", "bank1", "Stock Mario")
@@ -124,6 +124,14 @@ def make_bank2(path: Path, kind: str, base: Path = None):
 
 
 class Driver:
+    """Drive the firmware one input poll at a time.
+
+    A breakpoint stays on ``READ_BUTTONS_RETURN`` for the whole session, and
+    between calls the target sits halted there with that frame's input not yet
+    injected. So every poll gets an injected value (GWemu's stuck TIME never
+    reaches the firmware), and reads and screenshots see a frame boundary.
+    """
+
     def __init__(self, pid: int, out_dir: Path):
         row = next(r for r in instances() if r["pid"] == pid)
         host, port = row["gdbEndpoint"].split(":")
@@ -132,31 +140,64 @@ class Driver:
         self.dbg = DebugSession(backend, "gwemu", qmp_socket=row["qmpSocket"])
         self.pid = pid
         self.out_dir = out_dir
+        self.at_poll = False
+
+    def _wait_poll(self):
+        result = self.dbg.wait_stopped(10)
+        if not (
+            result.get("stopped") and result["registers"]["pc"] == READ_BUTTONS_RETURN
+        ):
+            raise RuntimeError(f"read_buttons return site not reached: {result}")
+        self.at_poll = True
+
+    def run_to_poll(self):
+        """Resume a halted target and stop at its next poll."""
+        self.dbg.bp(READ_BUTTONS_RETURN)
+        self.dbg.resume()
+        self._wait_poll()
+
+    def _sync(self):
+        """Halt at the next poll (on first use, or after the target ran free)."""
+        if not self.at_poll:
+            self.dbg.halt()
+            self.run_to_poll()
+
+    def _release(self, mask: int):
+        """Inject ``mask`` into the current poll and step off the breakpoint."""
+        self._sync()
+        self.dbg.backend.write_register("r0", mask)
+        self.dbg.clear_bp(READ_BUTTONS_RETURN)
+        self.dbg.step()
+        self.at_poll = False
 
     def frames(self, buttons: str = "", n: int = 1):
         """Inject a button mask (e.g. "LEFT+GAME"; "" = nothing) for n frames."""
         mask = sum(1 << BITS[b] for b in buttons.split("+") if b)
         for _ in range(n):
-            result = self.dbg.inject_return(READ_BUTTONS_RETURN, mask, timeout=10)
-            if not result.get("hit"):
-                raise RuntimeError(f"read_buttons return site not reached: {result}")
+            self._release(mask)
+            self.run_to_poll()
+
+    def last_frame(self, buttons: str):
+        """Inject one frame and let the target run free (e.g. it resets)."""
+        self._release(sum(1 << BITS[b] for b in buttons.split("+") if b))
+        self.dbg.resume()
 
     def tap(self, buttons: str, settle: int = 8):
         self.frames(buttons, 2)
         self.frames("", settle)
 
     def shot(self, name: str):
-        """Screenshot at a frame boundary (target halted)."""
-        self.dbg.run_until(READ_BUTTONS_RETURN, timeout=10)
+        """Screenshot at a frame boundary."""
+        self._sync()
         screenshot_instance(pid=self.pid, output=self.out_dir / f"{name}.png")
-        self.dbg.backend.write_register("r0", 0)
-        self.dbg.resume()
 
     def read8(self, addr: int) -> int:
-        self.dbg.halt()
-        value = self.dbg.backend.read_memory(addr, 1)[0]
-        self.dbg.resume()
-        return value
+        self._sync()
+        return self.dbg.backend.read_memory(addr, 1)[0]
+
+    def read16(self, addr: int) -> int:
+        self._sync()
+        return struct.unpack("<H", self.dbg.backend.read_memory(addr, 2))[0]
 
     def wait_until(self, condition, what: str, max_frames: int = 600, step: int = 10):
         """Run idle frames until ``condition()``; animations don't take a
@@ -178,17 +219,11 @@ class Driver:
                 pass
         raise RuntimeError(f"{buttons} never led to {what}")
 
-    def read16(self, addr: int) -> int:
-        self.dbg.halt()
-        value = struct.unpack("<H", self.dbg.backend.read_memory(addr, 2))[0]
-        self.dbg.resume()
-        return value
-
     def pc(self) -> int:
-        self.dbg.halt()
-        value = self.dbg.backend.read_register("pc")
-        self.dbg.resume()
-        return value
+        """PC wherever the target is (it may never reach another poll)."""
+        if not self.at_poll:
+            self.dbg.halt()
+        return self.dbg.backend.read_register("pc")
 
 
 def check(condition: bool, message: str):
@@ -198,8 +233,8 @@ def check(condition: bool, message: str):
 
 def run(driver: Driver, bank2: str) -> bool:
     # GWemu reports some buttons as held when idle (e.g. TIME on 0.0.23), so
-    # every frame's input is injected; never let the firmware run un-driven
-    # mid-sequence or the "release" of the stuck button registers as a press.
+    # Driver injects every frame's input; a single un-driven poll would see
+    # the "release" of the stuck button and register it as a press.
     driver.frames("", 30)
     driver.tap("TIME", settle=30)  # Leave the first-boot "PRESS TIME" screen.
     driver.wait_until(
@@ -229,9 +264,7 @@ def run(driver: Driver, bank2: str) -> bool:
             choice == CHOICE_DUAL_BOOT,
             f"DUAL BOOT selected after 3x DOWN (choice=0x{choice:X})",
         )
-        driver.frames(
-            "A", 1
-        )  # The firmware resets during this frame; there is no next one.
+        driver.last_frame("A")  # The firmware resets during this frame.
         time.sleep(1)
         pc = driver.pc()
         ok &= check(

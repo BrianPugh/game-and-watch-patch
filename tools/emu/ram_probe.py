@@ -181,7 +181,7 @@ def main():
         ranges = list(paint_ranges(regs["sp"], skip))
         for _, start, end in ranges:
             backend.write_memory(start, MARKER * ((end - start) // len(MARKER)))
-        dbg.resume()
+        driver.run_to_poll()
 
         exercise(driver, args.idle_frames)
 

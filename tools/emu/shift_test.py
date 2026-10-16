@@ -17,7 +17,6 @@ Usage:
 """
 
 import argparse
-import struct
 import sys
 import time
 from pathlib import Path
@@ -149,13 +148,8 @@ def main():
                 print(f"FAIL: {name}: {e} (pc=0x{pc:08X})")
                 ok = False
                 break
-            driver.dbg.run_until(menu.READ_BUTTONS_RETURN, timeout=10)
-            screenshot_instance(pid=pid, output=out_dir / f"{name}.png")
-            mode = struct.unpack(
-                "<H", driver.dbg.backend.read_memory(menu.GNW_MODE, 2)
-            )[0]
-            driver.dbg.backend.write_register("r0", 0)
-            driver.dbg.resume()
+            driver.shot(name)
+            mode = driver.read16(menu.GNW_MODE)
             pc = driver.pc()
             in_bank1 = args.delta and 0x0800_0000 <= pc < 0x0810_0000
             ok &= menu.check(

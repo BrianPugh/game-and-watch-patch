@@ -24,7 +24,3 @@ class BadImageError(Exception):
 
 class InvalidIPSError(Exception):
     """Corrupt IPS Patch file"""
-
-
-class InvalidAsmError(Exception):
-    """Bad ASM instructions provided to keystone-engine."""

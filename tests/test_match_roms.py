@@ -19,7 +19,7 @@ def _caller(addr, callee, literal_index):
     """push; ldr r0, [pc, #k]; bl callee; movs r1, #7; adds r1, #1; adds r1, #2; pop."""
     ldr_pc = addr + 2
     k = (literal_index - ((ldr_pc + 4) & ~3)) // 4
-    hw1, hw2 = _encode_branch(0xF7FE, 0xFD92, callee - (addr + 4 + 4))
+    hw1, hw2 = _encode_branch(0xF000, 0xF800, callee - (addr + 4 + 4))
     return [0xB510, 0x4800 | k, hw1, hw2, 0x2107, 0x3101, 0x3102, 0xBD10]
 
 

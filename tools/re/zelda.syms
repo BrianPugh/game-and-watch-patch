@@ -4,6 +4,13 @@
 #
 # --- core / previously known (Core/Inc/stock_firmware_zelda.h, patches/zelda.py)
 0x0801ad48 func stock_Reset_Handler
+0x0801643c func app_load_play_pcm                   # app_load_pcm through the 0x08016278 veneer to pcm_clip_start(ptr, flag, 0x1bc68, 0x12c0)
+0x0801ad0c func clock_sprite_desc                    # (i) -> &clock_sprite_descs[i]; reached from the clock module through the veneer at 0x9031c384
+0x0800c16c func nes_init                             # NES core setup: nes_core_tables, nes_build_palette, mapper table entry by index (shared NES core with Mario)
+0x0801441c func la_expand_frame                      # expands 4-bit pixels to 320-px RGB565 rows through la_nibble_lut (UNVERIFIED)
+0x0000b5fa func pcm_clip_start                       # (ptr, flag, n_samples, tail): fills the clip struct 0x2001a8b8 (ITCM; copied from 0x9031706a)
+0x0000b620 func pcm_clip_tick                        # streams the clip 240 samples per block, scaled by volume (ITCM; copied from 0x90317090)
+0x00009d52 func ui_draw_tile                         # draws one ui_tiles tile (UNVERIFIED) (ITCM; copied from 0x903157c2)
 0x08016808 func read_buttons
 # --- game-select menu (external flash). Same code lineage as Mario's overlay UI.
 0x0000a0c0 func menu_variant_to_app_id              # variant id 1..9 -> app id (6,7,8,9,11,12,13,14,5; else 15). zelda.py --no-la zeroes the LA immediates (ITCM; copied from 0x90315b30)
@@ -664,6 +671,25 @@
 0x902d8160 data nes_palette_rgb                      # data: 64 x RGB888 NES palette
 0x902df160 data menu_variant_info                    # data: 10 x 8-byte entries, one per menu variant ([2] = variant id)
 0x9030aef4 data clock_patch_list                     # data: LoZ1 ROM patches for the clock/demo mode
+# --- external data 0x90288120-0x9030b4a0 (2026-10-16). Pointers into it are classified in patches/xrefs.py LAYOUT
+# (ext_pointer_tables / not_ext_pointers); extents run to the next entry unless noted. Code indexes past some bases
+# (e.g. timer_scene_data + 0x2300), so move these as contiguous ranges, not per reference.
+0x90288120 data app_load_pcm                         # s16 PCM, 0x1bc68 samples to 0x902bf9f0 (+16 B pad): app_load (0x0800fa76) -> app_load_play_pcm. Raw PCM: a compression candidate
+0x902bfa00 data ui_tiles                             # to 0x902cade0 (46 KB): 4bpp tile graphics drawn by the overlay UI (ui_draw_tile, ITCM 0x9d52)
+0x902cade0 data timer_data_a                         # to 0x902d0640: read by timer_input via 0x08003880/0x08003a6c, sub-tables at +0x5414/+0x552c/+0x5644/+0x575c (UNVERIFIED role)
+0x902d0640 data gb_core_tables                       # to 0x902d2150: GB core (LA) init 0x08003fc0 copies 0x6e0 B from here; gb_apu_write/gb_cpu_execute read 0x902d0640-0x902d2150 (UNVERIFIED split)
+0x902d2150 data dtcm_table_a8a8_data                 # to 0x902d2650: 4 x 0x140 B, pointed to by DTCM .data 0x2000a8a8-0x2000a8b4 (UNVERIFIED role)
+0x902d2650 data timer_scene_data                     # to 0x902d5350: 0x080044dc picks base + 0x3c0..0x2300 per scene object; timer_draw_scene reads 0x902d4a90
+0x902d5350 data dtcm_table_a890_data                 # to 0x902d5710: 6 x 0xa0 B, pointed to by DTCM .data 0x2000a890-0x2000a8a4 (UNVERIFIED role)
+0x902d5710 data clock_sprite_frames                  # 145 x 16 B {u16, u16 index, u16 108, u16 105, ptr, ptr}; the pointers cover clock_sprite_gfx
+0x902d6020 data clock_sprite_descs                   # 432 x 16 B, frame pointer at +12; clock_sprite_desc(i) = &clock_sprite_descs[i]
+0x902d7b20 data la_nibble_lut                        # 16 x u32 used by la_expand_frame (0x0801441c); 0x902d7b60-0x902d8160 unclassified (UNVERIFIED)
+0x902d8220 data nes_core_tables                      # to 0x902da1c0: read by nes_init: 256 x 12 B opcode records, handler tables 0x902d8e20/0x902d9060/0x902d9080, 192 x 20 B mapper table 0x902d92c0 (Mario: 0x900a8c44)
+0x902da2fc data timer_gfx                            # to 0x902defbc: pointed to by DTCM .data 0x2000a9d8-0x2000a9fc, timer_draw_scene, timer_input (UNVERIFIED split)
+0x902df730 data timer_digits_gfx                     # to 0x902e3a20: timer draw helpers 0x0800a604/0x0800ab88/0x0800ad9c/0x0800b060 (UNVERIFIED role)
+0x902e3a20 data vermin_gfx                           # to 0x902e9064: vermin_tick literals, the 0x080007xx flash-data table and DTCM .data 0x2000ae34-0x2000ae60
+0x902e9064 data clock_sprite_gfx                     # to 0x9030a7f4: graphics behind clock_sprite_frames (145 KB)
+0x9030a7f4 data clock_module_data                    # to 0x9030b4a0: read by the clock module (external code); includes clock_patch_list
 0x90317dc0 func HAL_Delay_ext_copy                   # a second HAL_Delay in external flash
 0x9031c38c func clock_patch_loz1_rom                 # (prg): applies the patch list at 0x9030aef4 (bank, address, length, bytes) to the LoZ1 PRG copy; loz1_load(demo)
 0x9031cc36 func rand_lcg                             # same code as Mario 0x08013e36

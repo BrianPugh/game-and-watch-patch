@@ -819,6 +819,36 @@ class Device:
         self.ext_cursor = start + n
         self.ext_offset -= n
 
+    def ext_pack(self, start: int, end: int, blocks):
+        """Replace the stock external data [start, end) with smaller blocks.
+
+        ``blocks`` is ``(stock offset, data)`` pairs inside the range; they're
+        packed back to back (word aligned) where ``start`` lands, and each
+        block's stock offset maps to its new place. The data after the range
+        shifts down in ``EXT_SHIFT_ALIGN`` steps, like ``ext_drop``.
+        """
+        self.ext_keep(start)
+        packed = bytearray()
+        new = []
+        for offset, data in blocks:
+            if not start <= offset < end:
+                raise ValueError(f"0x{offset:X} is outside 0x{start:X}-0x{end:X}")
+            new.append((offset, len(packed), len(data)))
+            packed += bytes(data).ljust(round_up_word(len(data)), b"\x00")
+        n = (end - start - len(packed)) // self.EXT_SHIFT_ALIGN * self.EXT_SHIFT_ALIGN
+        if n < 0:
+            raise ValueError("The packed blocks are larger than the range.")
+        # Nothing keeps (and so re-maps) [start, end) after this: the cursor
+        # moves to the end, and the next kept data lands after the padding.
+        dst = start + self.ext_offset
+        self.external.clear_range(dst, end)
+        self.external[dst : dst + len(packed)] = packed
+        base = self.external.FLASH_BASE
+        for offset, pos, size in new:
+            self.lookup.add(base + offset, base + dst + pos, size)
+        self.ext_cursor = end
+        self.ext_offset -= n
+
     def move_ext(self, ext, size, reference):
         """Attempt to relocate in priority order:
         1. Internal

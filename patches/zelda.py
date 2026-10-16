@@ -54,12 +54,30 @@ the LA save states right after the data (see ZeldaGnW._compact_ext).
 
 from pathlib import Path
 
+from .compression import lzma_compress
 from .exception import InvalidStockRomError, NotEnoughSpaceError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
 from .tileset import decode_backdrop
 from .utils import fds_remove_crc_gaps, printd, printi, round_up_page, round_up_word
 
 build_dir = Path("build")  # TODO: expose this properly or put in better location
+
+# Stock external offsets of the 11 backdrop images (backdrop_images in DTCM),
+# and the end of the last one's zero padding.
+BACKDROP_STARTS = [
+    0x1F_4C00,
+    0x20_5A80,
+    0x21_1920,
+    0x21_3840,
+    0x22_2500,
+    0x23_4140,
+    0x24_2480,
+    0x25_3960,
+    0x25_CF20,
+    0x26_AB00,
+    0x27_9FA0,
+]
+BACKDROP_END = 0x28_8120
 
 
 class ZeldaGnW(Device, name="zelda"):
@@ -271,20 +289,7 @@ class ZeldaGnW(Device, name="zelda"):
         0x26AB00    0x279f98
         0x279FA0    0x28811d
         """
-        bytes_starts = [
-            ("0", 0x1F4C00),
-            ("1", 0x205A80),
-            ("2", 0x211920),
-            ("3", 0x213840),
-            ("4", 0x222500),
-            ("5", 0x234140),
-            ("6", 0x242480),
-            ("7", 0x253960),
-            ("8", 0x25CF20),
-            ("9", 0x26AB00),
-            ("10", 0x279FA0),
-        ]
-        for name, start in bytes_starts:
+        for name, start in enumerate(BACKDROP_STARTS):
             img, consumed = decode_backdrop(self.external[start:])
             img.save(build_dir / f"backdrop_{name}.png")
             # print(hex(start + consumed))
@@ -325,6 +330,35 @@ class ZeldaGnW(Device, name="zelda"):
         self.internal.nop(0xB52A, 1, expect="2:aeb8096b")
         self.internal.replace(0xB54C, b"\xc0\xb1", expect="2:7fa409bc")
 
+    def _recompress_backdrops(self):
+        """Store the 11 backdrops as Mario's sleep images: palette + LZMA indices.
+
+        backdrop_tick's tail call to the stock decode-by-index helper goes to
+        backdrop_inflate (main.c) instead. The blobs are packed back to back (603424 -> ~491 KB), and the DTCM
+        backdrop_images pointers follow them through fix_ext_refs().
+        """
+        printi("Recompressing the backdrop images.")
+        self.internal.asm(
+            0x1_642C,
+            "b.w #" + hex(0xFFFFFFFE & self.internal.address("backdrop_inflate")),
+            expect="4:234b079b",
+        )
+
+        blocks = []
+        for start in BACKDROP_STARTS:
+            img, _ = decode_backdrop(self.external[start:])
+            if img.size != (320, 240):
+                raise InvalidStockRomError(f"Unexpected backdrop size {img.size}.")
+            palette_size = self.external[start + 4]
+            palette = self.external[start + 6 : start + 6 + 2 * palette_size]
+            blob = bytes(palette).ljust(512, b"\x00") + lzma_compress(img.tobytes())
+            blocks.append((start, blob))
+        self.ext_pack(BACKDROP_STARTS[0], BACKDROP_END, blocks)
+        printd(
+            f"    {BACKDROP_END - BACKDROP_STARTS[0]} -> "
+            f"{sum(round_up_word(len(b)) for _, b in blocks)} bytes"
+        )
+
     def _compact_ext(self):
         """Close the gaps in external flash and put the LA save states after it.
 
@@ -363,7 +397,9 @@ class ZeldaGnW(Device, name="zelda"):
             self.ext_drop(0xD_2000, 0x1F_4C00)
 
         if self.args.no_sleep_images:
-            self.ext_drop(0x1F_4C00, 0x28_8120)
+            self.ext_drop(BACKDROP_STARTS[0], BACKDROP_END)
+        else:
+            self._recompress_backdrops()
 
         stock_end = self.external.ENC_END
         self.ext_keep(stock_end)
@@ -467,7 +503,12 @@ class ZeldaGnW(Device, name="zelda"):
             # backdrop_tick's "no backdrop" path (g_backdrop_index < 0): clear
             # the frame instead of decoding backdrop_images[index].
             self.internal.b(0x1_6426, 0x1_6430, expect="2:eb4a57f1")
-            self.rwdata_erase(0x1F_4C00, 0x28_8120 - 0x1F_4C00)
+            self.rwdata_erase(BACKDROP_STARTS[0], BACKDROP_END - BACKDROP_STARTS[0])
+
+        # The GIF decoder (decode-by-index helper at 0x08019f36 and gif_decode)
+        # is only reached from backdrop_tick's tail call at 0x0801642c, which
+        # either goes to backdrop_inflate or is skipped without backdrops.
+        self.free_int(0x1_9CA4, 0x1_9F58)
 
         self._compact_ext()
 

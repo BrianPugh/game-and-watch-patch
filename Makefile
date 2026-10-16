@@ -201,6 +201,7 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 # These flags all imply --no-sleep-images, leaving sleep_image_inflate unused.
 ifeq (,$(filter --no-sleep-images --slim --internal-only --clock-only,$(PATCH_PARAMS)))
 LDFLAGS += -Wl,--undefined=sleep_image_inflate
+LDFLAGS += -Wl,--undefined=backdrop_inflate
 endif
 
 # default action: build all

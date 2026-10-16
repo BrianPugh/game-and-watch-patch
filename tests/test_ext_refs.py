@@ -177,3 +177,38 @@ def test_ext_drop_shifts_the_rest_in_aligned_steps(monkeypatch):
     assert device.external[0x90:0xD0] == b"\x00" * 0x40
     assert device.fix_ext_refs() == {"literal": 1}
     assert word(device.internal, 0x10) == 0x9000_0084
+
+
+def test_ext_pack_maps_each_block_and_shifts_the_rest(monkeypatch):
+    device = make_device(
+        {0x0800_0010: 0x9000_0060, 0x0800_0014: 0x9000_00C4}, monkeypatch
+    )
+    device.EXT_SHIFT_ALIGN = 0x20
+    device.ext_offset = 0
+    device.ext_cursor = 0x10
+    device.external[0x00:0x100] = bytes(range(0x100))
+    put(device.internal, 0x10, 0x9000_0060)
+    put(device.internal, 0x14, 0x9000_00C4)
+    device.ext_drop(0x20, 0x40)  # shift 0x20 before the packed range
+
+    # 0x50 stock bytes -> 2 blocks of 6 (word aligned to 8) and 4 bytes; the
+    # shift grows by 0x40, leaving 0x10 for the 0xC packed bytes.
+    device.ext_pack(0x40, 0x90, [(0x40, b"\xaa" * 6), (0x60, b"\xbb" * 4)])
+    device.ext_keep(0xD0)
+
+    assert device.ext_offset == -0x60
+    assert device.external[0x20:0x30] == b"\xaa" * 6 + b"\x00" * 2 + b"\xbb" * 4 + (
+        b"\x00" * 4
+    )
+    assert device.external[0x30:0x70] == bytes(range(0x90, 0xD0))
+    assert device.fix_ext_refs() == {"literal": 2}
+    assert word(device.internal, 0x10) == 0x9000_0028
+    assert word(device.internal, 0x14) == 0x9000_0064
+
+
+def test_ext_pack_rejects_blocks_larger_than_the_range(monkeypatch):
+    device = make_device({}, monkeypatch)
+    device.ext_offset = 0
+    device.ext_cursor = 0
+    with pytest.raises(ValueError):
+        device.ext_pack(0x40, 0x48, [(0x40, b"\xaa" * 12)])

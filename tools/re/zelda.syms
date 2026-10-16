@@ -22,6 +22,14 @@
 0x902df1b0 data menu_rows                           # 5 rows x 11 bytes: [count, variant ids...]: {0,1} {2,3} {4,5,6,7} {8} {9}
 0x2001a7bc data ui_state                            # overlay UI struct; +0x28 s16 carousel slide offset, +0x2a row cursor, +0x2d chosen variant per row
 0x2000ab9f data current_app_id                      # UNVERIFIED
+# RAM never written by stock fw (GWemu canary probe 2026-10-16, 2 identical runs: boot, clock, every game-select variant played briefly; sleep images / nvram UNVERIFIED)
+0x0000b7c0 data itcm_unused                           # to 0x00010000 (18496 B): past the last itcm_overlay_load copy (menu UI ends at 0x0000b7c0)
+#   AXI 0x240d3560-0x240d6000 (10912 B), 0x240fc120-0x240fd000 (3808 B), 0x2401f320-0x24020000 (3296 B),
+#       0x240a50f0-0x240a5c20 and 0x240b7cf0-0x240b8820 (2864 B each), 0x24090c40-0x24091040 (1024 B),
+#       0x240dce00-0x240dd000 and 0x240e5e00-0x240e6000 (512 B each) also unused
+#   No DTCM, AHB or SRD block >= 512 B is unused.
+#   Our linker RAM region (0x240ec524, __RAM_LENGTH__ 68308) is skipped by the probe; stock writes 0x240f0ad0-0x240fc120, so
+#       __RAM_LENGTH__ overstates the free space past our .data/.bss/heap (UNVERIFIED where stock use starts). Re-run: tools/emu/ram_probe.py --device zelda
 # --- generated: names shared with the other G&W firmware (HAL/SDK/runtime matched by code) and session RE
 0x00000000 func nes_cpu_run                          # 6502 interpreter entry: registers live in r5-r8 (saved at nes+0xb24); NMI/IRQ checks, then dispatch; Mario runs it from ITCM 0x0000; runs in ITCM; copied from external flash 0x9030c388 by itcm_overlay_load
 0x00000192 func nes_cpu_op_group_a                   # opcode handler block (UNVERIFIED); runs in ITCM; copied from external flash 0x9030c51a by itcm_overlay_load
@@ -625,7 +633,7 @@
 0x2000ab90 data g_state                              # main game-state struct: +0 power state, +9 leave-main-loop flag, +0xd app id (Zelda), +0xe pending mode request, +0x74/+0x78 idle counters (Zelda)
 0x2000ab92 data g_board_variant                      # g_state+2: read_pc8_with_pullup() at boot; picks PA2 vs PC5 for the same signal in MX_GPIO_Init and buttons_scan_debounced
 0x2000ab9b data g_backdrop_index                     # g_state+0xb: backdrop chosen each frame by main_loop_tick (2 clock-like, 3..10 per game/progress, <0 none)
-0x2000ab9d data g_app_id                             # g_state+0xd: 2 clock, 5 timer, 6/7 LoZ1 EN/JP, 8/9 LoZ2 EN/JP, 11-14 LA EN/FR/DE/JP, 15 Vermin (see menu_variant_to_app_id, app_load); 1 skips most of main_loop_tick
+0x2000ab9d data g_app_id                             # g_state+0xd: 2 first-boot PRESS TIME screen, 4 clock, 0x12 game-select menu (GWemu, zelda_menu_test.py), 5 timer, 6/7 LoZ1 EN/JP, 8/9 LoZ2 EN/JP, 11-14 LA EN/FR/DE/JP, 15 Vermin (see menu_variant_to_app_id, app_load); 1 skips most of main_loop_tick
 0x2000ab9e data g_mode_request                       # g_state+0xe: set once by mode_request (e.g. 3 when the 3-minute idle counter g_state+0x74 reaches 10800 frames)
 0x2000accc data draw_ctx                             # draw library state: +0 u16 color, +4 target framebuffer
 0x2000acd4 data uwTickFreq                           # HAL uwTickFreq / tick state (HAL_IncTick adds it)

@@ -41,6 +41,7 @@ CONFIGS = {
     "zelda": "--device=zelda",
     "zelda_options": "--device=zelda --no-la --no-sleep-images --no-second-beep "
     "--no-hour-tune --encrypt --debug",
+    "zelda_relocate": "--device=zelda --relocate-stock=0x08120000",
 }
 
 OUTPUTS = [

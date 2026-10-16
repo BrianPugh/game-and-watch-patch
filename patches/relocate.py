@@ -136,14 +136,29 @@ class Relocation:
                         self._fix_abs(data, src - dst, kind)
                         break
                 else:
-                    raise NotImplementedError(
-                        f"{kind} at 0x{src:08X} isn't in an rwdata block"
-                    )
+                    # Zelda copies its ITCM code out of external flash at boot.
+                    ext = self._copy_source(src)
+                    buf, off = (None, None) if ext is None else self.device.locate(ext)
+                    if buf is None:
+                        raise NotImplementedError(
+                            f"{kind} at 0x{src:08X} isn't in an rwdata block"
+                        )
+                    self._fix_abs(buf, off, kind)
             elif kind in ("external literal", "external data pointer"):
                 buf, off = self.device.locate(src)
                 if buf is None:
                     raise NotImplementedError(f"can't locate {kind} at 0x{src:08X}")
                 self._fix_abs(buf, off, kind)
+
+    def _copy_source(self, addr):
+        """External address that a boot-time ITCM/DTCM copy fills ``addr`` from."""
+        layout = xrefs.LAYOUT[self.device.name]
+        for src, dst, n in layout.get("itcm_copies", []) + layout.get(
+            "dtcm_copies", []
+        ):
+            if dst <= addr < dst + n:
+                return src + addr - dst
+        return None
 
     def _elf_relocs(self):
         """(address, type) of every relocation in our ELF that lands in flash."""

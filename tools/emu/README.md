@@ -129,3 +129,11 @@ build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu 
 menu test's dual-boot stub stays at `0x08100000`, which is why the firmware
 goes to `0x08120000`. Both tools wait on firmware state rather than counting
 frames, and retry presses the stock UI ignores (e.g. during clock animations).
+
+Zelda works the same way (stock code below its init table at `0x0801b368`):
+
+```bash
+make PATCH_PARAMS="--device=zelda --relocate-stock=0x08120000"
+build/gwprov-venv/bin/python tools/emu/zelda_menu_test.py --gwemu-bin /path/to/gwemu \
+    --bank2-image build/internal_flash_patched_bank2.bin --stock-offset 0x120000
+```

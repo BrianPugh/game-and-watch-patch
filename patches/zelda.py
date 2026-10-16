@@ -158,6 +158,16 @@ class ZeldaGnW(Device, name="zelda"):
             action="store_true",
             help="Remove the hour tune in TIME/CLOCK.",
         )
+
+        group = parser.add_argument_group("Experimental")
+        group.add_argument(
+            "--relocate-stock",
+            type=lambda s: int(s, 0),
+            metavar="ADDR",
+            help="Run the stock firmware relocated to this bank-2 address "
+            "(e.g. 0x08120000), written to a separate bank-2 image. "
+            "Tests stock-code relocation; see tools/emu/README.md.",
+        )
         self.args = parser.parse_args()
         return self.args
 
@@ -516,6 +526,15 @@ class ZeldaGnW(Device, name="zelda"):
         self.external.set_range(0x0000, 0x12000, b"\xFF")
 
     def patch(self):
+        if self.args.relocate_stock:
+            from .relocate import Relocation
+
+            printi(f"Relocate the stock firmware to 0x{self.args.relocate_stock:08X}.")
+            # Everything below the init table (0x0801b368), vector table included.
+            self.relocation = Relocation(
+                self, 0x0800_0000, 0x0801_B368, self.args.relocate_stock
+            )
+
         self._dump_roms()
         self._dump_backdrops()
 
@@ -582,6 +601,9 @@ class ZeldaGnW(Device, name="zelda"):
         self._compact_ext()
 
         self.fix_ext_refs()
+        if self.relocation:
+            # Before _finish_ext() compresses the ITCM overlay.
+            self.relocation.fix_ram_images()
 
         self._finish_ext()
 

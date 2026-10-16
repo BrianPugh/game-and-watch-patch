@@ -92,6 +92,11 @@ LAYOUT = {
     },
     "zelda": {
         "ctor_table": (0x0801_B0BC, 0x0801_B0D4),
+        # Internal flash data holding pointers to internal flash data.
+        "int_pointer_tables": [
+            # Factory key test: 11 pointers to the button-label strings at 0x08000310.
+            (0x0800_03E4, 0x0800_0410),
+        ],
         # Zero-init entry (0x0800306a) ahead of the RWDATA entry.
         "init_entries": [0x0801_B368],
         # itcm_overlay_load (0x0800f784) copies these once at boot; the code is
@@ -575,10 +580,13 @@ def analyze(device, internal=None, external=None, repo=REPO):
         v = iword(lit) if sz == 4 else 0
         if in_image(v) and lit not in pc_offset_lits:
             refs.append({"kind": "literal", "src": lit, "target": v})
+    int_pointer_tables = layout.get("int_pointer_tables", [])
     for lo, hi in unknown_runs(cls, code.lo):
         for o in range((lo + 3) & ~3, hi - 3, 4):
             v = iword(o)
-            if v & 1 and (v & ~1) in code.insns:
+            if (v & 1 and (v & ~1) in code.insns) or (
+                in_image(v) and any(lo <= o < hi for lo, hi in int_pointer_tables)
+            ):
                 refs.append({"kind": "pointer in flash data", "src": o, "target": v})
             elif in_image(v):
                 refs.append(

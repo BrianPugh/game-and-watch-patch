@@ -32,6 +32,7 @@ bytes. Like keystone, it raises on operands that cannot be encoded.
 """
 
 import re
+from typing import List
 
 __all__ = [
     "ThumbAssemblyError",
@@ -51,15 +52,21 @@ _CONDITIONS = {
     "ge": 10, "lt": 11, "gt": 12, "le": 13, "al": 14,
 }  # fmt: skip
 
+_CONDITION_NAMES = {}
+for _name, _code in _CONDITIONS.items():
+    _CONDITION_NAMES.setdefault(_code, _name)
+
 _REGISTERS = {f"r{i}": i for i in range(16)}
 _REGISTERS.update({"sp": 13, "lr": 14, "pc": 15})
 
 _COND_RE = "|".join(_CONDITIONS)
-# The optional condition is consumed by an enclosing IT block and does not change
+# The optional condition comes from an enclosing IT block and does not change
 # the encoding, so e.g. ``addne.w`` encodes identically to ``add.w``.
+# :func:`assemble` checks each one against its IT slot.
 _MOV_W_RE = re.compile(rf"^mov(?:{_COND_RE})?\.w$")
 _ADD_W_RE = re.compile(rf"^add(?:{_COND_RE})?\.w$")
 _SUB_W_RE = re.compile(rf"^sub(?:{_COND_RE})?\.w$")
+_PREDICATED_RE = re.compile(rf"^(?:mov|add|sub)({_COND_RE})\.w$")
 # ``ldr.w Rt, [pc, #imm]`` -- PC-relative literal load with a signed byte offset.
 _LDR_W_PC_RE = re.compile(
     r"^ldr\.w\s+(\w+)\s*,\s*\[\s*pc\s*,\s*#\s*(-?(?:0x)?[0-9a-f]+)\s*\]$"
@@ -91,11 +98,11 @@ def _branch_target(token: str) -> int:
         raise ThumbAssemblyError(f"Invalid branch target {token!r}") from None
 
 
-def _emit16(hw: int) -> list[int]:
+def _emit16(hw: int) -> List[int]:
     return [hw & 0xFF, (hw >> 8) & 0xFF]
 
 
-def _emit32(hw1: int, hw2: int) -> list[int]:
+def _emit32(hw1: int, hw2: int) -> List[int]:
     return [hw1 & 0xFF, (hw1 >> 8) & 0xFF, hw2 & 0xFF, (hw2 >> 8) & 0xFF]
 
 
@@ -330,7 +337,9 @@ def _b_w(ops, addr):
     return _emit32(hw1, hw2)
 
 
-def _it(mnemonic, ops):
+def _it_slots(text: str) -> List[int]:
+    """Condition codes an IT instruction gives the instructions after it."""
+    mnemonic, *ops = text.split()
     if len(ops) != 1:
         raise ThumbAssemblyError("IT expects a single condition")
     pattern = mnemonic[2:]  # the 't'/'e' characters following "it"
@@ -340,6 +349,15 @@ def _it(mnemonic, ops):
         cond = _CONDITIONS[ops[0]]
     except KeyError:
         raise ThumbAssemblyError(f"Invalid condition {ops[0]!r}") from None
+    if cond == 14 and "e" in pattern:
+        raise ThumbAssemblyError("an IT AL block has no else slots")
+    return [cond] + [cond if ch == "t" else cond ^ 1 for ch in pattern]
+
+
+def _it(mnemonic, ops):
+    _it_slots(" ".join([mnemonic, *ops]))
+    cond = _CONDITIONS[ops[0]]
+    pattern = mnemonic[2:]
     fc0 = cond & 1
     n = 1 + len(pattern)
     mask = 1 << (4 - n)
@@ -349,7 +367,7 @@ def _it(mnemonic, ops):
     return _emit16(0xBF00 | (cond << 4) | mask)
 
 
-def _assemble_one(text: str, addr: int) -> list[int]:
+def _assemble_one(text: str, addr: int) -> List[int]:
     # ``ldr.w Rt, [pc, #imm]`` has bracket syntax the generic tokenizer mangles.
     ldr = _LDR_W_PC_RE.match(text)
     if ldr:
@@ -388,7 +406,7 @@ def _assemble_one(text: str, addr: int) -> list[int]:
     raise ThumbAssemblyError(f"Unsupported instruction: {text!r}")
 
 
-def assemble(code: str, addr: int = 0) -> list[int]:
+def assemble(code: str, addr: int = 0) -> List[int]:
     """Assemble one or more Thumb-2 instructions.
 
     Parameters
@@ -409,10 +427,24 @@ def assemble(code: str, addr: int = 0) -> list[int]:
         If any instruction or operand cannot be assembled.
     """
     result = []
+    it_slots = []  # conditions still owed to the current IT block
     for piece in code.lower().split(";"):
         piece = piece.strip()
         if not piece:
             continue
+        predicate = _PREDICATED_RE.match(piece.split()[0])
+        if it_slots:
+            expected = it_slots.pop(0)
+            if not predicate or _CONDITIONS[predicate.group(1)] != expected:
+                raise ThumbAssemblyError(
+                    f"{piece!r} doesn't match its IT slot ({_CONDITION_NAMES[expected]})"
+                )
+        elif predicate:
+            raise ThumbAssemblyError(f"{piece!r} is conditional outside an IT block")
         encoded = _assemble_one(piece, addr + len(result))
+        if piece.startswith("it"):
+            it_slots = _it_slots(piece)
         result.extend(encoded)
+    if it_slots:
+        raise ThumbAssemblyError("IT block is missing instructions")
     return result

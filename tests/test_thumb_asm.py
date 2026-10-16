@@ -318,7 +318,36 @@ def test_b_wide_range(keystone):
 )
 @pytest.mark.parametrize("cond", ["eq", "ne", "cs", "mi", "ge", "lt", "gt", "le"])
 def test_it_blocks(keystone, mnemonic, cond):
-    assert_match(keystone, f"{mnemonic} {cond}")
+    inverse = {"eq": "ne", "ne": "eq", "cs": "cc", "mi": "pl"}
+    inverse.update({"ge": "lt", "lt": "ge", "gt": "le", "le": "gt"})
+    body = [f"mov{cond}.w r0, #1"]
+    body += [
+        f"mov{cond if ch == 't' else inverse[cond]}.w r0, #1" for ch in mnemonic[2:]
+    ]
+    assert_match(keystone, f"{mnemonic} {cond}; " + "; ".join(body))
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "movne.w r4, #1",  # no IT block
+        "addeq.w r0, r0, #1",
+        "it eq; movne.w r4, #1",  # wrong slot
+        "ite ne; movne.w r4, #1; movne.w r4, #2",
+        "it ne; mov.w r4, #1",  # unpredicated instruction in the block
+        "it ne",  # block missing instructions
+        "itt ne; movne.w r4, #1",
+        "it ne; it ne; movne.w r4, #1",
+        "ite al; mov.w r4, #1; mov.w r4, #2",
+    ],
+)
+def test_it_predicates_rejected(code):
+    with pytest.raises(ThumbAssemblyError):
+        assemble(code)
+
+
+def test_it_condition_aliases():
+    assert assemble("it hs; movcs.w r4, #1") == assemble("it cs; movhs.w r4, #1")
 
 
 def test_nop(keystone):

@@ -11,6 +11,12 @@ def lzma_compress(data):
                 "id": lzma.FILTER_LZMA1,
                 "preset": 6,
                 "dict_size": 16 * 1024,
+                # lc=0 shrinks the decoder's probability model from 16 KB to
+                # 5.5 KB (LZMA_BUF_SIZE in main.c) and compresses our data no
+                # worse overall (only the 8-bit sleep images lose ~0.6%).
+                "lc": 0,
+                "lp": 0,
+                "pb": 2,
             }
         ],
     )

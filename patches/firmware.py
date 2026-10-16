@@ -469,6 +469,11 @@ class ExtFirmware(Firmware):
 class Device:
     registry = {}
 
+    # Internal flash held back from the fit checks: fix_ext_refs() and
+    # fix_ram_images() rewrite pointers in the compressed blobs after they're
+    # packed, which can grow them a few bytes (7 B for Mario at lc=0).
+    COMPRESSED_FIXUP_SLACK = 64
+
     def __init_subclass__(cls, name, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.name = name
@@ -684,7 +689,7 @@ class Device:
         )
         if self.internal.rwdata is not None:
             out -= self.internal.rwdata.compressed_len
-        return out
+        return out - self.COMPRESSED_FIXUP_SLACK
 
     def rwdata_erase(self, lower, size):
         """

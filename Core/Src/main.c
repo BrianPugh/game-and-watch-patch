@@ -215,8 +215,12 @@ gamepad_t read_buttons() {
 }
 
 
-const uint8_t LZMA_PROP_DATA[5] = {0x5d, 0x00, 0x40, 0x00, 0x00};
-#define LZMA_BUF_SIZE            16256
+// lc=0, lp=0, pb=2 ((pb * 5 + lp) * 9 + lc = 0x5a), 16 KB dictionary; must
+// match lzma_compress() in patches/compression.py.
+const uint8_t LZMA_PROP_DATA[5] = {0x5a, 0x00, 0x40, 0x00, 0x00};
+// LzmaDecode only allocates the probability model (the output buffer is the
+// dictionary): (1984 + 0x300 << (lc + lp)) UInt16s.
+#define LZMA_BUF_SIZE            ((1984 + (0x300 << 0)) * 2)
 
 static void *SzAlloc(ISzAllocPtr p, size_t size) {
     void* res = p->Mem;

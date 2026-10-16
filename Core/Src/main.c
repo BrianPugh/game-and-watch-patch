@@ -287,16 +287,22 @@ uint8_t backdrop_inflate(uint16_t *dst, int32_t index){
 }
 
 /**
- * Replaces loz2j_load's call to the stock helper at 0x0800f6fa, which loads
- * r6 (the NES context) and tail-calls memcpy(0x30000000, r1, r2). loz2_load
- * shares that helper for the uncompressed LoZ2 EN ROM, so only this call site
- * inflates.
+ * LoZ2 EN's CHR ROM, read in place from external flash; the patcher relocates
+ * this pointer when the external data moves.
  */
-void __attribute__((naked)) loz2j_rom_inflate(void){
+const uint8_t * const LOZ2_CHR = (const uint8_t *)0x90090000;
+
+/**
+ * Replaces loz2_load's "CHR = PRG ROM + 0x20000" (adds r0, r5, r4;
+ * str.w r0, [r6, #0xf4c]): the PRG ROM is stored compressed now, so the CHR
+ * no longer follows it. r6 is the NES context.
+ */
+void __attribute__((naked)) loz2_set_chr(void){
     __asm("                         \n\
-          ldr r6, =0x20000800       \n\
-          mov.w r0, #0x30000000     \n\
-          b.w memcpy_inflate        \n\
+          ldr r0, =LOZ2_CHR         \n\
+          ldr r0, [r0]              \n\
+          str.w r0, [r6, #0xf4c]    \n\
+          bx lr                     \n\
           .ltorg                    \n\
     ");
 }

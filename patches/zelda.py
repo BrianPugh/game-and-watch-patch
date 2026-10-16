@@ -48,14 +48,15 @@ Start      End        Description
 0x3E0000   0x400000   LA save states, 32 KB per LA language
 
 The patch keeps 0x00000-0x20000 in place, closes the gaps after it, and puts
-the LA save states right after the data (see ZeldaGnW._compact_ext).
+the LA save states right after the data (see ZeldaGnW._compact_ext and
+_finish_ext).
 """
 
 
 from pathlib import Path
 
 from .compression import lzma_compress
-from .exception import InvalidStockRomError, NotEnoughSpaceError
+from .exception import InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
 from .tileset import decode_backdrop
 from .utils import fds_remove_crc_gaps, printd, printi, round_up_page, round_up_word
@@ -78,6 +79,17 @@ BACKDROP_STARTS = [
     0x27_9FA0,
 ]
 BACKDROP_END = 0x28_8120
+
+# itcm_overlay_load's 5 copies out of external flash (4 into ITCM, 1 into
+# DTCM), which fill 0x30B4A0-0x317230: (source literal, stock offset, size).
+OVERLAY_COPIES = [
+    (0xFD30, 0x30_B4A0, 0xEE8),
+    (0xFD38, 0x30_C388, 0x1E70),
+    (0xFD44, 0x30_E1F8, 0x5D0),
+    (0xFD50, 0x30_E7C8, 0x6F24),
+    (0xFD5C, 0x31_56EC, 0x1B44),
+]
+OVERLAY_START, OVERLAY_END = 0x30_B4A0, 0x31_7230
 
 
 class ZeldaGnW(Device, name="zelda"):
@@ -359,8 +371,14 @@ class ZeldaGnW(Device, name="zelda"):
             f"{sum(round_up_word(len(b)) for _, b in blocks)} bytes"
         )
 
+    def _compress_in_place(self, start, size, end, reference):
+        """LZMA the ``size`` bytes at ``start`` and drop the rest up to ``end``."""
+        compressed_len = self.external.compress(start, size)
+        self._expect_refs(reference, start, compressed_len)
+        self.ext_drop(start + round_up_word(compressed_len), end)
+
     def _compact_ext(self):
-        """Close the gaps in external flash and put the LA save states after it.
+        """Close the gaps in external flash; _finish_ext() ends the image.
 
         Everything from 0x20000 on shifts down (``ext_keep``/``ext_drop``), so
         offsets inside a block, like LA's bank addressing off one ROM base,
@@ -373,18 +391,30 @@ class ZeldaGnW(Device, name="zelda"):
         )
         self.ext_cursor = 0x2_0000
 
-        # loz2j_load copies the 0x1e000-byte FDS image into AHB SRAM, so it can be
-        # stored compressed (in external flash when it doesn't fit internal).
-        printd("Compressing LoZ2 JP ROM")
-        loz2j, loz2j_end = 0xB_0000, 0xD_0000
-        compressed_len = self.external.compress(loz2j, 0x1_E000)
-        self.internal.bl(0xF69A, "loz2j_rom_inflate", expect="4:2ce1dfce")
-        try:
-            self.move_to_int(loz2j, compressed_len, 0xFD1C)
-            self.ext_drop(loz2j, loz2j_end)
-        except NotEnoughSpaceError:
-            self._expect_refs(0xFD1C, loz2j, compressed_len)
-            self.ext_drop(loz2j + round_up_word(compressed_len), loz2j_end)
+        # Stock memcpy's these into RAM before use, so they're stored LZMA
+        # compressed (in place; internal flash is kept for smaller data).
+        printi("Compressing the clock graphics and the NES ROMs")
+        # app_load: memcpy(0x24000000, clock graphics, 0x10000).
+        self.internal.bl(0xFA1A, "memcpy_inflate", expect="4:880d2d82")
+        self._compress_in_place(0x2_0000, 0x1_0000, 0x3_0000, 0x1_0660)
+        # loz1_load: memcpy(0x30000000, LoZ1 EN ROM, 0x20000).
+        self.internal.bl(0xF528, "memcpy_inflate", expect="4:f4b61f7f")
+        self._compress_in_place(0x3_0000, 0x2_0000, 0x5_0000, 0xFD00)
+        # loz1j_load: memcpy(0x30000000, LoZ1 JP FDS image, 0x1e000).
+        self.internal.bl(0xF5C2, "memcpy_inflate", expect="4:5f322700")
+        self._compress_in_place(0x5_0000, 0x1_E000, 0x7_0000, 0xFD14)
+        # The helper loz2_load and loz2j_load share: memcpy(0x30000000, r1, r2).
+        self.internal.asm(0xF702, b_w_memcpy_inflate_asm, expect="4:1ee08bc3")
+        # loz2_load copies the LoZ2 EN PRG ROM and reads the CHR ROM after it in
+        # place, at PRG + 0x20000; loz2_set_chr loads the CHR's own pointer.
+        self.internal.bl(0xF666, "loz2_set_chr", expect="4:79f3cad4")
+        self.internal.nop(0xF66A, 1, expect="2:8daa0f67")
+        self._expect_refs(
+            self.internal.address("LOZ2_CHR", sub_base=True), 0x9_0000, 0x2_0000
+        )
+        self._compress_in_place(0x7_0000, 0x2_0000, 0x9_0000, 0xFD18)
+        # loz2j_load: the 0x1e000-byte FDS image.
+        self._compress_in_place(0xB_0000, 0x1_E000, 0xD_0000, 0xFD1C)
 
         printd("Compressing and moving LoZ2 TIMER data to int")
         timer, timer_end = 0xD_0000, 0xD_2000
@@ -401,9 +431,48 @@ class ZeldaGnW(Device, name="zelda"):
         else:
             self._recompress_backdrops()
 
+        # The overlay code holds pointers that fix_ext_refs() rewrites, so it's
+        # appended uncompressed for now and compressed by _finish_ext().
+        overlay = bytes(self.external[OVERLAY_START:OVERLAY_END])
+        self.ext_drop(OVERLAY_START, OVERLAY_END)
+
         stock_end = self.external.ENC_END
         self.ext_keep(stock_end)
-        data_end = stock_end + self.ext_offset
+        self.overlay_pos = stock_end + self.ext_offset
+        self.external[self.overlay_pos : self.overlay_pos + len(overlay)] = overlay
+        base = self.external.FLASH_BASE
+        self.lookup.add(base + OVERLAY_START, base + self.overlay_pos, len(overlay))
+
+    def _finish_ext(self):
+        """Compress the ITCM overlay and put the LA save states after the data.
+
+        Runs after fix_ext_refs(): the overlay's pointers are final, and
+        nothing points at the overlay except itcm_overlay_load's literals.
+        """
+        printi("Compressing the ITCM/DTCM overlay copies")
+        blobs = []
+        for literal, offset, size in OVERLAY_COPIES:
+            src = self.overlay_pos + offset - OVERLAY_START
+            if self.internal.int(literal) != self.external.FLASH_BASE + src:
+                raise ValueError(f"Unexpected overlay literal at 0x{literal:X}")
+            blobs.append(lzma_compress(bytes(self.external[src : src + size])))
+        self.external.clear_range(self.overlay_pos, len(self.external))
+        data_end = self.overlay_pos
+        for (literal, offset, size), blob in zip(OVERLAY_COPIES, blobs):
+            self.external[data_end : data_end + len(blob)] = blob
+            self.internal.replace(literal, self.external.FLASH_BASE + data_end, size=4)
+            printd(f"    0x{offset:06X}: {size} -> {len(blob)} bytes")
+            data_end += round_up_word(len(blob))
+        # The first 4 copies are bl memcpy, the last a tail call.
+        self.internal.bl(0xF7A2, "memcpy_inflate", expect="4:d2879707")
+        self.internal.bl(0xF7B2, "memcpy_inflate", expect="4:1a5e1d0f")
+        self.internal.bl(0xF7C2, "memcpy_inflate", expect="4:c63b76ba")
+        self.internal.bl(0xF7D2, "memcpy_inflate", expect="4:0ee2fcb2")
+        self.internal.asm(
+            0xF7E6,
+            "b.w #" + hex(0xFFFFFFFE & self.internal.address("memcpy_inflate")),
+            expect="4:ac7f82fd",
+        )
         self.external.ENC_END = data_end
 
         # LA save states: 4 x 32 KB (one per language) at 0x3E0000 + lang *
@@ -513,6 +582,8 @@ class ZeldaGnW(Device, name="zelda"):
         self._compact_ext()
 
         self.fix_ext_refs()
+
+        self._finish_ext()
 
         # Compress, insert, and reference the modified rwdata
         self.int_pos += self.internal.rwdata.write_table_and_data(

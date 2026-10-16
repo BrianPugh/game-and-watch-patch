@@ -276,6 +276,23 @@ uint8_t sleep_image_inflate(const uint8_t *src, uint16_t *dst){
 }
 #endif
 
+#if GNW_DEVICE_ZELDA
+/**
+ * Replaces loz2j_load's call to the stock helper at 0x0800f6fa, which loads
+ * r6 (the NES context) and tail-calls memcpy(0x30000000, r1, r2). loz2_load
+ * shares that helper for the uncompressed LoZ2 EN ROM, so only this call site
+ * inflates.
+ */
+void __attribute__((naked)) loz2j_rom_inflate(void){
+    __asm("                         \n\
+          ldr r6, =0x20000800       \n\
+          mov.w r0, #0x30000000     \n\
+          b.w memcpy_inflate        \n\
+          .ltorg                    \n\
+    ");
+}
+#endif
+
 /**
  * This gets hooked into the rwdata/bss init table.
  */

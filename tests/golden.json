@@ -26,12 +26,12 @@
       "internal_flash_patched_bank2.bin": "0ed167e66162f7307b3a8525cbbfe04cc4946a16"
     },
     "zelda": {
-      "external_flash_patched.bin": "5999c10b67c2868524b1f3efeb9fd53bf0d067d7",
-      "internal_flash_patched.bin": "80cf421c8421af5bbb7142fcb454f48d77372809"
+      "external_flash_patched.bin": "00bf6ed25156ee6879e4eec4fca572f64970f97f",
+      "internal_flash_patched.bin": "9096213e40194b29038340105ffa561c7c5ce6d6"
     },
     "zelda_options": {
-      "external_flash_patched.bin": "66590845aac2b7ef9bd46ae7a52a2e0b10fc886b",
-      "internal_flash_patched.bin": "e1b1147b96c20a3570d58aa8749856007076b364"
+      "external_flash_patched.bin": "565d4284b793497f19587531c3b2814ecc8e6687",
+      "internal_flash_patched.bin": "ae0dd267d77971c344c340a98cd1cd83b6e570f9"
     }
   },
   "toolchain": "arm-none-eabi-gcc (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) 15.2.1 20251203"

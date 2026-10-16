@@ -76,7 +76,9 @@ make PATCH_PARAMS="--device=zelda" flash
 
 # in the retro-go repo
 make clean
-# In this example, I'm assuming you have a 64MB flash chip (60 = 64 - 4)
+# In this example, I'm assuming you have a 64MB flash chip (60 = 64 - 4).
+# The patched firmware uses less than 4MB (the patcher prints "External Firmware Used"),
+# so retro-go can start anywhere after that; 4MB is a round number that leaves room.
 make -j8 EXTFLASH_SIZE_MB=60 EXTFLASH_OFFSET=4194304 INTFLASH_BANK=2 flash
 ```
 ## Build and flash using Docker

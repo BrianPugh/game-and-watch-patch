@@ -12,8 +12,10 @@ tooling, so keep it in its own venv:
 
 ```bash
 python3 -m venv build/gwprov-venv
-build/gwprov-venv/bin/pip install 'gwprov[dist,media] @ git+https://github.com/slash-proc/gwprov'
+build/gwprov-venv/bin/pip install 'gwprov[dist,media] @ git+https://github.com/slash-proc/gwprov' numpy
 ```
+
+numpy lets scripts import `patches` (e.g. `patches.tileset`) from this venv.
 
 Download a GWemu build from the
 [releases page](https://github.com/slash-proc/gwemu/releases) (e.g.
@@ -45,3 +47,63 @@ see `tools/re/mario.syms`) and overwrites `r0` with the desired button mask.
 Run a whole sequence within one session. Once injection stops, the firmware
 sees the emulator's stuck TIME again, which registers as a fresh TIME press
 (closing menus / switching to the clock).
+
+## RAM probe
+
+```bash
+make PATCH_PARAMS="--device=mario"
+build/gwprov-venv/bin/python tools/emu/ram_probe.py --gwemu-bin /path/to/gwemu
+```
+
+Fills RAM with a marker at the stock `Reset_Handler`, plays clock, SMB1,
+SMB2, BALL and the pause menu, then lists regions that still hold the marker
+(never written by the stock firmware). Our own `.data`/`.bss`/stack is skipped.
+GWemu fills some buffers (e.g. audio) in some runs only, so run it more than
+once and trust only regions that are free every time. Results are recorded in
+`tools/re/mario.syms`.
+
+## Function coverage
+
+```bash
+build/gwprov-venv/bin/python tools/emu/coverage.py --gwemu-bin /path/to/gwemu
+```
+
+Breaks on every stock function entry from reset and records the first mode
+(boot, clock, SMB1, BALL, pause, SMB2) each one runs in, then lists the
+largest never-run ranges. That's how the factory test (`--no-factory-test`)
+was found. "Never ran" isn't proof of dead code: check callers first, and
+re-run this after removing code (removed ranges are filled with `udf`, so a
+missed path faults).
+
+GWemu only honors breakpoints set while the target is halted, and resuming
+from an armed breakpoint re-hits it; the tool clears, steps and re-arms.
+
+## Relocated stock image
+
+```bash
+python tools/re/shift_image.py --device=mario
+build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu
+```
+
+Boots the stock image relocated to bank 2 (see `tools/re/README.md`) and
+plays the `coverage.py` phases with input injected at the shifted
+`read_buttons` return. A phase fails if that site stops being reached (fault
+or hang) or the CPU is caught in bank 1. `--images build/re/shift/stock --delta 0`
+runs the same steps on unshifted images to check the harness itself.
+
+## Relocated patched build
+
+```bash
+make PATCH_PARAMS="--device=mario --slim --game-select-dual-boot --relocate-stock=0x08120000"
+build/gwprov-venv/bin/python tools/emu/mario_menu_test.py --gwemu-bin /path/to/gwemu \
+    --bank2-image build/internal_flash_patched_bank2.bin --stock-offset 0x120000
+build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu --delta 0x120000 \
+    --bank1 build/internal_flash_patched.bin --bank2 build/internal_flash_patched_bank2.bin \
+    --external build/external_flash_patched.bin
+```
+
+`--relocate-stock` moves all stock code (everything below the init table at
+`0x0801807c`) to bank 2 and leaves `udf` behind; our code stays in bank 1. The
+menu test's dual-boot stub stays at `0x08100000`, which is why the firmware
+goes to `0x08120000`. Both tools wait on firmware state rather than counting
+frames, and retry presses the stock UI ignores (e.g. during clock animations).

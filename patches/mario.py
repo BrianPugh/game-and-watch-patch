@@ -21,6 +21,7 @@ from .utils import (
     printi,
     round_down_word,
     round_up_page,
+    round_up_word,
     seconds_to_frames,
 )
 
@@ -42,6 +43,22 @@ class MarioGnW(Device, name="mario"):
         RWDATA_LEN = 36
         RWDATA_ITCM_IDX = 0
         RWDATA_DTCM_IDX = 1
+        # Stock functions our C code calls, as Thumb addresses. They become
+        # absolute symbols (generated build/stock_symbols.s) so the ELF records
+        # each use as a relocation, which the patcher needs to relocate stock code.
+        STOCK_SYMBOLS = {
+            "stock_Reset_Handler": 0x0801_7A45,
+            "stock_read_buttons": 0x0801_0D49,
+            "is_usb_connected": 0x0801_0DC3,
+            "stock_sleep": 0x0800_63A1,
+            "stock_prepare_clock_rom": 0x0801_0E11,
+            "stock_game_select_handle_input": 0x0800_C859,
+            "ui_tile_ptr": 0x0800_C361,
+            "ui_draw_tile16": 0x0800_C37D,
+            "ui_blit_4bpp": 0x0800_C3D1,
+            "ui_set_dirty_rect": 0x0800_CB9F,
+            "ui_draw_panel": 0x0800_CC07,
+        }
 
     class Ext(ExtFirmware):
         STOCK_ROM_SHA1_HASH = "eea70bb171afece163fb4b293c5364ddb90637ae"
@@ -69,6 +86,11 @@ class MarioGnW(Device, name="mario"):
             default=None,
             help="Go to sleep after this many seconds of inactivity.. "
             "Valid range: [1, 1092]",
+        )
+        group.add_argument(
+            "--sleep-on-usb",
+            action="store_true",
+            help="Allow sleeping while USB is connected (stock never sleeps on USB power).",
         )
 
         group.add_argument(
@@ -159,12 +181,27 @@ class MarioGnW(Device, name="mario"):
         group.add_argument(
             "--no-mario-song",
             action="store_true",
-            help="Remove the mario song easter egg.",
+            help="Remove the mario song easter egg (~540KB of external data, ~2.7KB of internal code).",
         )
         group.add_argument(
             "--no-sleep-images",
             action="store_true",
             help="Remove the 5 sleeping images.",
+        )
+        group.add_argument(
+            "--no-factory-test",
+            action="store_true",
+            help="Remove the factory CHARGE AND KEY TEST screen (~5KB of internal code).",
+        )
+
+        group = parser.add_argument_group("Experimental")
+        group.add_argument(
+            "--relocate-stock",
+            type=lambda s: int(s, 0),
+            metavar="ADDR",
+            help="Run the stock firmware relocated to this bank-2 address "
+            "(e.g. 0x08120000), written to a separate bank-2 image. "
+            "Tests stock-code relocation; see tools/emu/README.md.",
         )
 
         group = parser.add_argument_group("High level flash savings flags")
@@ -220,15 +257,68 @@ class MarioGnW(Device, name="mario"):
         if self.args.slim:
             self.args.no_mario_song = True
             self.args.no_sleep_images = True
+            self.args.no_factory_test = True
 
         return self.args
 
     def patch(self):
+        if self.args.relocate_stock:
+            from .relocate import Relocation
+
+            printi(f"Relocate the stock firmware to 0x{self.args.relocate_stock:08X}.")
+            # Everything below the init table (0x0801807c), vector table included.
+            self.relocation = Relocation(
+                self, 0x0800_0000, 0x0801_807C, self.args.relocate_stock
+            )
+
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
         self.internal.replace(0x4, "bootloader")
 
         printi("Intercept button presses for macros.")
         self.internal.bl(0x6B52, "read_buttons")
+
+        if self.args.no_factory_test:
+            printi("Remove the factory CHARGE AND KEY TEST (g_gnw_mode 0x01).")
+            # game_reload: never enter test mode on the magic boot value.
+            self.internal.b(0x66D2, 0x66DA)
+            # Its static constructor -> an existing `bx lr`.
+            ctor_entry, bx_lr = 0x1_7E08, 0x659A
+            self.internal.replace(
+                ctor_entry, ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF, size=4
+            )
+            # main_loop_tick calls, each guarded by g_gnw_mode == 1.
+            for call in (0x6CC4, 0x6DBC, 0x70E4, 0x711C):
+                self.internal.nop(call, 2)
+            # Thunks, constructor, body and literal pools.
+            self.free_int(0x1_1A94, 0x1_2EE4)
+
+        if self.args.no_mario_song:
+            printi("Remove the mario song code (g_gnw_mode 0x04).")
+            # Mode 4 is never entered (see the 0x6FC8 patch below); these are
+            # main_loop_tick's calls, each guarded by (g_gnw_mode & 0xC6) == 4.
+            for call in (0x6980, 0x6DAE, 0x7008, 0x7112):
+                self.internal.nop(call, 2)
+            # Its static constructor -> an existing `bx lr`.
+            ctor_entry, bx_lr = 0x1_7E04, 0x659A
+            self.internal.replace(
+                ctor_entry, ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF, size=4
+            )
+            if not self.args.no_factory_test:
+                # The factory test stops the song; nothing to stop now.
+                self.internal.nop(0x1_1D20, 2)
+            # Constructor, body and literal pools.
+            self.free_int(0x1_0FAC, 0x1_1A24)
+
+        if self.args.no_mario_song and self.args.no_factory_test:
+            printi("Remove the drawing library only used by the song and factory test.")
+            ctor_entry, bx_lr = 0x1_7E10, 0x659A
+            self.internal.replace(
+                ctor_entry, ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF, size=4
+            )
+            # Constructor, primitives and the text printf.
+            self.free_int(0x1_6F30, 0x1_7394)
+            # Its vsnprintf and helpers, down to memchr.
+            self.free_int(0x1_73EA, 0x1_7A30)
 
         if self.args.game_select_dual_boot:
             printi("Add dual-boot entry to the game-select menu.")
@@ -270,6 +360,13 @@ class MarioGnW(Device, name="mario"):
         if self.args.disable_sleep:
             printi("Disable sleep timer")
             self.internal.replace(0x6C40, 0x91, size=1)
+
+        if self.args.sleep_on_usb:
+            printi("Allow sleeping while USB is connected.")
+            # main_loop_tick's idle timer reset (0x6BEE) and wake-from-sleep
+            # (0x6BA6) both fire when is_usb_connected() or there's input.
+            for call in (0x6BA6, 0x6BEE):
+                self.internal.asm(call, "movs r0, #0; nop", size=4)
 
         if self.args.mario_song_time:
             printi(f"Setting Mario Song time to {self.args.mario_song_time} seconds.")
@@ -370,6 +467,7 @@ class MarioGnW(Device, name="mario"):
                     )
                 # Update the SMB1_GRAPHIC_MODS table
                 self.internal.replace(table, loc, size=4)
+                self.int_pointers.append(table)
                 table += 4
 
         printd("Compressing and moving stuff stuff to internal firmware.")
@@ -700,6 +798,10 @@ class MarioGnW(Device, name="mario"):
             img, _ = decode_backdrop(self.external[index:])
             img.save(build_dir / f"backdrop_{name}.png")
 
+        # The stock GIF decoder's only caller is the tail call at 0x10938, which
+        # is either hooked below or unreachable once the images are deleted.
+        self.free_int(0x1_6764, 0x1_69F0)
+
         if self.args.no_sleep_images:
             # Images Notes:
             #    * In-between images are just zeros.
@@ -717,7 +819,38 @@ class MarioGnW(Device, name="mario"):
                 self.internal.replace(reference, b"\x00" * 4)  # Erase image references
             self.ext_offset -= total_image_length
         else:
-            self.move_ext(0xC58F8, total_image_length, references)
+            printe("Recompressing sleeping images.")
+            # Replace the stock GIF decoder (tail-called at 0x10938) with ours.
+            self.internal.asm(
+                0x10938,
+                "b.w #"
+                + hex(0xFFFFFFFE & self.internal.address("sleep_image_inflate")),
+            )
+            # Each image's literal pool reference, keyed by its ext offset.
+            literals = {
+                self.internal.int(ref) - self.external.FLASH_BASE: ref
+                for ref in references
+            }
+            starts = sorted(literals)
+            ends = starts[1:] + [0xC58F8 + total_image_length]
+            for start, end in zip(starts, ends):
+                # LZMA over the raw 8-bit indices is ~23% smaller than the LZW.
+                img, _ = decode_backdrop(self.external[start:])
+                if img.size != (320, 240):
+                    raise InvalidStockRomError(
+                        f"Unexpected sleep image size {img.size}."
+                    )
+                palette_size = self.external[start + 4]
+                palette = self.external[start + 6 : start + 6 + 2 * palette_size]
+                blob = bytes(palette).ljust(512, b"\x00") + lzma_compress(img.tobytes())
+                blob = blob.ljust(round_up_word(len(blob)), b"\x00")
+                print(f"    {end - start} -> {len(blob)} bytes")
+                # Placing each blob at its image's original offset lets the
+                # literal pool reference relocate through the normal lookup.
+                self.external.clear_range(start, end)
+                self.external[start : start + len(blob)] = blob
+                self.move_ext(start, len(blob), literals[start])
+                self.ext_offset -= end - start - len(blob)
 
         # Definitely at least contains part of the TIME graphic on startup screen.
         self.move_to_compressed_memory(0xF4D18, 2880, 0x10960)
@@ -726,6 +859,9 @@ class MarioGnW(Device, name="mario"):
         # The memcpy to this address is all zero, so i guess its not used?
         self.external.replace(0xF5858, b"\x00" * 34728)  # refence at internal 0x7210
         self.ext_offset -= 34728
+
+        if self.relocation:
+            self.relocation.fix_ram_images()
 
         if self.compressed_memory_pos:
             # Compress and copy over compressed_memory
@@ -776,7 +912,9 @@ class MarioGnW(Device, name="mario"):
         self.internal.add(0x1_06EC, self.ext_offset)
         self.external.shorten(self.ext_offset)
 
-        internal_remaining_free = len(self.internal) - self.int_pos
+        internal_remaining_free = (
+            len(self.internal) - self.int_pos + self.int_hole_space
+        )
         compressed_memory_free = (
             len(self.compressed_memory) - self.compressed_memory_pos
         )

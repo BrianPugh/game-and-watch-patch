@@ -14,6 +14,39 @@
 0x08012ee4 func mode_is_game_only                     # mode == (mode & 0xc030)
 0x08012f00 func mode_is_clock_or_game
 0x08010df4 func mode_is_game_or_clock_bits            # mode == (mode & 0xc038)
+0x08004b60 func memcpy_bytes                          # (dst, src, n) byte loop
+0x0800661c func game_reload                           # on g_state_transition==1: memcpy(ITCM 0, ext 0x90000000, 0x1e5c), then memcpy(ITCM 0x2cb4, ext 0x900f5858, 0) -- length 0, so the ext block is dead
+# --- sleep images (5x 320x240 GIF-style LZW, ext 0x900c58f8-0x900f4d18; patches/mario.py)
+0x080108cc func sleep_image_tick                      # called from main_loop_tick @0x08007032 when g_gnw_mode & 0x80 (idle sleep screen) or (mode & 0xc0)==0x40 (first-boot PRESS TIME screen, juggling image); ctx 0x20010760 ([0]=image index, see sleep_image_reason; [4]=frame, [8]=copy); tail-calls the decoder @0x08010938 (hooked to sleep_image_inflate)
+0x0800c6c0 func sleep_image_start                     # (index): stores index at 0x20010760, resets frame/copy; called with 1 on first boot (0x080066ee) and from ui_begin_transition_uncover
+0x2001075c data sleep_image_reason                    # 4 bytes, set when sleep starts (main_loop_tick @0x08006c1a): [0]=1, [1]=came from SMB1/SMB2, [2]=came from BALL; [3] refreshed every frame from 0x08011a3c's output (BCD hour? UNVERIFIED). ui_begin_transition_uncover picks image 3 (SMB), 5 (BALL), 4 ([3]==0x12), 6 ([3]==0x23), else 2
+0x080169cc func gif_decode                            # (src, dst) -> u8 error; full LZW decode to RGB565 in one call; dictionary in ITCM 0x8000. Decoder 0x08016764-0x080169f0 has no other callers; patcher frees it
+0x080167f0 func gif_decode_init
+0x08016886 func gif_decode_pass                       # called 4x by gif_decode, each up to (n+1)/4 of the pixels
+# --- factory "CHARGE AND KEY TEST" (g_gnw_mode 0x01; confirmed by forcing the mode in GWemu)
+# 0x080066d4 (in game_reload) enters factory test: game_reload: if boot arg r6 == 0xffff00ff, g_gnw_mode = 1
+0x08011a94 func factory_test_init_thunk               # -> 0x08011abe with ctx 0x20010bdc
+0x08011abe func factory_test_init                     # runs every boot (resets ctx, draw color 0x5555)
+0x08011a9a func factory_test_tick_thunk               # -> 0x08011b0c; called from main_loop_tick @0x08006cc4 when mode==1
+0x08011aa4 func factory_test_thunk_b                  # -> 0x08011eb4; main_loop_tick @0x08006dbc when mode==1
+0x08011aac func factory_test_thunk_c                  # -> 0x08012a98; main_loop_tick @0x0800711c
+0x08011ab4 func factory_test_thunk_d                  # -> 0x08012cf4; main_loop_tick @0x080070e4 when mode==1
+0x08011b0c func factory_test_tick                     # 0x08011b0c-0x08012ee4 (5080 B) never runs outside mode 1; no other callers
+# --- mario song (g_gnw_mode 0x04; module 0x08010fac-0x08011a24, freed by --no-mario-song)
+# main_loop_tick @0x08006fc4: after 300 frames (--mario-song-time) on the sleep screen, g_gnw_mode = (mode & 0xc038) | 4
+0x08010fac func mario_song_ctor                       # static ctor (table entry 0x08017e04); ctx 0x2001099c
+0x08011328 func mario_song_stop                       # also called by the factory test @0x08011d20
+0x08011430 func mario_song_start                      # main_loop_tick @0x08006980 when mode 4 and not started
+0x08011486 func mario_song_poll                       # main_loop_tick @0x08007008; returns 0 -> main loop begins a switch (g_state_transition = 3)
+0x080114fc func mario_song_tick                       # main_loop_tick @0x08006dae when (mode & 0xc6) == 0x04
+0x080113ce func mario_song_tick_late                  # main_loop_tick @0x08007112, end of frame
+# 0x08011a00: literal pool of 7 external banner pointers; 0x0801199c: audio pointer (patches/mario.py)
+# --- drawing library (0x08016f30-0x08017394 plus its vsnprintf/memchr 0x080173ea-0x08017a30); only the song and factory test use it
+0x08016f30 func draw_ctor                             # static ctor (table entry 0x08017e10); zeroes the cursor at 0x200010d8
+0x08016f38 func draw_set_target
+0x08016f40 func draw_set_color565
+0x08016f48 func draw_set_color_rgb                    # (r, g, b) -> RGB565
+0x08017370 func draw_printf                           # (fmt, ...) -> vsnprintf @0x08017408
 # --- overlay UI (pause/settings + game-select share one slide-in overlay)
 0x0800c4f0 func ui_init
 0x0800c4be func ui_expand_1bpp_font
@@ -48,7 +81,7 @@
 # --- RAM
 0x20001034 data g_state                               # main game-state struct
 0x2000103d data g_state_transition                    # g_state+9: 0 idle,1/2 reload,3 begin switch,4 covering,5 uncovering
-0x20001044 data g_gnw_mode                            # u16: 0x02 clock,0x04 mario-song,0x08 BALL,0x10 SMB1,0x20 SMB2,0x40 first-boot "PRESS TIME" screen (observed 0x52 in GWemu); 0x80 UNVERIFIED (set on 3-min idle -> likely sleep-screen); 0x01 UNKNOWN (no sleep, skips UI)
+0x20001044 data g_gnw_mode                            # u16: 0x02 clock,0x04 mario-song,0x08 BALL,0x10 SMB1,0x20 SMB2,0x40 first-boot "PRESS TIME" screen (observed 0x52 in GWemu); 0x80 idle sleep screen (set on 3-min idle; seen in GWemu with --sleep-time=5); 0x01 UNKNOWN (no sleep, skips UI)
 0x20010694 data ui_state                              # 0 none, 4 opening (c584), 5 open, 6 closing (c5d2), 7 cover-start (c604), 9 uncover-start (c62e); 8 = cover done (main loop waits for it); exact animation sub-states UNVERIFIED
 0x20010698 data ui_game_select_choice                 # u16 mode value under cursor
 0x2001069a data ui_is_game_select                     # 1 = game-select overlay, 0 = settings overlay
@@ -56,7 +89,46 @@
 0x200106a5 data ui_req_clock                          # set by TIME in game-select
 0x200106a6 data ui_req_switch_game                    # set by A in game-select if choice != current
 0x20010f18 data ui_font_ptr
+# RAM never written by stock fw (GWemu canary probe 2026-10-15: boot, clock, SMB1, SMB2, BALL, pause menu; mario song / sleep images / nvram UNVERIFIED)
+0x00002cc0 data itcm_unused                           # to 0x00008000 (21312 B)
+#   AHB 0x3001e0c0-0x3001f800 (5952 B) also unused (AHB SRAM is not mapped in the RE ELF)
+#   AHB 0x3001fbf0-0x30020000 (1040 B) also unused
+#   AHB 0x300145b0-0x3001e000 (39504 B): tail of our linker RAM region (__RAM_ORIGIN__/__RAM_LENGTH__) beyond our .data/.bss/stack; stock never writes it
+#   AHB 0x30000000-0x30010000 and AXI 0x2408efe0-0x24098fe0: written in some runs only (look like audio buffers); treat as used. Re-run: tools/emu/ram_probe.py
+# --- startup / frame pacing
+0x08017b20 func SystemInit                            # first call from stock_Reset_Handler (literal 0x08017a4c); sets SCB->VTOR = 0x08000000 via `mov.w r2, #0x8000000` @0x08017b76
+0x08017ff8 func stock_main_entry                      # stock_Reset_Handler tail-jumps here (literal 0x08017a50)
+0x08013b56 func HAL_LTDC_IRQHandler                   # via vector104 (LTDC IRQ88) thunk @0x08017aa6, handle 0x2001085c; line IRQ -> 0x0801739a (empty), reload IRQ -> ltdc_reload_callback
+0x08010b5e func ltdc_reload_callback                  # sets g_frame_ready = 1
+0x20010f1c data g_frame_ready                         # main_loop_tick waits on it with wfi @0x080070cc, clears it @0x08010b14
+# --- compiler runtime (armcc __aeabi_*); reached from ITCM/external code through veneers
+0x08002b84 func aeabi_memset                          # (dst, n, c)
+0x08004d5c func aeabi_memclr                          # (dst, n) -> aeabi_memset with c=0
+0x08017bb0 func aeabi_l2d_UNVERIFIED                  # int64 -> double (clz + exponent bias)
+0x08017bf8 func aeabi_uldivmod                        # 64-bit unsigned divide/modulo
+0x08017d04 func aeabi_llsl
+0x08017d28 func aeabi_llsr
+0x08013e36 func rand_lcg                              # state = state * 1664525 + 1013904223; returns state >> 11
+0x20010f20 data g_rand_state
+# --- LCD panel over SPI2 (ops table in DTCM .data at 0x20000fdc)
+0x20000fdc data lcd_panel_ops                         # fn ptrs at +0x0 power_on, +0x8 init_seq, +0xc cmd_28, +0x28 width, +0x2c height
+0x08013926 func lcd_panel_power_on_UNVERIFIED         # GPIOB MODER / GPIOD BSRR toggles
+0x080139ac func lcd_panel_init_seq                    # command/data sequence (0xdd, 0x01, 0xd0, 0xa0, ...) over SPI2
+0x080139e6 func lcd_panel_cmd_28_UNVERIFIED           # sends command 0x28 (MIPI DCS display-off?)
+0x080139e8 func lcd_spi_write_cmd_UNVERIFIED
+0x080139f0 func lcd_spi_write_data_UNVERIFIED         # same as cmd with bit 0x80 set
+0x08013a4c func lcd_get_width                         # returns 320
+0x08013a52 func lcd_get_height                        # returns 240
+# --- absolute code references outside internal-flash code (what an internal-code relocator must patch)
+# vector table: 146 handlers. Static-ctor table 0x08017e00-0x08017e18: 6 self-relative entries. RWDATA table 0x080180a4: self-relative offsets.
+0x00001e5c data itcm_veneers                          # rwdata0 starts with `ldr.w pc, [pc]` veneers into internal flash (aeabi_*, memcpy_bytes, 0x08004cb9-0x08004cd9 accessors on ctx 0x20010400)
+0x900c0210 data ext_veneers                           # 9 `ldr.w pc, [pc]` veneers from external code into internal flash; ext code literals also point at 0x0800061c (s8 table)
+0x080004a0 data fn_table_0x80004a0                    # 36 thumb fn pointers into 0x08015091-0x08015dcd (0x08015dcd repeats as a default); base loaded at 0x08016594
+0x08000530 data fn_table_0x8000530                    # 59 thumb fn pointers into 0x0800d825-0x0800e7b3 (the 0x0800d39c module); base loaded at 0x0800eb6c
+0x0800b758 func ext_table_stubs_0x800b758             # 0x0800b758-0x0800b801: tiny handlers reached only through ext_fn_table_0x900a9ce4
+0x08006010 func adr_jump_table_dispatch               # adr r0, tbl; ldr r1, [r0, r5, lsl #2]; bx r1 -- absolute targets inline (0x08006020); also 0x08005e7c
 # --- external flash (decrypted)
+0x900a9ce4 data ext_fn_table_0x900a9ce4               # 18 thumb fn pointers (20-byte records) into ext_table_stubs_0x800b758; inside the 8352-B blob at 0x900a8c44 the patcher moves to SRAM3 (ref 0x0800bc44)
 0x900aace4 data iconset_4bpp                          # 256px wide, 16x16 tiles, 0x80 B/tile
 0x900aebe4 data ui_font_1bpp                          # 0x2c 8x8 glyphs, expanded by ui_expand_1bpp_font
 0x200010b4 data g_input                               # +6: u16 buttons held last frame (main_loop_tick stores read_buttons() result here)

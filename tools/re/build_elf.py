@@ -29,7 +29,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from patches import Device  # noqa: E402
-from patches.compression import lz77_decompress  # noqa: E402
+from patches.xrefs import extract_rwdata, parse_syms  # noqa: E402,F401
 
 INT_BASE = 0x0800_0000
 EXT_BASE = 0x9000_0000
@@ -51,39 +51,6 @@ def i32(data, offset):
 def s32(data, offset):
     v = i32(data, offset)
     return v - (1 << 32) if v & 0x8000_0000 else v
-
-
-def parse_syms(path):
-    """Parse a ``.syms`` file: ``<addr> <func|data> <name>  # optional note``."""
-    funcs, datas = {}, {}
-    if not path.exists():
-        return funcs, datas
-    for line in path.read_text().splitlines():
-        fields = line.split("#", 1)[0].split()
-        if not fields:
-            continue
-        addr, kind, name = int(fields[0], 16), fields[1], fields[2]
-        if kind == "func":
-            funcs[addr & ~1] = name
-        elif kind == "data":
-            datas[addr] = name
-        else:
-            raise ValueError(f"{path}: unknown kind {kind!r} in line {line!r}")
-    return funcs, datas
-
-
-def extract_rwdata(device_cls, internal):
-    """Decompress each RWDATA init block; returns ``[(dst_addr, data), ...]``."""
-    start, length = device_cls.Int.RWDATA_OFFSET, device_cls.Int.RWDATA_LEN
-    blocks = []
-    for i in range(start, start + length - 4, 16):
-        data_addr = i + 4 + i32(internal, i + 4)
-        data_len = i32(internal, i + 8) >> 1
-        dst = i32(internal, i + 12)
-        blocks.append(
-            (dst, lz77_decompress(internal[data_addr : data_addr + data_len]))
-        )
-    return blocks
 
 
 def is_push_prologue(data, offset):

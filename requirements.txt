@@ -4,3 +4,4 @@ numpy
 pycryptodome
 pyelftools
 keystone-engine
+capstone

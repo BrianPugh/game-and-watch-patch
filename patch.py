@@ -171,6 +171,12 @@ def main():
     # Save patched firmware
     args.int_output.write_bytes(device.internal)
     args.ext_output.write_bytes(device.external)
+    bank2_output = args.int_output.with_name(args.int_output.stem + "_bank2.bin")
+    if device.bank2:
+        bank2_output.write_bytes(device.bank2)
+        print(f"Wrote relocated stock firmware to {bank2_output}")
+    elif bank2_output.exists():
+        bank2_output.unlink()
 
     print(Fore.GREEN)
     print("Binary Patching Complete!")
@@ -178,11 +184,24 @@ def main():
         f"    Internal Firmware Used:  {len(device.internal) - internal_remaining_free} bytes"
     )
     print(f"        Free: {internal_remaining_free} bytes")
+    if device.int_holes:
+        holes = ", ".join(
+            f"{end - start}" for start, end in device.int_holes if end > start
+        )
+        print(
+            f"          of which in freed stock-code holes: {device.int_hole_space} bytes ({holes})"
+        )
     print(
         f"    Compressed Memory Used: {len(device.compressed_memory) - compressed_memory_remaining_free} bytes"
     )
     print(f"        Free: {compressed_memory_remaining_free} bytes")
     print(f"    External Firmware Used: {len(device.external)} bytes")
+    # Relocated data spills between regions, so per-region "Free" depends on
+    # placement order. The total is the number to minimize.
+    print(
+        f"    Total Footprint (internal + external): "
+        f"{len(device.internal) - internal_remaining_free + len(device.external)} bytes"
+    )
     print(Style.RESET_ALL)
 
 

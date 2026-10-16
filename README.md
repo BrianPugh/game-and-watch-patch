@@ -127,7 +127,7 @@ python3 -m pip install .
 # Development
 Main stages to developing a feature:
 1. Find a place to take control in the stock rom (usually function calls).
-2. Add the stock function and its address to `Core/Inc/stock_firmware.h`.
+2. Add the stock function's Thumb address to `Int.STOCK_SYMBOLS` in `patches/<device>.py` and its prototype to `Core/Inc/stock_firmware_<device>.h`. The build turns the addresses into linker symbols, so the patcher can follow every call when it relocates stock code.
 3. Implement your own function, possibly in `Core/Src/main.c`. There's a good chance your custom function will call the function in (2). You will also probably have to add `-Wl,--undefined=my_custom_function` to `LDFLAGS` in the Makefile so that it doesn't get optimized out as unreachable code.
 4. Add a patch definition to `patches/patches.py`.
 

@@ -14,7 +14,7 @@ from .exception import (
     ParsingError,
 )
 from .patch import FirmwarePatchMixin
-from .utils import round_down_word, round_up_page, round_up_word
+from .utils import printd, printi, round_down_word, round_up_page, round_up_word
 
 
 def _val_to_color(val):
@@ -383,6 +383,7 @@ class IntFirmware(Firmware):
     RWDATA_LEN = 0
     RWDATA_ITCM_IDX = None
     RWDATA_DTCM_IDX = None
+    STOCK_SYMBOLS = {}
 
     def __init__(self, firmware, elf):
         super().__init__(firmware)
@@ -500,6 +501,16 @@ class Device:
         self.ext_offset = 0
         self.int_pos = 0
         self.compressed_memory_pos = 0
+        # [start, end) internal offsets of removed stock code, reusable for data.
+        self.int_holes = []
+        # The same ranges as freed (int_holes shrinks as data fills them).
+        self.int_freed = []
+        # Internal offsets of words the patcher filled with internal addresses
+        # (no ELF relocation covers them).
+        self.int_pointers = []
+        # patches.relocate.Relocation when stock code is moved; bank2 holds it.
+        self.relocation = None
+        self.bank2 = bytearray()
 
     def _move_copy(
         self, dst, dst_offset: int, src, src_offset: int, size: int, delete: bool
@@ -614,18 +625,46 @@ class Device:
                     i : i + 4
                 ] = b"\x00\x00\x00\x00"
 
-    def move_to_int(self, ext, size, reference):
-        if self.int_free_space < size:
-            raise NotEnoughSpaceError
+    def free_int(self, start: int, end: int):
+        """Release stock internal code in [start, end) for relocated data.
 
-        new_loc = self.int_pos
+        The caller must have made the range unreachable. It's filled with
+        ``udf`` so a missed path faults instead of running garbage.
+        """
+        start, end = round_up_word(start), round_down_word(end)
+        self.internal[start:end] = b"\xfe\xde" * ((end - start) // 2)
+        self.int_holes.append([start, end])
+        self.int_freed.append((start, end))
+        printd(f"Freed internal 0x{start:X}-0x{end:X} ({end - start} bytes).")
+
+    def _take_int_hole(self, size: int):
+        """Offset of the smallest hole that fits ``size``, or None."""
+        size = round_up_word(size)
+        fits = [h for h in self.int_holes if h[1] - h[0] >= size]
+        if not fits:
+            return None
+        hole = min(fits, key=lambda h: h[1] - h[0])
+        offset = hole[0]
+        hole[0] += size
+        return offset
+
+    @property
+    def int_hole_space(self):
+        return sum(end - start for start, end in self.int_holes)
+
+    def move_to_int(self, ext, size, reference):
+        new_loc = self._take_int_hole(size)
+        if new_loc is None:
+            if self.int_free_space < size:
+                raise NotEnoughSpaceError
+            new_loc = self.int_pos
+            self.int_pos += round_up_word(size)
 
         if isinstance(ext, (bytes, bytearray)):
-            self.internal[self.int_pos : self.int_pos + size] = ext
+            self.internal[new_loc : new_loc + size] = ext
         else:
-            self._move_ext_to_int(ext, self.int_pos, size=size)
-            print(f"    move_ext_to_int {hex(ext)} -> {hex(self.int_pos)}")
-        self.int_pos += round_up_word(size)
+            self._move_ext_to_int(ext, new_loc, size=size)
+            print(f"    move_ext_to_int {hex(ext)} -> {hex(new_loc)}")
 
         if reference is not None:
             self.internal.lookup(reference)
@@ -742,6 +781,9 @@ class Device:
         )
         # hdmi-cec = 0x01B8; not used in the gnw hardware.
         self.internal.replace(0x01B8, metadata.pack())
+        if self.relocation:
+            counts = self.relocation.apply()
+            printi(f"Relocated stock code; fixed {counts}")
         return out
 
     def patch(self):

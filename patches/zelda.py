@@ -70,6 +70,11 @@ class ZeldaGnW(Device, name="zelda"):
         RWDATA_OFFSET = 0x1B390
         RWDATA_LEN = 20
         RWDATA_DTCM_IDX = 0  # decompresses to 0x2000_A800
+        # Stock functions our C code calls (Thumb addresses); see MarioGnW.Int.
+        STOCK_SYMBOLS = {
+            "stock_Reset_Handler": 0x0801_AD49,
+            "stock_read_buttons": 0x0801_6809,
+        }
 
     class Ext(ExtFirmware):
         STOCK_ROM_SHA1_HASH = "1c1c0ed66d07324e560dcd9e86a322ec5e4c1e96"
@@ -413,7 +418,9 @@ class ZeldaGnW(Device, name="zelda"):
             0x1B070, data_offset=self.int_pos
         )
 
-        internal_remaining_free = len(self.internal) - self.int_pos
+        internal_remaining_free = (
+            len(self.internal) - self.int_pos + self.int_hole_space
+        )
         compressed_memory_free = (
             len(self.compressed_memory) - self.compressed_memory_pos
         )

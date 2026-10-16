@@ -55,7 +55,7 @@ the LA save states right after the data (see ZeldaGnW._compact_ext).
 from pathlib import Path
 
 from .compression import lzma_compress
-from .exception import InvalidStockRomError, NotEnoughSpaceError
+from .exception import InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
 from .tileset import decode_backdrop
 from .utils import fds_remove_crc_gaps, printd, printi, round_up_page, round_up_word
@@ -359,6 +359,12 @@ class ZeldaGnW(Device, name="zelda"):
             f"{sum(round_up_word(len(b)) for _, b in blocks)} bytes"
         )
 
+    def _compress_in_place(self, start, size, end, reference):
+        """LZMA the ``size`` bytes at ``start`` and drop the rest up to ``end``."""
+        compressed_len = self.external.compress(start, size)
+        self._expect_refs(reference, start, compressed_len)
+        self.ext_drop(start + round_up_word(compressed_len), end)
+
     def _compact_ext(self):
         """Close the gaps in external flash and put the LA save states after it.
 
@@ -373,18 +379,30 @@ class ZeldaGnW(Device, name="zelda"):
         )
         self.ext_cursor = 0x2_0000
 
-        # loz2j_load copies the 0x1e000-byte FDS image into AHB SRAM, so it can be
-        # stored compressed (in external flash when it doesn't fit internal).
-        printd("Compressing LoZ2 JP ROM")
-        loz2j, loz2j_end = 0xB_0000, 0xD_0000
-        compressed_len = self.external.compress(loz2j, 0x1_E000)
-        self.internal.bl(0xF69A, "loz2j_rom_inflate", expect="4:2ce1dfce")
-        try:
-            self.move_to_int(loz2j, compressed_len, 0xFD1C)
-            self.ext_drop(loz2j, loz2j_end)
-        except NotEnoughSpaceError:
-            self._expect_refs(0xFD1C, loz2j, compressed_len)
-            self.ext_drop(loz2j + round_up_word(compressed_len), loz2j_end)
+        # Stock memcpy's these into RAM before use, so they're stored LZMA
+        # compressed (in place; internal flash is kept for smaller data).
+        printi("Compressing the clock graphics and the NES ROMs")
+        # app_load: memcpy(0x24000000, clock graphics, 0x10000).
+        self.internal.bl(0xFA1A, "memcpy_inflate", expect="4:880d2d82")
+        self._compress_in_place(0x2_0000, 0x1_0000, 0x3_0000, 0x1_0660)
+        # loz1_load: memcpy(0x30000000, LoZ1 EN ROM, 0x20000).
+        self.internal.bl(0xF528, "memcpy_inflate", expect="4:f4b61f7f")
+        self._compress_in_place(0x3_0000, 0x2_0000, 0x5_0000, 0xFD00)
+        # loz1j_load: memcpy(0x30000000, LoZ1 JP FDS image, 0x1e000).
+        self.internal.bl(0xF5C2, "memcpy_inflate", expect="4:5f322700")
+        self._compress_in_place(0x5_0000, 0x1_E000, 0x7_0000, 0xFD14)
+        # The helper loz2_load and loz2j_load share: memcpy(0x30000000, r1, r2).
+        self.internal.asm(0xF702, b_w_memcpy_inflate_asm, expect="4:1ee08bc3")
+        # loz2_load copies the LoZ2 EN PRG ROM and reads the CHR ROM after it in
+        # place, at PRG + 0x20000; loz2_set_chr loads the CHR's own pointer.
+        self.internal.bl(0xF666, "loz2_set_chr", expect="4:79f3cad4")
+        self.internal.nop(0xF66A, 1, expect="2:8daa0f67")
+        self._expect_refs(
+            self.internal.address("LOZ2_CHR", sub_base=True), 0x9_0000, 0x2_0000
+        )
+        self._compress_in_place(0x7_0000, 0x2_0000, 0x9_0000, 0xFD18)
+        # loz2j_load: the 0x1e000-byte FDS image.
+        self._compress_in_place(0xB_0000, 0x1_E000, 0xD_0000, 0xFD1C)
 
         printd("Compressing and moving LoZ2 TIMER data to int")
         timer, timer_end = 0xD_0000, 0xD_2000

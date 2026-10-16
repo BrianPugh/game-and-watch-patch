@@ -97,6 +97,11 @@ class Relocation:
     def __init__(self, device, lo, hi, dst):
         if (dst - lo) % 0x1000:
             raise ValueError("relocation offset must be a multiple of 4 KB")
+        if not (dst_in_bank2(dst) and dst + hi - lo <= BANK2_END):
+            raise ValueError(
+                f"0x{dst:08X}-0x{dst + hi - lo:08X} doesn't fit in bank 2 "
+                f"(0x{BANK2_BASE:08X}-0x{BANK2_END:08X})"
+            )
         self.device = device
         self.lo, self.hi, self.dst = lo, hi, dst
         self.delta = dst - lo
@@ -106,6 +111,11 @@ class Relocation:
 
     def moves(self, addr):
         return self.lo <= addr < self.hi
+
+    def freed(self, addr):
+        """In stock code the patcher removed; it may hold data now."""
+        base = self.device.internal.FLASH_BASE
+        return any(base + s <= addr < base + e for s, e in self.device.int_freed)
 
     def _count(self, kind):
         self.counts[kind] = self.counts.get(kind, 0) + 1
@@ -180,6 +190,10 @@ class Relocation:
 
         # Current code in the range (patches changed some of it).
         code = Code(cur, base, lo + xrefs.VECTOR_TABLE_END, hi)
+        # Freed stock code may hold data now. Live code can still branch there
+        # behind a guard that's never taken (e.g. sleep_image_tick skips the
+        # removed decoder when the images are deleted), so don't descend into it.
+        code.contains = lambda a: code.lo <= a < code.hi and not self.freed(a)
         with contextlib.redirect_stdout(io.StringIO()):
             code.descend({a | 1 for a in self.map.code.entries if self.moves(a)})
 
@@ -221,6 +235,8 @@ class Relocation:
                     self._count("our branch in")
             elif rtype == R_ARM_ABS32:
                 self._fix_abs(d.internal, o, "our pointer")
+        for o in d.int_pointers:
+            self._fix_abs(d.internal, o, "patcher pointer")
 
         # Absolute words in internal flash.
         absolute = {
@@ -234,6 +250,7 @@ class Relocation:
             for r in self.map.refs
             if r["kind"] == "pc-offset literal"
         }
+        absolute = {a for a in absolute if not self.freed(a)}
         for a in sorted(absolute - set(pc_offsets)):
             buf, o = where(a)
             self._fix_abs(buf, o, "absolute")
@@ -251,6 +268,7 @@ class Relocation:
         for a in (base + rw.table_end - 8, base + rw.table_end - 4):
             selfrel[a] = a
         selfrel.update(pc_offsets)
+        selfrel = {a: b for a, b in selfrel.items() if not self.freed(a)}
         for a, b in sorted(selfrel.items()):
             v = struct.unpack_from("<i", cur, a - base)[0]
             t = (b + v) & 0xFFFF_FFFF
@@ -285,7 +303,8 @@ class Relocation:
 
 
 BANK2_BASE = 0x0810_0000
+BANK2_END = BANK2_BASE + 0x10_0000
 
 
 def dst_in_bank2(addr):
-    return BANK2_BASE <= addr < BANK2_BASE + 0x10_0000
+    return BANK2_BASE <= addr < BANK2_END

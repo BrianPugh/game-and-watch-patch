@@ -5,6 +5,7 @@ def make_device(size=0x1000):
     device = Device.__new__(Device)
     device.internal = bytearray(size)
     device.int_holes = []
+    device.int_freed = []
     return device
 
 
@@ -12,6 +13,7 @@ def test_free_int_fills_udf_and_word_aligns():
     device = make_device()
     device.free_int(0x102, 0x20A)
     assert device.int_holes == [[0x104, 0x208]]
+    assert device.int_freed == [(0x104, 0x208)]
     assert device.internal[0x104:0x208] == b"\xfe\xde" * ((0x208 - 0x104) // 2)
     assert device.internal[0x100:0x104] == b"\x00" * 4
     assert device.int_hole_space == 0x104

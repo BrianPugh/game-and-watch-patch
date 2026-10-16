@@ -503,6 +503,11 @@ class Device:
         self.compressed_memory_pos = 0
         # [start, end) internal offsets of removed stock code, reusable for data.
         self.int_holes = []
+        # The same ranges as freed (int_holes shrinks as data fills them).
+        self.int_freed = []
+        # Internal offsets of words the patcher filled with internal addresses
+        # (no ELF relocation covers them).
+        self.int_pointers = []
         # patches.relocate.Relocation when stock code is moved; bank2 holds it.
         self.relocation = None
         self.bank2 = bytearray()
@@ -629,6 +634,7 @@ class Device:
         start, end = round_up_word(start), round_down_word(end)
         self.internal[start:end] = b"\xfe\xde" * ((end - start) // 2)
         self.int_holes.append([start, end])
+        self.int_freed.append((start, end))
         printd(f"Freed internal 0x{start:X}-0x{end:X} ({end - start} bytes).")
 
     def _take_int_hole(self, size: int):

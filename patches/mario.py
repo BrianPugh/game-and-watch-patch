@@ -467,6 +467,7 @@ class MarioGnW(Device, name="mario"):
                     )
                 # Update the SMB1_GRAPHIC_MODS table
                 self.internal.replace(table, loc, size=4)
+                self.int_pointers.append(table)
                 table += 4
 
         printd("Compressing and moving stuff stuff to internal firmware.")
@@ -841,9 +842,7 @@ class MarioGnW(Device, name="mario"):
                     )
                 palette_size = self.external[start + 4]
                 palette = self.external[start + 6 : start + 6 + 2 * palette_size]
-                blob = bytes(palette).ljust(512, b"\x00") + lzma_compress(
-                    bytes(img.get_flattened_data())
-                )
+                blob = bytes(palette).ljust(512, b"\x00") + lzma_compress(img.tobytes())
                 blob = blob.ljust(round_up_word(len(blob)), b"\x00")
                 print(f"    {end - start} -> {len(blob)} bytes")
                 # Placing each blob at its image's original offset lets the

@@ -48,7 +48,8 @@ Start      End        Description
 0x3E0000   0x400000   LA save states, 32 KB per LA language
 
 The patch keeps 0x00000-0x20000 in place, closes the gaps after it, and puts
-the LA save states right after the data (see ZeldaGnW._compact_ext).
+the LA save states right after the data (see ZeldaGnW._compact_ext and
+_finish_ext).
 """
 
 
@@ -78,6 +79,17 @@ BACKDROP_STARTS = [
     0x27_9FA0,
 ]
 BACKDROP_END = 0x28_8120
+
+# itcm_overlay_load's 5 copies out of external flash (4 into ITCM, 1 into
+# DTCM), which fill 0x30B4A0-0x317230: (source literal, stock offset, size).
+OVERLAY_COPIES = [
+    (0xFD30, 0x30_B4A0, 0xEE8),
+    (0xFD38, 0x30_C388, 0x1E70),
+    (0xFD44, 0x30_E1F8, 0x5D0),
+    (0xFD50, 0x30_E7C8, 0x6F24),
+    (0xFD5C, 0x31_56EC, 0x1B44),
+]
+OVERLAY_START, OVERLAY_END = 0x30_B4A0, 0x31_7230
 
 
 class ZeldaGnW(Device, name="zelda"):
@@ -366,7 +378,7 @@ class ZeldaGnW(Device, name="zelda"):
         self.ext_drop(start + round_up_word(compressed_len), end)
 
     def _compact_ext(self):
-        """Close the gaps in external flash and put the LA save states after it.
+        """Close the gaps in external flash; _finish_ext() ends the image.
 
         Everything from 0x20000 on shifts down (``ext_keep``/``ext_drop``), so
         offsets inside a block, like LA's bank addressing off one ROM base,
@@ -419,9 +431,48 @@ class ZeldaGnW(Device, name="zelda"):
         else:
             self._recompress_backdrops()
 
+        # The overlay code holds pointers that fix_ext_refs() rewrites, so it's
+        # appended uncompressed for now and compressed by _finish_ext().
+        overlay = bytes(self.external[OVERLAY_START:OVERLAY_END])
+        self.ext_drop(OVERLAY_START, OVERLAY_END)
+
         stock_end = self.external.ENC_END
         self.ext_keep(stock_end)
-        data_end = stock_end + self.ext_offset
+        self.overlay_pos = stock_end + self.ext_offset
+        self.external[self.overlay_pos : self.overlay_pos + len(overlay)] = overlay
+        base = self.external.FLASH_BASE
+        self.lookup.add(base + OVERLAY_START, base + self.overlay_pos, len(overlay))
+
+    def _finish_ext(self):
+        """Compress the ITCM overlay and put the LA save states after the data.
+
+        Runs after fix_ext_refs(): the overlay's pointers are final, and
+        nothing points at the overlay except itcm_overlay_load's literals.
+        """
+        printi("Compressing the ITCM/DTCM overlay copies")
+        blobs = []
+        for literal, offset, size in OVERLAY_COPIES:
+            src = self.overlay_pos + offset - OVERLAY_START
+            if self.internal.int(literal) != self.external.FLASH_BASE + src:
+                raise ValueError(f"Unexpected overlay literal at 0x{literal:X}")
+            blobs.append(lzma_compress(bytes(self.external[src : src + size])))
+        self.external.clear_range(self.overlay_pos, len(self.external))
+        data_end = self.overlay_pos
+        for (literal, offset, size), blob in zip(OVERLAY_COPIES, blobs):
+            self.external[data_end : data_end + len(blob)] = blob
+            self.internal.replace(literal, self.external.FLASH_BASE + data_end, size=4)
+            printd(f"    0x{offset:06X}: {size} -> {len(blob)} bytes")
+            data_end += round_up_word(len(blob))
+        # The first 4 copies are bl memcpy, the last a tail call.
+        self.internal.bl(0xF7A2, "memcpy_inflate", expect="4:d2879707")
+        self.internal.bl(0xF7B2, "memcpy_inflate", expect="4:1a5e1d0f")
+        self.internal.bl(0xF7C2, "memcpy_inflate", expect="4:c63b76ba")
+        self.internal.bl(0xF7D2, "memcpy_inflate", expect="4:0ee2fcb2")
+        self.internal.asm(
+            0xF7E6,
+            "b.w #" + hex(0xFFFFFFFE & self.internal.address("memcpy_inflate")),
+            expect="4:ac7f82fd",
+        )
         self.external.ENC_END = data_end
 
         # LA save states: 4 x 32 KB (one per language) at 0x3E0000 + lang *
@@ -531,6 +582,8 @@ class ZeldaGnW(Device, name="zelda"):
         self._compact_ext()
 
         self.fix_ext_refs()
+
+        self._finish_ext()
 
         # Compress, insert, and reference the modified rwdata
         self.int_pos += self.internal.rwdata.write_table_and_data(

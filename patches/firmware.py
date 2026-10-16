@@ -595,6 +595,20 @@ class Device:
                     i : i + 4
                 ] = new_val.to_bytes(4, "little")
 
+    def rwdata_ref(self, addr):
+        """Relocate the pointer at runtime address ``addr`` in an rwdata block
+        (e.g. an ITCM literal, which a range scan would confuse with code)."""
+        rwdata = self.internal.rwdata
+        for data, dst in zip(rwdata.datas, rwdata.dsts):
+            if dst <= addr and addr + 4 <= dst + len(data):
+                i = addr - dst
+                val = int.from_bytes(data[i : i + 4], "little")
+                new_val = self.lookup[val]
+                print(f"    updating rwdata 0x{val:08X} -> 0x{new_val:08X}")
+                data[i : i + 4] = new_val.to_bytes(4, "little")
+                return
+        raise KeyError(f"0x{addr:08X} isn't in an rwdata block")
+
     def rwdata_erase(self, lower, size):
         """
         Erasing no longer used references makes it compress better.

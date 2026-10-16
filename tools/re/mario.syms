@@ -129,6 +129,7 @@
 0x08006010 func adr_jump_table_dispatch               # adr r0, tbl; ldr r1, [r0, r5, lsl #2]; bx r1 -- absolute targets inline (0x08006020); also 0x08005e7c
 # --- external flash (decrypted)
 0x900a9ce4 data ext_fn_table_0x900a9ce4               # 18 thumb fn pointers (20-byte records) into ext_table_stubs_0x800b758; inside the 8352-B blob at 0x900a8c44 the patcher moves to SRAM3 (ref 0x0800bc44)
+0x900aabe4 data apu_reciprocal_table                  # 64 x s32 65536/n, n=1..64 (end of the 0x900a8c44 blob); loaded at ITCM 0x275e through the ITCM-rwdata literal 0x2c88. That code looks like FDS expansion audio (64-sample wavetable, signed 6-bit mod); stock SMB1/SMB2 never reached it in GWemu (UNVERIFIED)
 0x900aace4 data iconset_4bpp                          # 256px wide, 16x16 tiles, 0x80 B/tile
 0x900aebe4 data ui_font_1bpp                          # 0x2c 8x8 glyphs, expanded by ui_expand_1bpp_font
 0x200010b4 data g_input                               # +6: u16 buttons held last frame (main_loop_tick stores read_buttons() result here)

@@ -2,11 +2,11 @@
   "configs": {
     "mario": {
       "external_flash_patched.bin": "418b3c52aa4d9b092b119dc2deb757261a5dc93b",
-      "internal_flash_patched.bin": "87eb9343fb8ac266f0a111cab02a1f41167d0e56"
+      "internal_flash_patched.bin": "4076096fc5558193e229c9de3aea91eb1986b441"
     },
     "mario_clock_only": {
-      "external_flash_patched.bin": "95305a46b663b68cc1ac800a079a856875779f51",
-      "internal_flash_patched.bin": "17d19302003714b1fa4ebe4a392fe6e180d1f126"
+      "external_flash_patched.bin": "526b795e6691b639e5d4fe9e8add955ea751569c",
+      "internal_flash_patched.bin": "92f75bbe11522dd59ccdbd6e9e777d2d5eeb154b"
     },
     "mario_internal_only": {
       "external_flash_patched.bin": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
@@ -14,7 +14,7 @@
     },
     "mario_options": {
       "external_flash_patched.bin": "893d39d0740049113fc570a5afd85d63165cf7e8",
-      "internal_flash_patched.bin": "95f1902ce12ab1d772862aaa207038b602c59e43"
+      "internal_flash_patched.bin": "4167800a2c209b4b75d7225305c2e808f88ded5f"
     },
     "mario_relocate": {
       "external_flash_patched.bin": "5eddc8293da5dd64ad22a64cdef29dc090b7d03e",
@@ -27,7 +27,7 @@
     },
     "zelda_options": {
       "external_flash_patched.bin": "66590845aac2b7ef9bd46ae7a52a2e0b10fc886b",
-      "internal_flash_patched.bin": "2e2a1d713113f165ecadf8e61a5f9e734d5cf83d"
+      "internal_flash_patched.bin": "dc0f941793841be3c298d4a624690267a25a7464"
     }
   },
   "toolchain": "arm-none-eabi-gcc (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) 15.2.1 20251203"

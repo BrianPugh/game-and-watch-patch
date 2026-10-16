@@ -144,6 +144,7 @@ SECTIONS
 
    .fill :
   {
+    __flash_end__ = .;  /* end of our code/data; the patcher places data from here */
     FILL(0x00);
     . = ORIGIN(FLASH) + LENGTH(FLASH) - 1;
     BYTE(0x00)

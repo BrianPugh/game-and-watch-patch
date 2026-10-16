@@ -7,12 +7,7 @@ from Crypto.Cipher import AES
 from elftools.elf.elffile import ELFFile
 
 from .compression import lz77_decompress, lzma_compress
-from .exception import (
-    InvalidStockRomError,
-    MissingSymbolError,
-    NotEnoughSpaceError,
-    ParsingError,
-)
+from .exception import InvalidStockRomError, MissingSymbolError, NotEnoughSpaceError
 from .patch import FirmwarePatchMixin
 from .utils import printd, printi, round_down_word, round_up_page, round_up_word
 
@@ -414,25 +409,8 @@ class IntFirmware(Firmware):
 
     @property
     def empty_offset(self):
-        """Detect a series of 0x00 to figure out the end of the internal firmware.
-
-        Returns
-        -------
-        int
-            Offset into firmware where empty region begins.
-        """
-
-        if self.rwdata is None:
-            search_start = self.STOCK_ROM_END
-        else:
-            search_start = self.rwdata.table_end
-        for addr in range(search_start, self.FLASH_LEN, 0x10):
-            if self[addr : addr + 256] == b"\x00" * 256:
-                int_pos_start = addr
-                break
-        else:
-            raise ParsingError("Couldn't find end of internal code.")
-        return int_pos_start
+        """Offset where our linked code and data end; relocated data goes after."""
+        return self.address("__flash_end__", sub_base=True)
 
     @property
     def key(self):

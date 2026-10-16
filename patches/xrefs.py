@@ -80,8 +80,9 @@ LAYOUT = {
         # Init-table entries before the RWDATA entries the patcher rewrites
         # (self-relative function offsets; 0x0801807c -> bss clear at 0x08001692).
         "init_entries": [0x0801_807C],
-        # game_reload copies this much of external flash to ITCM 0.
-        "itcm_from_ext": 0x1E5C,
+        # (external source, ITCM destination, length): game_reload copies the
+        # start of external flash to ITCM 0 (the ITCM rwdata block follows it).
+        "itcm_copies": [(0x9000_0000, 0x0000_0000, 0x1E5C)],
         # External-flash code (ends where the sleep images start).
         "ext_code": (0x900C_0000, 0x900C_58F8),
         # External-flash ROMs and media; pointer-like words in them are false positives.
@@ -95,6 +96,31 @@ LAYOUT = {
                 0x900F_5858,
                 0x900F_DF00,
             ),  # ITCM overlay game_reload copies 0 bytes of (dead)
+        ],
+    },
+    "zelda": {
+        "ctor_table": (0x0801_B0BC, 0x0801_B0D4),
+        # Zero-init entry (0x0800306a) ahead of the RWDATA entry.
+        "init_entries": [0x0801_B368],
+        # itcm_overlay_load (0x0800f784) copies these once at boot; the code is
+        # linked for ITCM (NES CPU core at 0, GB core at 0x2d58, menu UI at 0x9c7c).
+        "itcm_copies": [
+            (0x9030_C388, 0x0000_0000, 0x1E70),
+            (0x9030_B4A0, 0x0000_1E70, 0xEE8),
+            (0x9030_E7C8, 0x0000_2D58, 0x6F24),
+            (0x9031_56EC, 0x0000_9C7C, 0x1B44),
+        ],
+        "dtcm_copies": [(0x9030_E1F8, 0x2000_AE88, 0x5D0)],
+        # External-flash code that runs in place.
+        "ext_code": (0x9031_7230, 0x9032_54A0),
+        "ext_skip": [
+            (0x9000_0000, 0x9002_0000),  # NVRAM banks and save slots
+            (0x9002_0000, 0x9003_0000),  # sprites
+            (0x9003_0000, 0x900D_2000),  # LoZ1/LoZ2 (EN/JP) ROMs and the timer data
+            (0x900D_2000, 0x901F_4C00),  # Link's Awakening ROMs
+            (0x901F_4C00, 0x9028_8120),  # 11 backdrop images
+            # Unencrypted tail: empty, reset-cleared and LA scratch areas.
+            (0x9032_54A0, 0x9040_0000),
         ],
     },
 }
@@ -262,8 +288,10 @@ class Code:
                 and ops
                 and ops[-1].type == A.ARM_OP_IMM
             ):
-                self.branches.append((a, ops[-1].imm, ins.mnemonic, ins.size))
-                work.append(ops[-1].imm)
+                # capstone reports targets >= 0x80000000 (external flash) as negative.
+                t = ops[-1].imm & 0xFFFF_FFFF
+                self.branches.append((a, t, ins.mnemonic, ins.size))
+                work.append(t)
                 if mn == "b" and not cond:
                     return
                 a = nxt
@@ -326,6 +354,28 @@ class Analysis:
     layout: dict
 
 
+def itcm_image(layout, external, rwdata):
+    """ITCM as it is after boot: the external-flash blocks the firmware copies
+    there plus the ITCM rwdata block."""
+    blocks = [
+        (dst, external[src - EXT_BASE : src - EXT_BASE + n])
+        for src, dst, n in layout.get("itcm_copies", [])
+    ]
+    blocks += [(dst, data) for dst, data in rwdata if dst < 0x0001_0000]
+    itcm = bytearray(max((dst + len(data) for dst, data in blocks), default=0))
+    for dst, data in blocks:
+        itcm[dst : dst + len(data)] = data
+    return bytes(itcm)
+
+
+def copy_sources(layout):
+    """External-flash ranges the firmware copies to ITCM/DTCM."""
+    return [
+        (src, src + n)
+        for src, _, n in layout.get("itcm_copies", []) + layout.get("dtcm_copies", [])
+    ]
+
+
 def analyze(device, internal=None, external=None, repo=REPO):
     """Analyze the stock firmware. ``internal``/``external`` default to the
     backups in ``repo``; ``external`` must be decrypted."""
@@ -357,12 +407,12 @@ def analyze(device, internal=None, external=None, repo=REPO):
         # The used image, plus the bank end (stock compares the image end against it).
         return INT_BASE <= a <= image_end or a == INT_BASE + len(internal)
 
-    # ITCM image: external-flash prefix plus the ITCM rwdata block.
-    itcm_dst, itcm_data = next((dst, data) for dst, data in rwdata if dst < 0x0001_0000)
-    itcm = bytearray(itcm_dst + len(itcm_data))
-    itcm[: layout["itcm_from_ext"]] = external[: layout["itcm_from_ext"]]
-    itcm[itcm_dst:] = itcm_data
+    itcm = itcm_image(layout, external, rwdata)
     dtcm = [(dst, data) for dst, data in rwdata if dst >= 0x2000_0000]
+    dtcm += [
+        (dst, external[src - EXT_BASE : src - EXT_BASE + n])
+        for src, dst, n in layout.get("dtcm_copies", [])
+    ]
 
     refs = []  # dicts: kind, src, target (+ extra)
 
@@ -424,10 +474,7 @@ def analyze(device, internal=None, external=None, repo=REPO):
             covered.update(range(a, a + sz))
         for lit, sz in c.literals().items():
             covered.update(range(lit, lit + sz))
-    skip = layout["ext_skip"] + [
-        layout["ext_code"],
-        (EXT_BASE, EXT_BASE + layout["itcm_from_ext"]),
-    ]
+    skip = layout["ext_skip"] + [layout["ext_code"]] + copy_sources(layout)
     candidates = {}
     for o in range(0, len(external) - 3, 4):
         a = EXT_BASE + o

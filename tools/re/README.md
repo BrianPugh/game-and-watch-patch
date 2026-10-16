@@ -20,8 +20,11 @@ arm-none-eabi-objdump -d --start-address=0x080002cc --stop-address=0x08018004 bu
 
 The ELF maps internal flash at `0x0800_0000`, the decrypted external flash at
 `0x9000_0000`, and each LZ77-compressed RWDATA init block at its RAM
-destination (Mario: ITCM code at `0x1E5C`, DTCM data at `0x2000_0800`), so
-cross-region calls and literal pools resolve. Function symbols come from the
+destination (Mario: ITCM code at `0x1E5C`, DTCM data at `0x2000_0800`; Zelda:
+DTCM data at `0x2000_A800`), so cross-region calls and literal pools resolve.
+Mario's ITCM section also holds the `0x1E5C` bytes `game_reload` copies from
+external flash to ITCM 0 (the NES CPU core), and the AHB SRAM at `0x3000_0000`
+is mapped NOLOAD like the other RAM. Function symbols come from the
 `.syms` file plus auto-detected vector-table handlers, `ldr.w pc, [pc]`
 veneers, and literal-pool pointers to external-flash function prologues.
 
@@ -39,8 +42,24 @@ together (armcc shares literal pools across a module), the branches between
 units, and every absolute or self-relative reference into internal code
 (vector table, constructors, RWDATA table, literal pools, pointer tables in
 flash, ITCM/external veneers, DTCM `.data`). It also lists `push` prologues
-nothing references: dead code, or reached some way it doesn't model. Mario
-only so far (`LAYOUT` in the script).
+nothing references: dead code, or reached some way it doesn't model. Both
+devices are described by `LAYOUT` in `patches/xrefs.py`; Zelda has no ITCM
+code (its external-flash code runs in place).
+
+## Functions shared by both firmwares (`match_roms.py`)
+
+```bash
+python tools/re/match_roms.py [--names] [--json build/re/rom_match.json]
+```
+
+Lists the stock functions that are identical in Mario and Zelda (both are built
+from the same SDK: HAL, C runtime, power/NVRAM management, flash driver, draw
+library, NES core). Bodies come from the `xrefs.py` map; signatures mask
+addresses but keep peripheral and small constants; unique signatures pair up,
+then callees pair up in call order. Bodies under `--min-insns` (default 6) are
+skipped because tiny thunks match by accident. It also reports pairs whose
+`.syms` names disagree, so shared code keeps one name in both files. These
+pairs are the code an amalgamated firmware could keep once.
 
 ## Relocation test (`shift_image.py`)
 

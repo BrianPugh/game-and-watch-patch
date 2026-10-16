@@ -6,7 +6,7 @@
 0x080063a0 func sleep
 0x08010e10 func prepare_clock_rom
 0x08018004 func lz77_decompress_rwdata
-0x08017dc8 func bss_rwdata_init
+0x08017dc8 func __cpp_initialize__aeabi_          # runs the 6 static constructors (ctor table 0x08017e00) via call_init_array; the RWDATA table's last entry points here
 # --- main loop
 0x080067e8 func main_loop_tick                        # top-level state machine; one call per frame
 0x0800653e func reset_idle_timers
@@ -91,7 +91,7 @@
 0x20010f18 data ui_font_ptr
 # RAM never written by stock fw (GWemu canary probe 2026-10-15: boot, clock, SMB1, SMB2, BALL, pause menu; mario song / sleep images / nvram UNVERIFIED)
 0x00002cc0 data itcm_unused                           # to 0x00008000 (21312 B)
-#   AHB 0x3001e0c0-0x3001f800 (5952 B) also unused (AHB SRAM is not mapped in the RE ELF)
+#   AHB 0x3001e0c0-0x3001f800 (5952 B) also unused
 #   AHB 0x3001fbf0-0x30020000 (1040 B) also unused
 #   AHB 0x300145b0-0x3001e000 (39504 B): tail of our linker RAM region (__RAM_ORIGIN__/__RAM_LENGTH__) beyond our .data/.bss/stack; stock never writes it
 #   AHB 0x30000000-0x30010000 and AXI 0x2408efe0-0x24098fe0: written in some runs only (look like audio buffers); treat as used. Re-run: tools/emu/ram_probe.py
@@ -132,3 +132,427 @@
 0x900aace4 data iconset_4bpp                          # 256px wide, 16x16 tiles, 0x80 B/tile
 0x900aebe4 data ui_font_1bpp                          # 0x2c 8x8 glyphs, expanded by ui_expand_1bpp_font
 0x200010b4 data g_input                               # +6: u16 buttons held last frame (main_loop_tick stores read_buttons() result here)
+# --- generated: names shared with the other G&W firmware (HAL/SDK/runtime matched by code) and session RE
+0x00000000 func nes_cpu_run                          # 6502 interpreter entry: registers live in r5-r8 (saved at nes+0xb24); NMI/IRQ checks, then dispatch; Mario runs it from ITCM 0x0000
+0x00000192 func nes_cpu_op_group_a                   # opcode handler block (UNVERIFIED)
+0x000002cc func nes_cpu_dispatch                     # opcode dispatch loop (UNVERIFIED)
+0x000018b8 func nes_ppu_render_a                     # PPU background/sprite rendering (nes+0xc3c/0xc4c tile pointers) (UNVERIFIED)
+0x000019dc func nes_ppu_render_b                     # PPU scanline rendering (UNVERIFIED)
+0x00001d64 func nes_ppu_render_c                     # PPU attribute/sprite helper (UNVERIFIED)
+0x00001fd8 func nes_apu_envelope_update              # (UNVERIFIED)
+0x00002106 func nes_apu_pulse_render                 # (UNVERIFIED)
+0x00002204 func nes_apu_channel_step                 # (UNVERIFIED)
+0x0000221c func nes_apu_channel_step_inner           # (UNVERIFIED)
+0x000022d0 func nes_apu_triangle_noise_render        # (UNVERIFIED)
+0x00002426 func nes_apu_noise_step                   # (UNVERIFIED)
+0x000029ec func nes_apu_run_frame                    # generates one frame of APU samples (1 MHz timebase): pulse, triangle/noise and DMC channels
+0x00002ba4 func nes_apu_write                        # APU register write handling ($4000-$4017) (UNVERIFIED)
+0x00002c16 func nes_audio_output                     # (nes): mixes the APU output in 240-sample blocks (volume >> 7) into the SAI queue (audio_* veneers); cleans the D-cache
+0x0800068c func MX_ADC2_Init                         # hadc2 (0x40022100): HAL_ADC_Init + HAL_ADC_ConfigChannel; battery voltage (UNVERIFIED)
+0x080007ee func HAL_ADC_Init
+0x08000b72 func HAL_ADC_Start_IT                     # HAL (matched against a gcc build of Drivers/)
+0x08000ca2 func ADC_Enable                           # HAL (matched against a gcc build of Drivers/)
+0x08000cc0 func HAL_ADC_IRQHandler                   # HAL (matched against a gcc build of Drivers/)
+0x08000ff0 func ADC_Disable                          # HAL (matched against a gcc build of Drivers/)
+0x08001060 func ADC_ConfigureBoostMode               # HAL (matched against a gcc build of Drivers/)
+0x08001154 func memset                               # (dst, c, n) -> aeabi_memset(dst, n, c)
+0x08001168 func HAL_GPIO_Init
+0x08001344 func HAL_GPIO_DeInit                      # HAL (matched against a gcc build of Drivers/)
+0x08001472 func HAL_GPIO_EXTI_IRQHandler             # HAL (matched against a gcc build of Drivers/)
+0x080014d8 func NVIC_SetPriority                     # CMSIS __NVIC_SetPriority (IP / SHP registers)
+0x080014f2 func HAL_NVIC_SetPriorityGrouping         # SCB->AIRCR = 0x05fa0000 | group
+0x0800150c func HAL_NVIC_SetPriority
+0x08001546 func HAL_NVIC_EnableIRQ
+0x0800155c func HAL_NVIC_DisableIRQ                  # NVIC ICER
+0x0800157a func HAL_SYSTICK_Config                   # HAL (matched against a gcc build of Drivers/)
+0x08001588 func SysTick_Config                       # HAL (matched against a gcc build of Drivers/)
+0x080015c0 func HAL_GetTick                          # HAL (matched against a gcc build of Drivers/)
+0x080015cc func battery_adc_start                    # HAL_ADC_Start_IT(&hadc2); flag 0x2001b1c8
+0x080015de func adc_calibrate                        # HAL_ADCEx_Calibration_Start(&hadc2, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED); re-inits on failure
+0x08001692 func __scatterload_zeroinit               # init-table handler: zero-fills (size, addr) pairs (Zelda: DTCM 0x20000800+0xa000, AXI 0x24000000+0x10000, DTCM 0x2000b460+0xfdc0, AXI 0x240fd000+0x20c0)
+0x080016cc func HAL_RCC_ClockConfig                  # HAL (matched against a gcc build of Drivers/)
+0x080018bc func HAL_RCC_GetSysClockFreq              # PLL/HSI/CSI/HSE source decode with float fracn (older HAL)
+0x080019ba func HAL_RCC_GetHCLKFreq                  # older HAL: SystemD2Clock = D1 clock >> HPRE
+0x08001ec8 func HAL_RCCEx_PeriphCLKConfig
+0x080025cc func HAL_RCCEx_GetPeriphCLKFreq           # HAL (matched against a gcc build of Drivers/)
+0x0800282c func RTC_ByteToBcd2                       # HAL (matched against a gcc build of Drivers/)
+0x0800296a func HAL_RCCEx_GetD1SysClockFreq          # older HAL: SystemCoreClock = sysclk >> D1CPRE
+0x080029c0 func RCCEx_PLL2_Config                    # HAL (matched against a gcc build of Drivers/)
+0x08002a6c func RCCEx_PLL3_Config                    # HAL (matched against a gcc build of Drivers/)
+0x08002b98 func HAL_ADCEx_Calibration_Start
+0x08002f00 func HAL_InitTick
+0x08002f44 func NVIC_EnableIRQ_2                     # ISER, inlined copy
+0x08002f5a func NVIC_DisableIRQ_2                    # ICER, inlined copy
+0x08003002 func power_pin_clear_pending              # EXTI PR1 + NVIC ICPR for the PC5 (IRQ 23) or PA2 (IRQ 8) wake pin by board variant
+0x08003148 func tick_reached                         # (now, deadline): (int)(now - deadline) >= 0
+0x08003158 func debounce_bit                         # (level, threshold, bit, counter*, mask*): sets bit in *mask after threshold consecutive low samples, clears it on high
+0x08003188 func HAL_PWR_DisableWakeUpPin             # PWR_WKUPEPR &= ~(mask & 0x3f)
+0x080031c8 func aeabi_memclr4                        # -> 0x08003828
+0x08003214 func HAL_PWREx_ControlStopModeVoltageScaling
+0x08003226 func HAL_PWR_EnterSTOPMode                # (regulator, entry): LPDS, CPUCR, SLEEPDEEP, wfi/wfe
+0x08003368 func ball_input_api                       # (buttons): same code as Zelda's vermin_input_api, tail-calls the shared input handler; called from main_loop_tick (BALL is UNVERIFIED)
+0x080046a6 func audio_stream_begin                   # (stream): renders while enough samples are queued; returns how many samples to produce this frame
+0x080046e6 func audio_stream_target_samples          # helper of audio_stream_begin (UNVERIFIED)
+0x08004730 func audio_stream_put_sample              # (stream, s16): append to the 1024-sample ring
+0x08004752 func audio_stream_flush                   # (stream): renders and submits the remaining samples
+0x080049f0 func nvram_get                            # (id): value from nvram_ram (ids 8/9 are bits of +0x28)
+0x08004a16 func nvram_set                            # (id, value): updates nvram_ram and marks it dirty
+0x08004a60 func nvram_commit                         # if dirty: flip to the other bank and nvram_write
+0x08004a88 func bit_swap                             # helper for nvram_write's seed scrambling
+0x08004af2 func nvram_reset                          # fills nvram_ram with 0xff and writes both banks (leaving main()'s power loop)
+0x08004d64 func flash_read                           # (dev, ...): external NOR read via flash_cmd_read (0x6b quad-output fast read); -2 if dev != 0
+0x08004d8a func flash_read_quad_io                   # (dev, ...): read via flash_cmd_read_quad_io (4-line address/data)
+0x08004db6 func flash_program                        # (dev, buf, addr, len): WREN + page program in 256-byte pages, polls WIP
+0x08004e3c func flash_erase                          # (dev, addr, type 0/1/2): sector 4K (0x20) / block 32K (0x52) / block 64K (0xd8); timeouts 500/3000/6000 ms
+0x08004ea4 func flash_enable_memory_mapped           # flash_cmd_memory_mapped(handle, quad); state = 2
+0x08004ecc func flash_disable_memory_mapped          # HAL_OSPI_Abort; state = 1
+0x08004efc func flash_set_quad_mode                  # (dev, quad): toggles the QE bit via flash_set_qe_bit
+0x08004f84 func flash_set_qe_bit                     # (dev, enable): read status (0x05), set/clear bit 6 (QE), write status, verify
+0x08005054 func crypt_encrypt_wait                   # HAL_CRYP_Encrypt_IT (0x08011e7e), wfi until done; bkpt if the handle is bad
+0x0800506c func crypt_decrypt                        # HAL_CRYP_Decrypt_IT (0x08011f34)
+0x080050ec func audio_init                           # clears the audio buffers and starts SAI1 (UNVERIFIED)
+0x0800514c func audio_start_dma                      # SAI1 block A (0x40015804) DMA start (UNVERIFIED)
+0x080051f0 func audio_queue_get
+0x080051f6 func audio_queue_put
+0x08005214 func MX_SAI1_Init                         # SAI1 block A/B (0x40015804 / 0x40015824) via HAL_SAI_Init
+0x080052c6 func HAL_SAI_Init                         # HAL (matched against a gcc build of Drivers/)
+0x0800545c func HAL_SAI_DeInit                       # HAL (matched against a gcc build of Drivers/)
+0x080054c2 func HAL_SAI_DMAStop                      # UNVERIFIED
+0x08005568 func HAL_SAI_IRQHandler                   # HAL (matched against a gcc build of Drivers/)
+0x080056d0 func SAI_Disable                          # clears SAIEN, waits (timeout from SystemCoreClock)
+0x08005740 func SAI_DMAAbort                         # HAL (matched against a gcc build of Drivers/)
+0x08005794 func HAL_SAI_Transmit_DMA                 # sets the DMA half/complete callbacks, HAL_DMA_Start_IT
+0x0800583c func FLASH_WaitForLastOperation           # HAL (matched against a gcc build of Drivers/)
+0x0800589c func HAL_DMA_Abort_IT                     # UNVERIFIED
+0x08005924 func HAL_DMA_Start_IT
+0x08005ace func DMA_CalcBaseAndBitshift              # DMA1/DMA2 stream base and bit shift
+0x08005b8c func NVIC_SystemReset                     # AIRCR = VECTKEY | SYSRESETREQ, then spin
+0x08005baa func SCB_EnableICache                     # ICIALLU + CCR.IC (CMSIS inline)
+0x08005d46 func power_event                          # (event from 0x080139d0): power state machine transitions (events 1..6)
+0x08005e68 func system_state_dispatch                # (state = sysstate_get()): adr jump table; states 1/2 -> main_loop_tick(g_state[4]), others power/charge handlers
+0x08005ef4 func sysstate4_tick                       # system_state_dispatch[4]: power state 6 + PA0 high: re-init RTC/wakeup (UNVERIFIED)
+0x08005f2c func sysstate5_boot_tick                  # system_state_dispatch[5]: waits for the boot button combo, then game_reload(0xff00) or game_reload(0xffff00ff) (factory test)
+0x08005f9e func boot_factory_test                    # power_on_init; game_reload(0xffff00ff)
+0x08006030 func pwr_take_standby_flag                # returns 1 (and clears it via CPUCR.CSSF) if PWR_CPUCR.SBF says we woke from standby
+0x08006068 func buttons_gpio_init                    # clocks GPIOA/C/D, HAL_GPIO_Init(A: 0x5, C: 0x3822, D: 0xca21) = the G&W button pins
+0x080060e8 func boot_combo_check                     # D-pad/buttons released and PC1/PC13 pattern + battery ok (UNVERIFIED semantics)
+0x0800612a func power_on_init                        # one-time init after deciding to boot: clocks (first time), peripherals, nvram, audio, LCD; power state = 4
+0x08006224 func usb_power_check                      # buttons released, PA0 low, PC13 ... (UNVERIFIED semantics)
+0x080062e0 func power_down_peripherals               # HAL_Delay(20), LCD SPI/DAC/LTDC deinit, unused GPIOs to analog
+0x08006300 func read_pc8_with_pullup                 # momentarily enables a pull-up on PC8, returns 1 if it reads low (UNVERIFIED purpose)
+0x08006366 func resume_peripherals                   # MX_GPIO_Init, LCD SPI init/reset, MX_LTDC_Init, MX_OCTOSPI1_Init, 0x08013628
+0x08006384 func peripherals_deinit                   # DMA2D?/LTDC/OCTOSPI deinit + LCD panel power-off sequence
+0x080063b4 func power_button_poll                    # (buttons): toggles the power-held flag on bit 0x200 (POWER) edges
+0x080063f6 func power_off_poll                       # sysstate 3: once PA0 (power switch) releases, power state = 2
+0x0800644c func pin_pa2_or_pc5_low                   # reads PA2 (board variant 0) or PC5 (variant 1)
+0x0800646e func pin_pc5_or_pa2_low                   # the complementary read of pin_pa2_or_pc5_low
+0x0800721c func main                                 # called from __rt_entry; cache/MPU/clock/peripheral init, then the per-frame loop
+0x08007342 func mpu_wwdg_init_wrapper                # -> MX_WWDG1_Init
+0x080073c8 func flash_wait_ready                     # (handle, timeout): auto-poll RDSR (0x05) until WIP clears
+0x0800743c func flash_cmd_read                       # OSPI indirect read: 0x6b (1-1-4) or single-line by mode
+0x080074b4 func flash_cmd_read_quad_io               # OSPI indirect read with 4-line address and data
+0x08007536 func flash_cmd_page_program               # 0x02 (1-1-1) or 0x38 (1-4-4) page program + HAL_OSPI_Transmit
+0x080075b6 func flash_cmd_erase                      # (handle, addr, type): 0x20 / 0x52 / 0xd8
+0x0800761e func flash_cmd_memory_mapped              # 0xeb quad I/O read command + HAL_OSPI_MemoryMapped
+0x080076ac func flash_write_enable                   # WREN (0x06), auto-poll until WEL set
+0x08007766 func flash_cmd_read_status                # RDSR 0x05
+0x0800778a func flash_cmd_write_status               # WREN + WRSR with status/config bytes
+0x08007818 func flash_cmd_read_config                # RDCR 0x15 (Macronix)
+0x080078b2 func flash_cmd_reset_enable               # 0x66
+0x080078c8 func flash_cmd_reset                      # 0x99
+0x080078e0 func HAL_OSPI_Init                        # HAL (matched against a gcc build of Drivers/)
+0x080079d8 func HAL_OSPI_DeInit                      # HAL (matched against a gcc build of Drivers/)
+0x08007a04 func HAL_OSPI_IRQHandler                  # HAL (matched against a gcc build of Drivers/)
+0x08007b32 func HAL_OSPI_Command                     # HAL (matched against a gcc build of Drivers/)
+0x08007be8 func HAL_OSPI_Transmit                    # HAL (matched against a gcc build of Drivers/)
+0x08007c5e func HAL_OSPI_Receive                     # HAL (matched against a gcc build of Drivers/)
+0x08007d18 func OSPI_WaitFlagStateUntilTimeout       # HAL (matched against a gcc build of Drivers/)
+0x08007d1c func HAL_OSPI_AutoPolling                 # HAL (matched against a gcc build of Drivers/)
+0x08007dbe func HAL_OSPI_MemoryMapped                # HAL (matched against a gcc build of Drivers/)
+0x08007e20 func HAL_OSPI_Abort                       # HAL (matched against a gcc build of Drivers/)
+0x08007e8e func HAL_OSPIM_Config
+0x08008222 func OSPI_ConfigCmd                       # HAL (matched against a gcc build of Drivers/)
+0x08008408 func HAL_Delay
+0x08008430 func HAL_CRYP_Init
+0x080084a2 func HAL_CRYP_Encrypt_IT                  # UNVERIFIED (CRYP HAL is not in Drivers/)
+0x08008558 func HAL_CRYP_Decrypt_IT                  # UNVERIFIED (CRYP HAL is not in Drivers/)
+0x08008768 func HAL_CRYP_IRQHandler                  # UNVERIFIED
+0x0800908a func HAL_ADCEx_DisableVoltageRegulator    # HAL (matched against a gcc build of Drivers/)
+0x080090a2 func HAL_SAI_MspDeInit                    # HAL (matched against a gcc build of Drivers/)
+0x080095e8 func HAL_DMA_IRQHandler                   # HAL (matched against a gcc build of Drivers/)
+0x08009abc func HAL_SAI_ErrorCallback                # HAL (matched against a gcc build of Drivers/)
+0x08009ad2 func sysstate_set                         # writes the requested system state byte (Zelda 0x2001b218)
+0x08009ad8 func sysstate_get                         # returns the current system state byte (Zelda 0x2001b219; 1/2 = running the app, 3 = power-off path)
+0x08009c22 func HAL_RTC_AlarmAEventCallback          # HAL (matched against a gcc build of Drivers/)
+0x08009c88 func power_button_wakeup_init             # PWR_WKUPEPR |= WKUPEN1 (PA0), PA0 input, NVIC EXTI0 (IRQ 6)
+0x08009d58 func enter_stop_mode                      # flash power-down, stop-mode voltage scaling, HAL_PWR_EnterSTOPMode, then restores
+0x08009db4 func MX_DMA_Init                          # DMA1 clock; NVIC DMA1_Stream6 (IRQ 17) and DMA1_Stream7 (IRQ 47)
+0x08009e00 func MX_WWDG1_Init                        # WWDG1 0x50003000, prescaler 0x3800, window/counter 0x7f; handle hwwdg1
+0x08009e54 func wwdg_refresh_every_50ms              # HAL_WWDG_Refresh when the 50 ms deadline passes
+0x08009e74 func start_tick_deadline_50ms             # g = HAL_GetTick() + 50 (Zelda 0x2001b140)
+0x08009eb4 func HAL_Init                             # SystemCoreClock/SystemD2Clock from D1CorePrescTable, HAL_InitTick, HAL_MspInit
+0x08009efe func syscfg_enable_compensation_cell      # SYSCFG_CCCSR |= EN
+0x08009f2c func MX_GPIO_Init                         # LCD/power/backlight/button GPIOs; pin choice depends on g_board_variant
+0x0800a17a func MX_DAC1_Init                         # hdac1 = DAC1 (0x40007400); backlight
+0x0800a1c0 func MX_DAC2_Init                         # hdac2 = DAC2 (0x58003400); backlight
+0x0800a218 func HAL_DAC_MspInit                      # HAL (matched against a gcc build of Drivers/)
+0x0800a290 func HAL_DAC_MspDeInit                    # HAL (matched against a gcc build of Drivers/)
+0x0800a2be func MX_DAC1_DeInit
+0x0800a2da func MX_DAC2_DeInit
+0x0800a31c func lcd_spi2_init                        # SPI2 (0x40003800) register-level init + PB13/PB15 alternate function
+0x0800a376 func lcd_spi_deinit                       # GPIOB DeInit, reset SPI2
+0x0800a3b8 func lcd_reset_pulse                      # PD1 low, HAL_Delay(1), PD4 high (UNVERIFIED pin roles)
+0x0800a3d4 func lcd_panel_power_off                  # GPIOD pin writes with HAL_Delay (UNVERIFIED order)
+0x0800a40c func MX_OCTOSPI1_Init                     # hospi1 (0x52005000, 16 MB, ...), HAL_OSPIM_Config, NVIC OCTOSPI1 (IRQ 92)
+0x0800a5dc func HAL_OSPI_MspDeInit                   # HAL (matched against a gcc build of Drivers/)
+0x0800a62c func MX_OCTOSPI1_DeInit                   # disable OCTOSPI1 IRQ, HAL_OSPI_DeInit
+0x0800a664 func buttons_scan_init                    # first debounce sample in 10 ms
+0x0800a672 func buttons_scan_debounced               # every 10 ms: samples the GPIO button pins with debouncing; returns the GAMEPAD_* mask (Zelda 0x2001b180)
+0x0800a7f8 func MX_LTDC_Init                         # hltdc (LTDC 0x50001000), two HAL_LTDC_Init calls
+0x0800a854 func HAL_LTDC_MspInit                     # HAL (matched against a gcc build of Drivers/)
+0x0800aa16 func HAL_LTDC_MspDeInit                   # HAL (matched against a gcc build of Drivers/)
+0x0800aa74 func MX_LTDC_DeInit                       # disable LTDC IRQs, HAL_LTDC_DeInit (0x08019812)
+0x0800aab4 func lcd_backlight_set_raw                # (dac value): HAL_DAC_SetValue on DAC1 ch1/ch2 and DAC2 ch1, then HAL_DAC_Start all three
+0x0800ac08 func fds_load_files                       # walks FDS disk blocks (block 3 file header / 4 file data) and loads files into PRG/CHR RAM
+0x0800adb2 func nes_cpu_read_block                   # (dst, nes, addr, n): reads n bytes of the 6502 address space ($0000-$1FFF RAM mirror, banks via nes+0xc88)
+0x0800adf4 func fds_read_file_header                 # (nes): reads 0x11 bytes at the FDS header pointer, then scans the disk image (UNVERIFIED)
+0x08010698 func otfdec_disable                       # OTFDEC off, leaves memory-mapped mode
+0x0801077c func fb_fill_rect                         # (dst, w, h, rgb565): stride 640 B (320 px)
+0x0801080c func fb_copy_rows_20                      # (dst, src): 20 rows x 0x90 bytes, stride 640 B
+0x08010a94 func lcd_stop                             # waits for g_frame_ready, disables both LTDC layers
+0x08010b14 func ltdc_request_reload                  # g_frame_ready = 0; LTDC reload on vblank (0x08019960)
+0x08012012 func factory_test_draw_charge             # "CHARGE AND KEY TEST" / "CHECK CURRENT (n)" / "SLEEPING READY..." pages
+0x0801212c func factory_test_draw_key                # "CHARGE AND KEY TEST" key page
+0x0801216a func factory_test_draw_rtc                # "RTC TEST" / "READY..."
+0x080121b2 func factory_test_draw_rtc_calculating    # "CALCULATING..."
+0x08012288 func factory_test_draw_speaker            # "SPEAKER TEST"
+0x080123d4 func factory_test_draw_lcd                # "LCD TEST"
+0x0801251e func factory_test_draw_result             # "TEST RESULT : OK", "KEEP PUSHING B BUTTON", "COUNTDOWN %d"
+0x08012f1c func tim5_free_running_init               # TIM5: PSC from 0x2000ace0 (Zelda) / ARR 0xffffffff, enabled; register-level, no HAL
+0x08012fa6 func HAL_RTC_MspInit                      # HAL (matched against a gcc build of Drivers/)
+0x08012fd8 func HAL_CRYP_MspInit                     # RCC AHB2ENR CRYP clock, NVIC CRYP_IRQn
+0x0801302c func HAL_RTC_Init                         # HAL (matched against a gcc build of Drivers/)
+0x080130ca func HAL_RTC_SetTime                      # HAL (matched against a gcc build of Drivers/)
+0x080131e0 func HAL_RTC_SetDate                      # HAL (matched against a gcc build of Drivers/)
+0x08013332 func HAL_RTC_AlarmIRQHandler              # HAL (matched against a gcc build of Drivers/)
+0x0801337c func RTC_ExitInitMode                     # HAL (matched against a gcc build of Drivers/)
+0x08013390 func HAL_RTC_WaitForSynchro               # HAL (matched against a gcc build of Drivers/)
+0x080133ae func RTC_EnterInitMode                    # HAL (matched against a gcc build of Drivers/)
+0x080133fc func HAL_RTCEx_SetWakeUpTimer             # UNVERIFIED (armcc outlines its tails into the BL'd fragments that follow)
+0x08013446 func HAL_RTCEx_SetWakeUpTimer_IT          # configures EXTI line for the RTC wakeup (0x58000080)
+0x080134ec func HAL_RTCEx_DeactivateWakeUpTimer
+0x0801354e func HAL_RTCEx_WakeUpTimerIRQHandler      # HAL (matched against a gcc build of Drivers/)
+0x080135cc func HAL_WWDG_Init                        # HAL (matched against a gcc build of Drivers/)
+0x080135f4 func HAL_WWDG_Refresh
+0x080135fe func HAL_WWDG_MspInit                     # HAL (matched against a gcc build of Drivers/)
+0x08013648 func HAL_MspInit                          # RCC APB4ENR |= SYSCFG
+0x08013668 func HAL_DAC_Init                         # HAL (matched against a gcc build of Drivers/)
+0x08013690 func HAL_DAC_DeInit                       # HAL (matched against a gcc build of Drivers/)
+0x080136b0 func HAL_DAC_Start                        # HAL (matched against a gcc build of Drivers/)
+0x08013712 func HAL_DAC_Stop                         # HAL (matched against a gcc build of Drivers/)
+0x0801372e func HAL_DAC_SetValue
+0x080137fa func HAL_DAC_ConfigChannel                # HAL (matched against a gcc build of Drivers/)
+0x08013a58 func HAL_LTDC_Init                        # HAL (matched against a gcc build of Drivers/)
+0x08013b3e func HAL_LTDC_DeInit
+0x08013d1a func LTDC_SetConfig                       # HAL (matched against a gcc build of Drivers/)
+0x08013f5c func HAL_MDMA_DeInit                      # HAL (matched against a gcc build of Drivers/)
+0x08016f68 func draw_clear                           # (rgb565): fills the 320x240 draw target
+0x08016f80 func draw_pixel                           # (x, y) in the current color
+0x08016f98 func draw_fill_rect_pts                   # (p0*, p1*) inclusive
+0x08016fd0 func draw_fill_rect                       # (pos*, size*)
+0x08016fee func draw_line                            # (pos*, delta*): Bresenham
+0x08017078 func draw_rect_outline_pts                # (p0*, p1*)
+0x080170d8 func draw_rect_outline                    # (pos*, size*)
+0x080171fc func draw_fill_circle                     # (center*, r, ...): x^2 + y^2 <= r^2 (UNVERIFIED)
+0x08017334 func draw_string                          # (pos*, str): draw_char per byte, advancing 4 px * text scale
+0x08017394 func HAL_RTCEx_AlarmBEventCallback        # HAL (matched against a gcc build of Drivers/)
+0x08017396 func HAL_RTCEx_WakeUpTimerEventCallback   # HAL (matched against a gcc build of Drivers/)
+0x08017398 func HAL_LTDC_ErrorCallback               # HAL (matched against a gcc build of Drivers/)
+0x0801739a func HAL_LTDC_LineEventCallback           # HAL (matched against a gcc build of Drivers/)
+0x080173f2 func point_add                            # (dst*, src*)
+0x08017408 func vsnprintf                            # (buf, n, fmt, va) -> _printf_core
+0x08017444 func _printf_core                         # armcc printf engine (format parsing, %d/%x/%s, flags, width, '*')
+0x08017802 func _printf_int                          # integer conversion for _printf_core (bases 8/10/16)
+0x080178d0 func _printf_putc                         # (out_fn, state, c): calls out_fn, counts chars
+0x080178f0 func _printf_putn                         # (out_fn, state, buf, n)
+0x08017a38 func _sys_exit
+0x08017a54 func HAL_IncTick                          # HAL (matched against a gcc build of Drivers/)
+0x08017a64 func HardFault_Handler                    # vector 3
+0x08017a66 func SysTick_Handler                      # vector 15
+0x08017a74 func EXTI2_IRQHandler                     # vector 24
+0x08017a7a func DMA1_Stream6_IRQHandler              # vector 33
+0x08017a80 func ADC_IRQHandler                       # HAL (matched against a gcc build of Drivers/)
+0x08017a86 func EXTI9_5_IRQHandler                   # vector 39
+0x08017a96 func RTC_Alarm_IRQHandler                 # HAL (matched against a gcc build of Drivers/)
+0x08017a9c func DMA1_Stream7_IRQHandler              # vector 63
+0x08017a9e func UART7_IRQHandler                     # vector 98
+0x08017aa0 func SAI1_IRQHandler                      # vector 103
+0x08017aa6 func LTDC_IRQHandler                      # HAL (matched against a gcc build of Drivers/)
+0x08017aac func LTDC_ER_IRQHandler                   # HAL (matched against a gcc build of Drivers/)
+0x08017ab4 func OCTOSPI1_IRQHandler                  # vector 108
+0x08017aba func EXTI0_IRQHandler                     # vector 22
+0x08017abe func RTC_WKUP_IRQHandler                  # HAL (matched against a gcc build of Drivers/)
+0x08017ac4 func NMI_Handler                          # vector 2
+0x08017ac6 func MemManage_Handler                    # vector 4
+0x08017ac8 func BusFault_Handler                     # vector 5
+0x08017aca func UsageFault_Handler                   # vector 6
+0x08017acc func SVC_Handler                          # vector 11
+0x08017ace func DebugMon_Handler                     # vector 12
+0x08017ad0 func PendSV_Handler                       # vector 14
+0x08017ad2 func DMA2D_IRQHandler                     # vector 106
+0x08017af4 func DMA2_Stream6_IRQHandler              # vector 85
+0x08017b02 func CRYP_IRQHandler                      # vector 95: bl 0x0800e540 (get handle) then HAL_CRYP_IRQHandler
+0x08017c86 func HAL_HSEM_Take                        # HAL (matched against a gcc build of Drivers/)
+0x08017d48 func _fp_init                             # CPACR |= CP10/CP11 full access; FPSCR = 0x02000000 (default NaN)
+0x08017d6c func __rt_entry                           # __scatterload (if enabled), then main(0), then exit
+0x08017d90 func __scatterload                        # walks the RWDATA/init table: each entry is a self-relative fn ptr + args (lz77_decompress_rwdata, bss_rwdata_init)
+0x08017db8 func exit                                 # never returns: loops calling _sys_exit
+0x08017de8 func call_init_array                      # (start, end): calls each self-relative function pointer (static ctors)
+0x08017e00 data ctor_table                           # data: 6 self-relative static-constructor offsets
+0x08017e18 func WWDG_IRQHandler                      # vector 16
+0x08017e1c func PVD_PVM_IRQHandler                   # vector 17
+0x08017e20 func RTC_TAMP_STAMP_CSS_LSE_IRQHandler    # HAL (matched against a gcc build of Drivers/)
+0x08017e24 func FLASH_IRQHandler                     # HAL (matched against a gcc build of Drivers/)
+0x08017e28 func RCC_IRQHandler                       # HAL (matched against a gcc build of Drivers/)
+0x08017e2c func EXTI1_IRQHandler                     # vector 23
+0x08017e30 func EXTI3_IRQHandler                     # vector 25
+0x08017e34 func EXTI4_IRQHandler                     # vector 26
+0x08017e38 func DMA1_Stream0_IRQHandler              # vector 27
+0x08017e3c func DMA1_Stream1_IRQHandler              # vector 28
+0x08017e40 func DMA1_Stream2_IRQHandler              # vector 29
+0x08017e44 func DMA1_Stream3_IRQHandler              # vector 30
+0x08017e48 func DMA1_Stream4_IRQHandler              # vector 31
+0x08017e4c func DMA1_Stream5_IRQHandler              # vector 32
+0x08017e50 func FDCAN1_IT0_IRQHandler                # vector 35
+0x08017e54 func FDCAN2_IT0_IRQHandler                # vector 36
+0x08017e58 func FDCAN1_IT1_IRQHandler                # vector 37
+0x08017e5c func FDCAN2_IT1_IRQHandler                # vector 38
+0x08017e60 func TIM1_BRK_IRQHandler                  # vector 40
+0x08017e64 func TIM1_UP_IRQHandler                   # vector 41
+0x08017e68 func TIM1_TRG_COM_IRQHandler              # vector 42
+0x08017e6c func TIM1_CC_IRQHandler                   # vector 43
+0x08017e70 func TIM2_IRQHandler                      # vector 44
+0x08017e74 func TIM3_IRQHandler                      # vector 45
+0x08017e78 func TIM4_IRQHandler                      # vector 46
+0x08017e7c func I2C1_EV_IRQHandler                   # vector 47
+0x08017e80 func I2C1_ER_IRQHandler                   # vector 48
+0x08017e84 func I2C2_EV_IRQHandler                   # vector 49
+0x08017e88 func I2C2_ER_IRQHandler                   # vector 50
+0x08017e8c func SPI1_IRQHandler                      # vector 51
+0x08017e90 func SPI2_IRQHandler                      # vector 52
+0x08017e94 func USART1_IRQHandler                    # vector 53
+0x08017e98 func USART2_IRQHandler                    # vector 54
+0x08017e9c func USART3_IRQHandler                    # vector 55
+0x08017ea0 func EXTI15_10_IRQHandler                 # vector 56
+0x08017ea4 func DFSDM2_IRQHandler                    # vector 58
+0x08017ea8 func TIM8_BRK_TIM12_IRQHandler            # vector 59
+0x08017eac func TIM8_UP_TIM13_IRQHandler             # vector 60
+0x08017eb0 func TIM8_TRG_COM_TIM14_IRQHandler        # vector 61
+0x08017eb4 func TIM8_CC_IRQHandler                   # vector 62
+0x08017eb8 func FMC_IRQHandler                       # vector 64
+0x08017ebc func SDMMC1_IRQHandler                    # vector 65
+0x08017ec0 func TIM5_IRQHandler                      # vector 66
+0x08017ec4 func SPI3_IRQHandler                      # vector 67
+0x08017ec8 func UART4_IRQHandler                     # vector 68
+0x08017ecc func UART5_IRQHandler                     # vector 69
+0x08017ed0 func TIM6_DAC_IRQHandler                  # vector 70
+0x08017ed4 func TIM7_IRQHandler                      # vector 71
+0x08017ed8 func DMA2_Stream0_IRQHandler              # vector 72
+0x08017edc func DMA2_Stream1_IRQHandler              # vector 73
+0x08017ee0 func DMA2_Stream2_IRQHandler              # vector 74
+0x08017ee4 func DMA2_Stream3_IRQHandler              # vector 75
+0x08017ee8 func DMA2_Stream4_IRQHandler              # vector 76
+0x08017eec func FDCAN_CAL_IRQHandler                 # vector 79
+0x08017ef0 func DFSDM1_FLT4_IRQHandler               # vector 80
+0x08017ef4 func DFSDM1_FLT5_IRQHandler               # vector 81
+0x08017ef8 func DFSDM1_FLT6_IRQHandler               # vector 82
+0x08017efc func DFSDM1_FLT7_IRQHandler               # vector 83
+0x08017f00 func DMA2_Stream5_IRQHandler              # vector 84
+0x08017f04 func DMA2_Stream7_IRQHandler              # vector 86
+0x08017f08 func USART6_IRQHandler                    # vector 87
+0x08017f0c func I2C3_EV_IRQHandler                   # vector 88
+0x08017f10 func I2C3_ER_IRQHandler                   # vector 89
+0x08017f14 func OTG_HS_EP1_OUT_IRQHandler            # vector 90
+0x08017f18 func OTG_HS_EP1_IN_IRQHandler             # vector 91
+0x08017f1c func OTG_HS_WKUP_IRQHandler               # vector 92
+0x08017f20 func OTG_HS_IRQHandler                    # vector 93
+0x08017f24 func DCMI_PSSI_IRQHandler                 # vector 94
+0x08017f28 func HASH_RNG_IRQHandler                  # vector 96
+0x08017f2c func FPU_IRQHandler                       # vector 97
+0x08017f30 func UART8_IRQHandler                     # vector 99
+0x08017f34 func SPI4_IRQHandler                      # vector 100
+0x08017f38 func SPI5_IRQHandler                      # vector 101
+0x08017f3c func SPI6_IRQHandler                      # vector 102
+0x08017f40 func SAI2_IRQHandler                      # vector 107
+0x08017f44 func LPTIM1_IRQHandler                    # vector 109
+0x08017f48 func CEC_IRQHandler                       # vector 110
+0x08017f4c func I2C4_EV_IRQHandler                   # vector 111
+0x08017f50 func I2C4_ER_IRQHandler                   # vector 112
+0x08017f54 func SPDIF_RX_IRQHandler                  # vector 113
+0x08017f58 func DMAMUX1_OVR_IRQHandler               # vector 118
+0x08017f5c func DFSDM1_FLT0_IRQHandler               # vector 126
+0x08017f60 func DFSDM1_FLT1_IRQHandler               # vector 127
+0x08017f64 func DFSDM1_FLT2_IRQHandler               # vector 128
+0x08017f68 func DFSDM1_FLT3_IRQHandler               # vector 129
+0x08017f6c func SWPMI1_IRQHandler                    # vector 131
+0x08017f70 func TIM15_IRQHandler                     # vector 132
+0x08017f74 func TIM16_IRQHandler                     # vector 133
+0x08017f78 func TIM17_IRQHandler                     # vector 134
+0x08017f7c func MDIOS_WKUP_IRQHandler                # vector 135
+0x08017f80 func MDIOS_IRQHandler                     # vector 136
+0x08017f84 func JPEG_IRQHandler                      # vector 137
+0x08017f88 func MDMA_IRQHandler                      # vector 138
+0x08017f8c func SDMMC2_IRQHandler                    # vector 140
+0x08017f90 func HSEM1_IRQHandler                     # vector 141
+0x08017f94 func DAC2_IRQHandler                      # vector 143
+0x08017f98 func DMAMUX2_OVR_IRQHandler               # vector 144
+0x08017f9c func BDMA2_Channel0_IRQHandler            # vector 145
+0x08017fa0 func BDMA2_Channel1_IRQHandler            # vector 146
+0x08017fa4 func BDMA2_Channel2_IRQHandler            # vector 147
+0x08017fa8 func BDMA2_Channel3_IRQHandler            # vector 148
+0x08017fac func BDMA2_Channel4_IRQHandler            # vector 149
+0x08017fb0 func BDMA2_Channel5_IRQHandler            # vector 150
+0x08017fb4 func BDMA2_Channel6_IRQHandler            # vector 151
+0x08017fb8 func BDMA2_Channel7_IRQHandler            # vector 152
+0x08017fbc func COMP_IRQHandler                      # vector 153
+0x08017fc0 func LPTIM2_IRQHandler                    # vector 154
+0x08017fc4 func LPTIM3_IRQHandler                    # vector 155
+0x08017fc8 func UART9_IRQHandler                     # vector 156
+0x08017fcc func USART10_IRQHandler                   # vector 157
+0x08017fd0 func LPUART1_IRQHandler                   # vector 158
+0x08017fd4 func CRS_IRQHandler                       # vector 160
+0x08017fd8 func ECC_IRQHandler                       # vector 161
+0x08017fdc func DTS_IRQHandler                       # vector 163
+0x08017fe0 func WAKEUP_PIN_IRQHandler                # vector 165
+0x08017fe4 func OCTOSPI2_IRQHandler                  # vector 166
+0x08017fe8 func OTFDEC1_IRQHandler                   # vector 167
+0x08017fec func OTFDEC2_IRQHandler                   # vector 168
+0x08017ff0 func GFXMMU_IRQHandler                    # vector 169
+0x08017ff4 func BDMA1_IRQHandler                     # vector 170
+0x08018070 data scatterload_table                    # data: armcc init table (zero-init entry, RWDATA entry, __cpp_initialize__aeabi_)
+0x20001036 data g_board_variant                      # g_state+2: read_pc8_with_pullup() at boot; picks PA2 vs PC5 for the same signal in MX_GPIO_Init and buttons_scan_debounced
+0x20001154 data uwTickFreq                           # HAL uwTickFreq / tick state (HAL_IncTick adds it)
+0x20001168 data hcryp                                # CRYP_HandleTypeDef
+0x200011e8 data SystemCoreClock                      # CMSIS SystemCoreClock (HAL_Init writes it)
+0x200011ec data SystemD2Clock
+0x20010400 data audio_queue                          # SAI output buffer queue (+0xb4 u16 buffers free); Mario's ITCM veneers reach the same accessors
+0x2001085c data hltdc                                # LTDC_HandleTypeDef
+0x20010b78 data hadc2                                # ADC_HandleTypeDef
+0x20010c40 data hospi1                               # OSPI_HandleTypeDef
+0x20010ca0 data ball_ctx                             # Mario counterpart of vermin_ctx (same helper code); BALL game state (UNVERIFIED)
+0x20010e28 data hwwdg1                               # WWDG_HandleTypeDef
+0x20010e54 data hdac1                                # DAC_HandleTypeDef
+0x20010e68 data hdac2                                # DAC_HandleTypeDef
+0x20010e7c data g_buttons                            # debounced GAMEPAD_* mask from buttons_scan_debounced
+0x20010ecc data flash_state                          # external flash driver state: +0 state (1 idle, 2 memory-mapped), +1 quad mode, +8 OSPI handle pointer (0x2001b1dc)
+0x20010f0c data draw_ctx                             # draw library state: +0 u16 color, +4 target framebuffer
+# --- generated: ldr.w pc, [pc] veneers to named functions
+0x08005b24 func nes_ppu_render_c_veneer
+0x0800ab24 func nes_cpu_run_veneer
+0x0800ab2c func nes_ppu_render_a_veneer
+0x0800ab34 func nes_ppu_render_b_veneer
+0x080180ca func aeabi_uldivmod_veneer
+0x900c0210 func aeabi_memclr_veneer
+0x900c0218 func rand_lcg_veneer
+0x900c0248 func aeabi_llsr_veneer
+0x900c0250 func aeabi_llsl_veneer

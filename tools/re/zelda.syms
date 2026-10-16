@@ -31,12 +31,16 @@
 0x2000ab9f data current_app_id                      # UNVERIFIED
 # RAM never written by stock fw (GWemu canary probe 2026-10-16, 2 identical runs: boot, clock, every game-select variant played briefly; sleep images / nvram UNVERIFIED)
 0x0000b7c0 data itcm_unused                           # to 0x00010000 (18496 B): past the last itcm_overlay_load copy (menu UI ends at 0x0000b7c0)
-#   AXI 0x240d3560-0x240d6000 (10912 B), 0x240fc120-0x240fd000 (3808 B), 0x2401f320-0x24020000 (3296 B),
+#   AXI 0x240d3560-0x240d6000 (10912 B; now our linker RAM), 0x240fc120-0x240fd000 (3808 B), 0x2401f320-0x24020000 (3296 B),
 #       0x240a50f0-0x240a5c20 and 0x240b7cf0-0x240b8820 (2864 B each), 0x24090c40-0x24091040 (1024 B),
 #       0x240dce00-0x240dd000 and 0x240e5e00-0x240e6000 (512 B each) also unused
 #   No DTCM, AHB or SRD block >= 512 B is unused.
-#   Our linker RAM region (0x240ec524, __RAM_LENGTH__ 68308) is skipped by the probe; stock writes 0x240f0ad0-0x240fc120, so
-#       __RAM_LENGTH__ overstates the free space past our .data/.bss/heap (UNVERIFIED where stock use starts). Re-run: tools/emu/ram_probe.py --device zelda
+#   Stock-only probe (ram_probe.py --stock, 2026-10-16) agrees and adds AXI 0x240ff0c0-0x24100000 (3904 B), 0x240ece00-0x240ed000 (512 B)
+#       and DTCM 0x2001b220-0x2001b340 (288 B). It paints our linker RAM region too: stock owns all of it except 0x240ece00-0x240ed000.
+#   Our linker RAM region used to be 0x240ec524-0x240fcef8, inside app_state_loz2_en/app_state_loz2_jp: app_state_buffers_clear
+#       zeroes those at boot, after our init, and the timer's runtime memcpy_inflate then overwrote 13520 B of saved LoZ2 JP state
+#       (LoZ2 JP hangs on resume; stock doesn't). Per-game GWemu runs: only LoZ2 EN/JP write that range. Our RAM now starts at
+#       0x240d3560 (scripts/device_from_patch_params.py), which lc=0 LZMA (5.5 KB heap) makes fit.
 # --- generated: names shared with the other G&W firmware (HAL/SDK/runtime matched by code) and session RE
 0x00000000 func nes_cpu_run                          # 6502 interpreter entry: registers live in r5-r8 (saved at nes+0xb24); NMI/IRQ checks, then dispatch; Mario runs it from ITCM 0x0000; runs in ITCM; copied from external flash 0x9030c388 by itcm_overlay_load
 0x00000192 func nes_cpu_op_group_a                   # opcode handler block (UNVERIFIED); runs in ITCM; copied from external flash 0x9030c51a by itcm_overlay_load
@@ -282,7 +286,8 @@
 0x0800f0be func app_is_clock_mode                    # g_app_id == 4 or 0x10, or (g_state+0xc == 4 and app 0x12) (UNVERIFIED names for apps 3/4/0x10-0x12)
 0x0800f17c func nvram_read_record                    # (state*, flash offset, ...) -> pointer to a valid record or 0 (UNVERIFIED)
 0x0800f1e4 func nvram_write_record                   # (state*, flash offset, size, len) (UNVERIFIED)
-0x0800f43c func app_switch_hook                      # (app): when it differs from g_state+0x10 (0x2000aba0): per-app teardown via tbb (UNVERIFIED)
+0x0800f43c func app_switch_hook                      # (app): when it differs from g_state+0x10 (0x2000aba0), saves the old app's state into its app_state_* buffer (LA: la_request_pause)
+0x0800f4c0 func app_state_buffers_clear              # zeroes the 6 app_state_* buffers; called once at boot from 0x0801058c
 0x0800f518 func loz1_load                            # (demo): memcpy(AHB SRAM 0x30000000, LoZ1 EN ROM 0x90030000, 128K); nes_init(nes, ...); optional save template from 0x902df200
 0x0800f5b0 func loz1j_load                           # memcpy(0x30000000, LoZ1 JP FDS image 0x90050000, 0x1e000); FDS setup (0x0800d020); nes_init
 0x0800f628 func loz2_load                            # memcpy(0x30000000, LoZ2 EN ROM 0x90070000, 128K) + CHR at 0x90090000; nes_init
@@ -666,6 +671,12 @@
 0x2001b1d4 data flash_state                          # external flash driver state: +0 state (1 idle, 2 memory-mapped), +1 quad mode, +8 OSPI handle pointer (0x2001b1dc)
 0x2001b208 data g_frame_ready                        # set by ltdc_reload_callback; main_loop_tick waits on it with wfi
 0x2001b20c data g_rand_state                         # same code as Mario 0x20010f20
+0x2000b460 data app_state_dtcm                       # 0x8e00 B, cleared with the app_state_* buffers; no app_switch_hook entry (UNVERIFIED owner)
+0x24010000 data app_state_loz1_jp                    # 0xf320 B per-app state (app 7)
+0x240d6000 data app_state_timer                      # 0x6e00 B per-app state (app 5)
+0x240dd000 data app_state_loz1_en                    # 0x8e00 B per-app state (app 6)
+0x240e6000 data app_state_loz2_en                    # 0x6e00 B per-app state (app 8)
+0x240ed000 data app_state_loz2_jp                    # 0xf120 B per-app state (app 9); LoZ2 JP won't launch over a non-zero buffer
 0x240fd000 data flash_bounce_buffer                  # 4 KB buffer for external-flash sector read/modify/write
 0x240ff000 data nvram_ram                            # RAM copy of the settings record (0x80 B): +0 magic 0xfeadbabe, +4 checksum, +0xc u32 values by id, +0x28 flag bits (ids 8/9), +0x2c 0x3c-byte blob, +0x6c scramble seed
 0x902d8160 data nes_palette_rgb                      # data: 64 x RGB888 NES palette

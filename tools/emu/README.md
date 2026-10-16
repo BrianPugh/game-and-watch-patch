@@ -79,8 +79,10 @@ Fills RAM with a marker at the stock `Reset_Handler`, plays every mode
 game), then lists regions that still hold the marker
 (never written by the stock firmware). Our own `.data`/`.bss`/stack is skipped.
 GWemu fills some buffers (e.g. audio) in some runs only, so run it more than
-once and trust only regions that are free every time. Results are recorded in
-`tools/re/<device>.syms`.
+once and trust only regions that are free every time. `--stock` boots the
+unpatched backups and paints all of RAM, which shows what stock uses inside
+our linker region (on Zelda that region is stock's per-game state, see
+`tools/re/zelda.syms`). Results are recorded in `tools/re/<device>.syms`.
 
 ## Function coverage
 

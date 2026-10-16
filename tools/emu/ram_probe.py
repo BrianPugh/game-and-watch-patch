@@ -9,7 +9,9 @@ variant). Afterwards any 16-byte block still holding the marker was
 never written.
 
 Our own RAM (``build/gw_patch.elf`` .data/.bss/heap/stack) is left unpainted;
-the unused rest of our linker RAM region is painted and reported.
+the unused rest of our linker RAM region is painted and reported. ``--stock``
+boots the unpatched backups instead and paints all of RAM, which shows what
+stock itself uses inside our linker region.
 
 Caveats:
 * Coverage is limited to the paths played here. Sleep images, the Mario song
@@ -20,13 +22,14 @@ Caveats:
 Requires gwprov and a GWemu binary; see tools/emu/README.md.
 
 Usage:
-    python tools/emu/ram_probe.py --gwemu-bin /path/to/gwemu [--device zelda]
+    python tools/emu/ram_probe.py --gwemu-bin /path/to/gwemu [--device zelda] [--stock]
 """
 
 import argparse
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 from elftools.elf.elffile import ELFFile
 from gwprov.gwemu_manager import instances, start_instance, stop_instance
@@ -63,12 +66,12 @@ def our_ram(elf_path: Path) -> tuple[int, int]:
     return start, (end + 0xF) & ~0xF
 
 
-def paint_ranges(sp: int, skip: tuple[int, int]):
-    """RAM_BANKS minus our RAM and the live stack."""
+def paint_ranges(sp: int, skip: Optional[tuple[int, int]]):
+    """RAM_BANKS minus our RAM (if any) and the live stack."""
     for name, start, end in RAM_BANKS:
         if start <= sp < end:
             end = (sp - 0x100) & ~0xF
-        if start <= skip[0] < end:
+        if skip is not None and start <= skip[0] < end:
             yield name, start, skip[0]
             yield name, skip[1], end
         else:
@@ -185,23 +188,31 @@ def main():
         default=0,
         help="Extra clock frames at the end (e.g. to reach the sleep screen).",
     )
+    parser.add_argument(
+        "--stock",
+        action="store_true",
+        help="Boot the stock backups and paint all of RAM (no patched build needed).",
+    )
     args = parser.parse_args()
 
     work = args.work_dir.resolve()
-    out_dir = work / f"ram_probe_{args.device}"
+    out_dir = work / f"ram_probe_{args.device}{'_stock' if args.stock else ''}"
     out_dir.mkdir(parents=True, exist_ok=True)
     profile = work / f"{args.device}-profile"
     reset_handler, poll_pc, _ = DEVICES[args.device]
     bank2 = work / "bank2_erased.bin"
     make_bank2(bank2, "erased")
+    if args.stock:
+        internal = REPO / f"internal_flash_backup_{args.device}.bin"
+        external = REPO / f"flash_backup_{args.device}.bin"
+        skip = None
+    else:
+        internal = REPO / "build/internal_flash_patched.bin"
+        external = REPO / "build/external_flash_patched.bin"
+        skip = our_ram(REPO / "build/gw_patch.elf")
     make_profile(
-        profile,
-        bank2,
-        (REPO / "build/internal_flash_patched.bin").resolve(),
-        (REPO / "build/external_flash_patched.bin").resolve(),
-        model=args.device,
+        profile, bank2, internal.resolve(), external.resolve(), model=args.device
     )
-    skip = our_ram(REPO / "build/gw_patch.elf")
 
     start_instance(str(profile), headless=True, gwemu_bin=str(args.gwemu_bin.resolve()))
     pid = next(r["pid"] for r in instances() if r["profile"] == str(profile))
@@ -228,9 +239,12 @@ def main():
         exercise(driver, args.device, args.idle_frames)
 
         dbg.halt()
-        print(
-            f"\nNever written (>= {args.min_run} B); our RAM 0x{skip[0]:08X}-0x{skip[1]:08X} skipped:"
+        skipped = (
+            f"our RAM 0x{skip[0]:08X}-0x{skip[1]:08X} skipped"
+            if skip
+            else "stock images"
         )
+        print(f"\nNever written (>= {args.min_run} B); {skipped}:")
         for name, start, end in ranges:
             data = backend.read_memory(start, end - start)
             for a, b in untouched_runs(data, start):

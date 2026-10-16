@@ -33,9 +33,12 @@ __RAM_ORIGIN__ = 0x30010000;
 __RAM_LENGTH__ = {64 * (1 << 10) - 8192};
 """
     elif device.name == "zelda":
+        # AXI RAM stock never writes, below app_state_timer (tools/re/zelda.syms).
+        # Most other AXI RAM that looks free holds the per-game app_state_*
+        # buffers, which must survive our runtime LZMA calls (e.g. the timer).
         new_ld += """
-__RAM_ORIGIN__ = 0x240ec524;
-__RAM_LENGTH__ = 68308;
+__RAM_ORIGIN__ = 0x240d3560;
+__RAM_LENGTH__ = 0x240d6000 - 0x240d3560;
 """
     else:
         raise ValueError(f"Unsupported device {device.name}")

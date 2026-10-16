@@ -2,27 +2,27 @@
   "configs": {
     "mario": {
       "external_flash_patched.bin": "418b3c52aa4d9b092b119dc2deb757261a5dc93b",
-      "internal_flash_patched.bin": "4076096fc5558193e229c9de3aea91eb1986b441"
+      "internal_flash_patched.bin": "35d6b3e27b1dcfbb17998ed7f2034778fb79d032"
     },
     "mario_clock_only": {
       "external_flash_patched.bin": "526b795e6691b639e5d4fe9e8add955ea751569c",
-      "internal_flash_patched.bin": "92f75bbe11522dd59ccdbd6e9e777d2d5eeb154b"
+      "internal_flash_patched.bin": "21b4a85ba3828ca1ef8a0c270180dc7215202a01"
     },
     "mario_internal_only": {
       "external_flash_patched.bin": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-      "internal_flash_patched.bin": "e2cc00633e36ba2a0f921b5c74bb29e008d8f044"
+      "internal_flash_patched.bin": "6db2cf57bda0aaf18c09cc9a87e1e406adb7a498"
     },
     "mario_no_song": {
       "external_flash_patched.bin": "7785e80b36feca8e7961736f96ad4467ca12a4c8",
-      "internal_flash_patched.bin": "e462240b59273b05816b5223e004bce0e23d3a30"
+      "internal_flash_patched.bin": "45137fb84c19d50e5953988d3245772f61871c97"
     },
     "mario_options": {
       "external_flash_patched.bin": "893d39d0740049113fc570a5afd85d63165cf7e8",
-      "internal_flash_patched.bin": "b189f1e11f99cfafec9192f7cf24307567440d51"
+      "internal_flash_patched.bin": "b46b7c4bb85c59b7db4d9bc6a5bad8bb699cff29"
     },
     "mario_relocate": {
       "external_flash_patched.bin": "5eddc8293da5dd64ad22a64cdef29dc090b7d03e",
-      "internal_flash_patched.bin": "fd7cfaaa76f35d6e362fa847de71bac7be4425c5",
+      "internal_flash_patched.bin": "2410097f4429c96c53d561805a958f411e5c960c",
       "internal_flash_patched_bank2.bin": "f363515206d67475c802ee858469226262256e97"
     },
     "zelda": {

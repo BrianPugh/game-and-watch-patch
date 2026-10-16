@@ -649,7 +649,10 @@ class MarioGnW(Device, name="mario"):
 
         # Note: UNKNOWN* represents a block of data that i haven't decoded
         # yet. If you know what the block of data is, please let me know!
+        # Its last 256 bytes are apu_reciprocal_table (0x900aabe4), loaded
+        # through the ITCM rwdata literal at 0x2c88.
         self.move_to_compressed_memory(0xA_8C44, 8352, 0xBC44)
+        self.rwdata_ref(0x2C88)
 
         printe("Moving iconset.")
         # MODIFY THESE IF WE WANT CUSTOM GAME ICONS

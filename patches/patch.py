@@ -1,4 +1,7 @@
+import zlib
+
 from .compression import lzma_compress
+from .exception import UnexpectedBytesError
 from .thumb_asm import assemble as thumb_assemble
 
 
@@ -11,10 +14,30 @@ def twos_compliment(value, bits):
 
 
 class FirmwarePatchMixin:
-    """Patch commands that apply to a single firmware instance."""
+    """Patch commands that apply to a single firmware instance.
 
-    def replace(self, offset: int, data, size=None) -> int:
+    Every command takes an optional ``expect``, ``"<length>:<crc32 hex>"`` of
+    the bytes that must be at ``offset`` before it writes. It catches a patch
+    aimed at the wrong offset, or at code an earlier patch changed. It's a hash
+    so no stock firmware bytes end up in the repo; for a new patch, pass e.g.
+    ``"4:0"`` and copy the found value from the error.
+    """
+
+    def _expect(self, offset: int, expect):
+        if expect is None:
+            return
+        length, crc = expect.split(":")
+        found = bytes(self[offset : offset + int(length)])
+        found_crc = zlib.crc32(found)
+        if found_crc != int(crc, 16):
+            raise UnexpectedBytesError(
+                f'0x{offset:X}: expected "{expect}", found "{length}:{found_crc:08x}" '
+                f"({found.hex()})"
+            )
+
+    def replace(self, offset: int, data, size=None, expect=None) -> int:
         """ """
+        self._expect(offset, expect)
 
         if offset >= len(self):
             raise IndexError(
@@ -46,11 +69,12 @@ class FirmwarePatchMixin:
 
         return n_bytes_patched
 
-    def relative(self, offset, data, size=None) -> int:
+    def relative(self, offset, data, size=None, expect=None) -> int:
         """
         data
             If str, looks up a function
         """
+        self._expect(offset, expect)
         src = self.FLASH_BASE + offset
 
         if isinstance(data, str):
@@ -72,7 +96,7 @@ class FirmwarePatchMixin:
 
         return self.replace(offset, rel_distance, size=4)
 
-    def b(self, offset: int, data: int) -> int:
+    def b(self, offset: int, data: int, expect=None) -> int:
         """Unconditional branch inserted at ``offset`` to offset ``data``
 
         data should be the absolute offset into the firmware (i.e. NOT in the
@@ -80,6 +104,7 @@ class FirmwarePatchMixin:
 
         2 byte command
         """
+        self._expect(offset, expect)
 
         pc = offset + 4
         jump = data - pc
@@ -99,11 +124,12 @@ class FirmwarePatchMixin:
 
         return 2
 
-    def bl(self, offset: int, data) -> int:
+    def bl(self, offset: int, data, expect=None) -> int:
         """Replace a branch-link statement to a branch to one of our functions
 
         4 byte command.
         """
+        self._expect(offset, expect)
 
         if isinstance(data, str):
             dst_address = self.address(data)
@@ -141,8 +167,9 @@ class FirmwarePatchMixin:
 
         return 4
 
-    def bkpt(self, offset, size=2):
+    def bkpt(self, offset, size=2, expect=None):
         """Insert software breakpoint(s)"""
+        self._expect(offset, expect)
         if size % 2:
             raise ValueError("Size of breakpoints must be even.")
 
@@ -150,13 +177,14 @@ class FirmwarePatchMixin:
         self[offset : offset + size] = b"\x00\xbe" * n_bkpts
         return size
 
-    def asm(self, offset: int, data: str, size=None) -> int:
+    def asm(self, offset: int, data: str, size=None, expect=None) -> int:
         """
         Parameters
         ----------
         data : str
             Assembly instructions
         """
+        self._expect(offset, expect)
         data = data.strip()
         if data.startswith("b.w"):
             encoding = thumb_assemble(data, self.FLASH_BASE + offset)
@@ -169,8 +197,9 @@ class FirmwarePatchMixin:
             self[offset + i] = val
         return len(encoding)
 
-    def nop(self, offset: int, data: int) -> int:
+    def nop(self, offset: int, data: int, expect=None) -> int:
         """Insert N NOP operations (each 2 bytes long)."""
+        self._expect(offset, expect)
         size = data * 2
         self[offset : offset + size] = b"\x00\xbf" * data
         return size
@@ -214,7 +243,8 @@ class FirmwarePatchMixin:
     def copy(self, offset: int, data: int, size: int) -> int:
         return self._move_copy(offset, data, size, False)
 
-    def add(self, offset: int, data: int, size: int = 4) -> int:
+    def add(self, offset: int, data: int, size: int = 4, expect=None) -> int:
+        self._expect(offset, expect)
         val = self.int(offset, size)
         val += data
         self[offset : offset + size] = val.to_bytes(size, "little")

@@ -255,7 +255,17 @@ FORCE: ;
 ##################
 # PATCH BUILDING #
 ##################
-$(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin &: $(BUILD_DIR)/$(TARGET).bin patch.py $(shell find patches -type f)
+# patch.py writes both images, internal first. Grouped targets (&:) need make
+# 4.3, and macOS ships 3.81, so the external image hangs off the internal one:
+# it's rebuilt when missing or older (e.g. a run died between the 2 writes).
+PATCH_DEPS = $(BUILD_DIR)/$(TARGET).bin patch.py \
+	$(shell find patches -type f -not -path '*/__pycache__/*') \
+	$(wildcard tools/re/*.syms)
+
+$(BUILD_DIR)/internal_flash_patched.bin: $(PATCH_DEPS)
+	$(PYTHON) patch.py $(PATCH_PARAMS)
+
+$(BUILD_DIR)/external_flash_patched.bin: $(BUILD_DIR)/internal_flash_patched.bin
 	$(PYTHON) patch.py $(PATCH_PARAMS)
 
 patch: $(BUILD_DIR)/internal_flash_patched.bin $(BUILD_DIR)/external_flash_patched.bin

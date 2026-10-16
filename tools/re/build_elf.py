@@ -31,13 +31,8 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from patches import Device  # noqa: E402
-from patches.xrefs import (  # noqa: E402
-    EXT_BASE,
-    LAYOUT,
-    extract_rwdata,
-    itcm_image,
-    parse_syms,
-)
+from patches.syms import parse_syms  # noqa: E402
+from patches.xrefs import EXT_BASE, LAYOUT, extract_rwdata, itcm_image  # noqa: E402
 
 INT_BASE = 0x0800_0000
 VECTOR_TABLE_END = 0x2CC  # STM32H7B0 vector table size; identical on both devices.

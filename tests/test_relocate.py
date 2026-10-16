@@ -10,10 +10,10 @@ _md = capstone.Cs(
 )
 _md.detail = True
 
-# (stock encoding, mnemonic) of one instruction of each 32-bit branch kind.
+# (encoding with offset 0, mnemonic) of each 32-bit branch kind.
 BRANCHES = [
-    ((0xF7FE, 0xFD92), "bl"),  # bl, Mario 0x080070b0
-    ((0xF7F2, 0xB943), "b.w"),  # b.w, Mario 0x08017a70
+    ((0xF000, 0xF800), "bl"),
+    ((0xF000, 0xB800), "b.w"),
     ((0xF000, 0x8000), "bcc.w"),  # beq.w
 ]
 
@@ -35,7 +35,7 @@ def test_encode_branch_round_trip(encoding, kind, offset):
 
 @pytest.mark.parametrize("offset", [0x120000, -0x7FFFFE, 0xFFFFFE])
 def test_encode_bl_long(offset):
-    hw1, hw2 = _encode_branch(0xF7FE, 0xFD92, offset)
+    hw1, hw2 = _encode_branch(0xF000, 0xF800, offset)
     assert _target(hw1, hw2, 0x0800_0000)[1] == 0x0800_0004 + offset
 
 

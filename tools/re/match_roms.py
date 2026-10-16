@@ -33,7 +33,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-from patches.xrefs import analyze, parse_syms  # noqa: E402
+from patches.syms import parse_syms, syms_path  # noqa: E402
+from patches.xrefs import analyze  # noqa: E402
 
 DEVICES = ("mario", "zelda")
 
@@ -163,7 +164,7 @@ class Rom:
             "itcm": a.other["ITCM"],
             "external": a.other["external"],
         }
-        funcs, _ = parse_syms(REPO / "tools" / "re" / f"{device}.syms")
+        funcs, _ = parse_syms(syms_path(device))
         return cls(regions, funcs)
 
 
@@ -221,7 +222,7 @@ def main():
     roms = {d: Rom.from_device(d) for d in DEVICES}
     mario, zelda = roms["mario"], roms["zelda"]
     pairs = match(mario, zelda, args.min_insns)
-    names = {d: parse_syms(REPO / "tools" / "re" / f"{d}.syms")[0] for d in DEVICES}
+    names = {d: parse_syms(syms_path(d))[0] for d in DEVICES}
 
     by_region = defaultdict(lambda: [0, 0])
     for m, z in pairs.items():

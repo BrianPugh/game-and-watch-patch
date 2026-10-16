@@ -21,6 +21,13 @@
 // Intended for internal-use only; bypasses other checks
 #define BOOTLOADER_MAGIC_FORCE 0x45435246  // "FRCE"
 
+#if GNW_DEVICE_MARIO
+/**
+ * This will most likely be overriden by the patcher.
+ */
+const uint8_t * const SMB1_ROM = (const uint8_t *)0x90001e60;
+#endif
+
 #define BOOTLOADER_MAGIC_ADDRESS ((uint32_t *)0x2001FFF8)
 #define BOOTLOADER_JUMP_ADDRESS ((uint32_t **)0x2001FFFC)
 
@@ -141,6 +148,26 @@ uint8_t * prepare_clock_rom(void *mario_rom, size_t len){
 }
 #endif
 
+static uint32_t *dual_boot_target(){
+#if SD_BOOTLOADER
+    return (uint32_t *)SD_BOOTLOADER_ADDRESS;
+#else
+    return (uint32_t *)BANK_2_ADDRESS;
+#endif
+}
+
+bool dual_boot_target_valid(){
+    uint32_t *target_address = dual_boot_target();
+    return is_valid(target_address[1], target_address[0]);
+}
+
+void launch_dual_boot(){
+    if(dual_boot_target_valid()){
+        set_bootloader((uint32_t)dual_boot_target());
+        NVIC_SystemReset();
+    }
+}
+
 #if ENABLE_SMB1_GRAPHIC_MODS
 bool is_menu_open(){
     return *ui_draw_status_addr == 5;
@@ -166,19 +193,7 @@ gamepad_t read_buttons() {
 #else
     if((gamepad & GAMEPAD_LEFT) && (gamepad & GAMEPAD_GAME)){
 #endif
-        uint32_t *target_address;
-#if SD_BOOTLOADER
-        target_address = (uint32_t *)SD_BOOTLOADER_ADDRESS;
-#else
-        target_address = (uint32_t *)BANK_2_ADDRESS;
-#endif
-        uint32_t sp = *target_address;
-        uint32_t pc = *(target_address + 1);
-
-        if(is_valid(pc, sp)){
-            set_bootloader((uint32_t)target_address);
-            NVIC_SystemReset();
-        }
+        launch_dual_boot();
     }
 
 #if ENABLE_SMB1_GRAPHIC_MODS

@@ -15,6 +15,7 @@ BUILD_DIR = build
 
 # C sources
 C_SOURCES =  \
+Core/Src/game_select.c \
 Core/Src/ips.c \
 Core/Src/main.c \
 Core/Src/system_stm32h7xx.c \
@@ -106,6 +107,10 @@ ifneq (,$(findstring --triple-boot, $(PATCH_PARAMS)))
 	C_DEFS += -DTRIPLE_BOOT
 endif
 
+ifneq (,$(findstring --game-select-dual-boot, $(PATCH_PARAMS)))
+	C_DEFS += -DGAME_SELECT_DUAL_BOOT
+endif
+
 ifneq (,$(findstring --sd-bootloader, $(PATCH_PARAMS)))
 	C_DEFS += -DSD_BOOTLOADER
 endif
@@ -179,6 +184,11 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=SMB1_ROM \
 		  -Wl,--undefined=bootloader \
 		  -Wl,--undefined=bss_rwdata_init \
+		  -Wl,--undefined=GAME_SELECT_DUAL_BOOT_ICON \
+		  -Wl,--undefined=game_select_draw \
+		  -Wl,--undefined=game_select_handle_input \
+		  -Wl,--undefined=game_select_next \
+		  -Wl,--undefined=game_select_prev \
 		  -Wl,--undefined=memcpy_inflate \
 		  -Wl,--undefined=prepare_clock_rom \
 		  -Wl,--undefined=read_buttons \

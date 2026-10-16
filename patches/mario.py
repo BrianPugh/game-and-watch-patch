@@ -7,7 +7,13 @@ import patches
 from .compression import lzma_compress
 from .exception import BadImageError, InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
-from .tileset import bytes_to_tilemap, decode_backdrop, tilemap_to_bytes
+from .tileset import (
+    bytes_to_tilemap,
+    decode_backdrop,
+    png_to_icon_4bpp,
+    render_label_icon,
+    tilemap_to_bytes,
+)
 from .utils import (
     fds_remove_crc_gaps,
     printd,
@@ -77,6 +83,28 @@ class MarioGnW(Device, name="mario"):
             default=None,
             help="Hold the A button for this many seconds on the time "
             "screen to launch the mario drawing song easter egg.",
+        )
+
+        group = parser.add_argument_group("Game-select menu")
+        group.add_argument(
+            "--game-select-dual-boot",
+            action="store_true",
+            help="Add an entry to the GAME menu that launches the dual-boot target "
+            "(same as LEFT+GAME). Only shown if a valid target is flashed.",
+        )
+        mgroup = group.add_mutually_exclusive_group()
+        mgroup.add_argument(
+            "--game-select-dual-boot-icon",
+            type=Path,
+            default=Path(__file__).parent / "assets" / "retro_go_icon.png",
+            help="96x48 image for the dual-boot menu entry; colors are mapped to the "
+            "nearest menu palette color. Defaults to a Retro-Go logo.",
+        )
+        mgroup.add_argument(
+            "--game-select-dual-boot-label",
+            type=str,
+            default=None,
+            help="Instead of an image, draw this text on the dual-boot menu entry's icon.",
         )
 
         group = parser.add_argument_group("ROM Hacks and Graphical Mods")
@@ -201,6 +229,22 @@ class MarioGnW(Device, name="mario"):
 
         printi("Intercept button presses for macros.")
         self.internal.bl(0x6B52, "read_buttons")
+
+        if self.args.game_select_dual_boot:
+            printi("Add dual-boot entry to the game-select menu.")
+            # Each hooked function has exactly one call site.
+            self.internal.bl(0xC894, "game_select_prev")
+            self.internal.bl(0xC89C, "game_select_next")
+            self.internal.bl(0xCB18, "game_select_handle_input")
+            self.internal.bl(0xD236, "game_select_draw")
+            if self.args.game_select_dual_boot_label:
+                icon = render_label_icon(self.args.game_select_dual_boot_label)
+            else:
+                icon = png_to_icon_4bpp(self.args.game_select_dual_boot_icon)
+            self.internal.replace(
+                self.internal.address("GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
+                icon,
+            )
 
         printi("Mute clock audio on first boot.")
         self.internal.asm(0x49E0, "mov.w r1, #0x00000")

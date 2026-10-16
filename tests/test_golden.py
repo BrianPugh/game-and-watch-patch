@@ -36,6 +36,7 @@ CONFIGS = {
     "mario_options": "--device=mario --game-select-dual-boot --sleep-time=5 "
     "--sleep-on-usb --hard-reset-time=3 --mario-song-time=5 --no-save --encrypt "
     "--triple-boot --smb1-graphics {ips}",
+    "mario_no_song": "--device=mario --no-mario-song",
     "mario_clock_only": "--device=mario --clock-only --disable-sleep --debug",
     "zelda": "--device=zelda",
     "zelda_options": "--device=zelda --no-la --no-sleep-images --no-second-beep "

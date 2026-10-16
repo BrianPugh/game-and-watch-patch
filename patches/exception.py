@@ -10,6 +10,10 @@ class InvalidPatchError(Exception):
     """"""
 
 
+class UnexpectedBytesError(Exception):
+    """A patch site doesn't hold the bytes the patch expects."""
+
+
 class ParsingError(Exception):
     """"""
 

@@ -12,6 +12,10 @@
       "external_flash_patched.bin": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
       "internal_flash_patched.bin": "e2cc00633e36ba2a0f921b5c74bb29e008d8f044"
     },
+    "mario_no_song": {
+      "external_flash_patched.bin": "7785e80b36feca8e7961736f96ad4467ca12a4c8",
+      "internal_flash_patched.bin": "e462240b59273b05816b5223e004bce0e23d3a30"
+    },
     "mario_options": {
       "external_flash_patched.bin": "893d39d0740049113fc570a5afd85d63165cf7e8",
       "internal_flash_patched.bin": "4167800a2c209b4b75d7225305c2e808f88ded5f"

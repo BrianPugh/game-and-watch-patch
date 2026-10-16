@@ -272,23 +272,32 @@ class MarioGnW(Device, name="mario"):
             )
 
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
-        self.internal.replace(0x4, "bootloader")
+        self.internal.replace(0x4, "bootloader", expect="4:c32823e6")
 
         printi("Intercept button presses for macros.")
-        self.internal.bl(0x6B52, "read_buttons")
+        self.internal.bl(0x6B52, "read_buttons", expect="4:8d256c72")
 
         if self.args.no_factory_test:
             printi("Remove the factory CHARGE AND KEY TEST (g_gnw_mode 0x01).")
             # game_reload: never enter test mode on the magic boot value.
-            self.internal.b(0x66D2, 0x66DA)
+            self.internal.b(0x66D2, 0x66DA, expect="2:823b923f")
             # Its static constructor -> an existing `bx lr`.
             ctor_entry, bx_lr = 0x1_7E08, 0x659A
             self.internal.replace(
-                ctor_entry, ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF, size=4
+                ctor_entry,
+                ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF,
+                size=4,
+                expect="4:7458e291",
             )
             # main_loop_tick calls, each guarded by g_gnw_mode == 1.
-            for call in (0x6CC4, 0x6DBC, 0x70E4, 0x711C):
-                self.internal.nop(call, 2)
+            calls = {
+                0x6CC4: "4:2e84db16",
+                0x6DBC: "4:bc3188c7",
+                0x70E4: "4:4712a6f5",
+                0x711C: "4:d2968257",
+            }
+            for call, expect in calls.items():
+                self.internal.nop(call, 2, expect=expect)
             # Thunks, constructor, body and literal pools.
             self.free_int(0x1_1A94, 0x1_2EE4)
 
@@ -296,16 +305,25 @@ class MarioGnW(Device, name="mario"):
             printi("Remove the mario song code (g_gnw_mode 0x04).")
             # Mode 4 is never entered (see the 0x6FC8 patch below); these are
             # main_loop_tick's calls, each guarded by (g_gnw_mode & 0xC6) == 4.
-            for call in (0x6980, 0x6DAE, 0x7008, 0x7112):
-                self.internal.nop(call, 2)
+            calls = {
+                0x6980: "4:d4d038db",
+                0x6DAE: "4:02222f90",
+                0x7008: "4:ccbd1f14",
+                0x7112: "4:29521448",
+            }
+            for call, expect in calls.items():
+                self.internal.nop(call, 2, expect=expect)
             # Its static constructor -> an existing `bx lr`.
             ctor_entry, bx_lr = 0x1_7E04, 0x659A
             self.internal.replace(
-                ctor_entry, ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF, size=4
+                ctor_entry,
+                ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF,
+                size=4,
+                expect="4:53d049ab",
             )
             if not self.args.no_factory_test:
                 # The factory test stops the song; nothing to stop now.
-                self.internal.nop(0x1_1D20, 2)
+                self.internal.nop(0x1_1D20, 2, expect="4:5793f5ae")
             # Constructor, body and literal pools.
             self.free_int(0x1_0FAC, 0x1_1A24)
 
@@ -313,7 +331,10 @@ class MarioGnW(Device, name="mario"):
             printi("Remove the drawing library only used by the song and factory test.")
             ctor_entry, bx_lr = 0x1_7E10, 0x659A
             self.internal.replace(
-                ctor_entry, ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF, size=4
+                ctor_entry,
+                ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF,
+                size=4,
+                expect="4:33ea1c5f",
             )
             # Constructor, primitives and the text printf.
             self.free_int(0x1_6F30, 0x1_7394)
@@ -323,10 +344,10 @@ class MarioGnW(Device, name="mario"):
         if self.args.game_select_dual_boot:
             printi("Add dual-boot entry to the game-select menu.")
             # Each hooked function has exactly one call site.
-            self.internal.bl(0xC894, "game_select_prev")
-            self.internal.bl(0xC89C, "game_select_next")
-            self.internal.bl(0xCB18, "game_select_handle_input")
-            self.internal.bl(0xD236, "game_select_draw")
+            self.internal.bl(0xC894, "game_select_prev", expect="4:f87db677")
+            self.internal.bl(0xC89C, "game_select_next", expect="4:f2501abf")
+            self.internal.bl(0xCB18, "game_select_handle_input", expect="4:fa0dc437")
+            self.internal.bl(0xD236, "game_select_draw", expect="4:37ecc1ee")
             if self.args.game_select_dual_boot_label:
                 icon = render_label_icon(self.args.game_select_dual_boot_label)
             else:
@@ -337,36 +358,40 @@ class MarioGnW(Device, name="mario"):
             )
 
         printi("Mute clock audio on first boot.")
-        self.internal.asm(0x49E0, "mov.w r1, #0x00000")
+        self.internal.asm(0x49E0, "mov.w r1, #0x00000", expect="4:42e9afc9")
 
         if self.args.debug:
             # Override fault handlers for easier debugging via gdb.
             printi("Overriding handlers for debugging.")
-            self.internal.replace(0x8, "NMI_Handler")
-            self.internal.replace(0xC, "HardFault_Handler")
+            self.internal.replace(0x8, "NMI_Handler", expect="4:2e7195dd")
+            self.internal.replace(0xC, "HardFault_Handler", expect="4:631a8cd8")
 
         if self.args.hard_reset_time:
             hard_reset_time_ms = int(round(self.args.hard_reset_time * 1000))
             printi(
                 f"Hold power button for {hard_reset_time_ms} milliseconds to perform hard reset."
             )
-            self.internal.asm(0x9CEE, f"movw r1, #{hard_reset_time_ms}")
+            self.internal.asm(
+                0x9CEE, f"movw r1, #{hard_reset_time_ms}", expect="4:16285583"
+            )
 
         if self.args.sleep_time:
             printi(f"Setting sleep time to {self.args.sleep_time} seconds.")
             sleep_time_frames = seconds_to_frames(self.args.sleep_time)
-            self.internal.asm(0x6C3C, f"movw r2, #{sleep_time_frames}")
+            self.internal.asm(
+                0x6C3C, f"movw r2, #{sleep_time_frames}", expect="4:ab3637df"
+            )
 
         if self.args.disable_sleep:
             printi("Disable sleep timer")
-            self.internal.replace(0x6C40, 0x91, size=1)
+            self.internal.replace(0x6C40, 0x91, size=1, expect="1:220d7cc9")
 
         if self.args.sleep_on_usb:
             printi("Allow sleeping while USB is connected.")
             # main_loop_tick's idle timer reset (0x6BEE) and wake-from-sleep
             # (0x6BA6) both fire when is_usb_connected() or there's input.
-            for call in (0x6BA6, 0x6BEE):
-                self.internal.asm(call, "movs r0, #0; nop", size=4)
+            for call, expect in {0x6BA6: "4:93e9491c", 0x6BEE: "4:defc4f62"}.items():
+                self.internal.asm(call, "movs r0, #0; nop", size=4, expect=expect)
 
         if self.args.mario_song_time:
             printi(f"Setting Mario Song time to {self.args.mario_song_time} seconds.")
@@ -379,15 +404,19 @@ class MarioGnW(Device, name="mario"):
             # (mode & 0xc038) is clear, and the flags die at 0x6fee.
             song_start = bytes(self.internal[0x6FCA:0x6FDC])
             self.internal.asm(
-                0x6FC4, f"movw r1, #{mario_song_frames}; cmp r0, r1; blt 0x20", size=8
+                0x6FC4,
+                f"movw r1, #{mario_song_frames}; cmp r0, r1; blt 0x20",
+                size=8,
+                # Through the "orr.w r3, r3, #4" the song-start path ends with.
+                expect="28:c1b840c4",
             )
             self.internal[0x6FCC:0x6FDE] = song_start
             self.internal.asm(0x6FDE, "adds r3, #4", size=2)
 
         if not self.args.encrypt:
             # Disable OTFDEC
-            self.internal.nop(0x10688, 2)
-            self.internal.nop(0x1068E, 1)
+            self.internal.nop(0x10688, 2, expect="4:83fb638f")
+            self.internal.nop(0x1068E, 1, expect="2:f588a917")
 
         # Dump the tileset
         tileset_addr, tileset_size = 0x9_8B84, 0x1_0000
@@ -450,8 +479,8 @@ class MarioGnW(Device, name="mario"):
 
         if self.args.smb1_graphics:
             printi("Intercept prepare_clock_rom")
-            self.internal.bl(0x690E, "prepare_clock_rom")
-            self.internal.nop(0x1_0EF0, 2)
+            self.internal.bl(0x690E, "prepare_clock_rom", expect="4:0ef23293")
+            self.internal.nop(0x1_0EF0, 2, expect="4:699f7905")
 
             table = self.internal.address("SMB1_GRAPHIC_MODS", sub_base=True)
             for file_path in self.args.smb1_graphics:
@@ -485,7 +514,7 @@ class MarioGnW(Device, name="mario"):
         compressed_len = self.external.compress(
             0x0, 7772
         )  # Dst expects only 7772 bytes, not 7776
-        self.internal.bl(0x665C, "memcpy_inflate")
+        self.internal.bl(0x665C, "memcpy_inflate", expect="4:919d5894")
         self.move_ext(0x0, compressed_len, 0x7204)
         # Note: the 4 bytes between 7772 and 7776 is padding.
         self.ext_offset -= 7776 - round_down_word(compressed_len)
@@ -598,7 +627,7 @@ class MarioGnW(Device, name="mario"):
             self.rwdata_erase(0x1_2D44, mario_song_len)
             self.ext_offset -= mario_song_len
 
-            self.internal.asm(0x6FC8, "b 0x1c")
+            self.internal.asm(0x6FC8, "b 0x1c", expect="2:fc6d56af")
         else:
             references = [
                 # Banners
@@ -619,7 +648,7 @@ class MarioGnW(Device, name="mario"):
         # These index into one of the palettes starting at 0xbec68.
         printe("Compressing clock graphics")
         compressed_len = self.external.compress(0x9_8B84, 0x1_0000)
-        self.internal.bl(0x678E, "memcpy_inflate")
+        self.internal.bl(0x678E, "memcpy_inflate", expect="4:2228f44e")
 
         printe("Moving clock graphics")
         self.move_ext(0x9_8B84, compressed_len, 0x7350)
@@ -667,11 +696,11 @@ class MarioGnW(Device, name="mario"):
             # Replace conditional-branch with unconditional
             # TODO: this prevents hardlocking when selecting SMB2 from the menu,
             # but it's not quite right and is glitchy.
-            self.internal.b(0x69FC, 0x6A8C)
+            self.internal.b(0x69FC, 0x6A8C, expect="2:dae5b803")
         else:
             printe("Compressing and moving SMB2 ROM.")
             compressed_len = self.external.compress(smb2_addr, smb2_size)
-            self.internal.bl(0x6A12, "memcpy_inflate")
+            self.internal.bl(0x6A12, "memcpy_inflate", expect="4:9760e95f")
             self.move_to_compressed_memory(smb2_addr, compressed_len, 0x7374)
             self.ext_offset -= smb2_size - round_down_word(
                 compressed_len
@@ -681,8 +710,12 @@ class MarioGnW(Device, name="mario"):
             compressed_len = round_up_page(compressed_len)
 
             # Update the length of the compressed data (doesn't matter if its too large)
-            self.internal.asm(0x6A0A, f"mov.w r2, #{compressed_len}")
-            self.internal.asm(0x6A1E, f"mov.w r3, #{compressed_len}")
+            self.internal.asm(
+                0x6A0A, f"mov.w r2, #{compressed_len}", expect="4:8c95fc46"
+            )
+            self.internal.asm(
+                0x6A1E, f"mov.w r3, #{compressed_len}", expect="4:fb92ccd0"
+            )
 
         # Not sure what this data is
         self.move_to_compressed_memory(0xBEC58, 8 * 2, 0x10964)
@@ -836,6 +869,7 @@ class MarioGnW(Device, name="mario"):
                 0x10938,
                 "b.w #"
                 + hex(0xFFFFFFFE & self.internal.address("sleep_image_inflate")),
+                expect="4:4cf10da3",
             )
             # Each image's literal pool reference, keyed by its ext offset.
             literals = {
@@ -892,14 +926,17 @@ class MarioGnW(Device, name="mario"):
 
         if self.args.no_save:
             # Disable nvram loading
-            for nop in [0x495E, 0x49A6, 0x49B2]:
-                self.internal.nop(nop, 2)
+            calls = {0x495E: "4:80ad245d", 0x49A6: "4:7145c5fb", 0x49B2: "4:efc6e875"}
+            for call, expect in calls.items():
+                self.internal.nop(call, 2, expect=expect)
             # self.internal.b(0x4988, 0x49be)  # If you still want the first-startup "Press TIME Button" screen
-            self.internal.b(0x4988, 0x49C0)  # Skips Press TIME Button screen
+            self.internal.b(
+                0x4988, 0x49C0, expect="2:2871016b"
+            )  # Skips Press TIME Button screen
 
             # Disable nvram saving
             # This just skips the body of the nvram_write_bank function
-            self.internal.b(0x48BE, 0x4912)
+            self.internal.b(0x48BE, 0x4912, expect="2:f02c2fc0")
 
             self.ext_offset -= 8192
         else:
@@ -909,6 +946,7 @@ class MarioGnW(Device, name="mario"):
                 "ite ne; "
                 f"movne.w r4, #{hex(0xff000 + self.ext_offset)}; "
                 f"moveq.w r4, #{hex(0xfe000 + self.ext_offset)}",
+                expect="10:08ae9d3d",
             )
             printi("Update NVRAM write addresses")
             self.internal.asm(
@@ -916,11 +954,12 @@ class MarioGnW(Device, name="mario"):
                 "ite ne; "
                 f"movne.w r4, #{hex(0xff000 + self.ext_offset)}; "
                 f"moveq.w r4, #{hex(0xfe000 + self.ext_offset)}",
+                expect="10:08ae9d3d",
             )
 
         # Finally, shorten the firmware
         printi("Updating end of OTFDEC pointer")
-        self.internal.add(0x1_06EC, self.ext_offset)
+        self.internal.add(0x1_06EC, self.ext_offset, expect="4:0e03246b")
         self.external.shorten(self.ext_offset)
 
         internal_remaining_free = (

@@ -6,6 +6,7 @@ from colorama import Fore, Style
 from Crypto.Cipher import AES
 from elftools.elf.elffile import ELFFile
 
+from . import syms
 from .compression import lz77_decompress, lzma_compress
 from .exception import InvalidStockRomError, MissingSymbolError, NotEnoughSpaceError
 from .patch import FirmwarePatchMixin
@@ -378,7 +379,6 @@ class IntFirmware(Firmware):
     RWDATA_LEN = 0
     RWDATA_ITCM_IDX = None
     RWDATA_DTCM_IDX = None
-    STOCK_SYMBOLS = {}
 
     def __init__(self, firmware, elf):
         super().__init__(firmware)
@@ -394,6 +394,13 @@ class IntFirmware(Firmware):
         h = hashlib.sha1(self).hexdigest()
         if h != self.STOCK_ROM_SHA1_HASH:
             raise InvalidStockRomError
+
+    def sym(self, name: str) -> int:
+        """Offset into this image of the stock symbol ``name`` (``tools/re/<device>.syms``)."""
+        addr = self.syms[name]
+        if not self.FLASH_BASE <= addr < self.FLASH_BASE + len(self):
+            raise ValueError(f"{name} (0x{addr:08X}) isn't in this image")
+        return addr - self.FLASH_BASE
 
     def address(self, symbol_name, sub_base=False):
         symbols = self.symtab.get_symbol_by_name(symbol_name)
@@ -467,6 +474,7 @@ class Device:
 
     def __init__(self, internal_bin, internal_elf, external_bin):
         self.internal = self.Int(internal_bin, internal_elf)
+        self.internal.syms = syms.load(self.name)
         self.external = self.Ext(external_bin)
         self.compressed_memory = self.FreeMemory()
 

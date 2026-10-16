@@ -145,8 +145,8 @@ void game_select_draw(uint8_t *fb, ui_rect_t *rects, uint8_t color){
     else if(selected >= top + VISIBLE_ENTRIES) top = selected - VISIBLE_ENTRIES + 1;
     if(top + VISIBLE_ENTRIES > n) top = n > VISIBLE_ENTRIES ? n - VISIBLE_ENTRIES : 0;
 
-    ui_set_dirty_rect(&rects[DIRTY_RECT_GAME_SELECT], PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
-    ui_draw_panel(fb + PANEL_Y * FB_WIDTH + PANEL_X, PANEL_W, PANEL_H, color);
+    stock_ui_set_dirty_rect(&rects[DIRTY_RECT_GAME_SELECT], PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
+    stock_ui_draw_panel(fb + PANEL_Y * FB_WIDTH + PANEL_X, PANEL_W, PANEL_H, color);
 
     for(uint8_t slot = 0; slot < VISIBLE_ENTRIES && top + slot < n; slot++){
         const game_select_entry_t *entry = &entries[top + slot];
@@ -155,11 +155,11 @@ void game_select_draw(uint8_t *fb, ui_rect_t *rects, uint8_t color){
             blit_icon(dst, launder(entry->icon));
         }
         else{
-            ui_blit_4bpp(dst, ui_tile_ptr(entry->tile), ICON_W, ICON_H, UI_PALETTE);
+            stock_ui_blit_4bpp(dst, stock_ui_tile_ptr(entry->tile), ICON_W, ICON_H, UI_PALETTE);
         }
         if(top + slot == selected && !((*ui_blink_counter >> 5) & 1)){
             // Stock cursor position: left of the icon, vertically centered.
-            ui_draw_tile16(dst + 16 * FB_WIDTH - 16, ui_tile_ptr(CURSOR_TILE));
+            stock_ui_draw_tile16(dst + 16 * FB_WIDTH - 16, stock_ui_tile_ptr(CURSOR_TILE));
         }
     }
 

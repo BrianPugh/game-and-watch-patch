@@ -32,27 +32,9 @@ from capstone import arm as A
 
 from .compression import lz77_decompress
 from .firmware import Device
+from .syms import parse_syms, syms_path
 
 REPO = Path(__file__).resolve().parents[1]
-
-
-def parse_syms(path):
-    """Parse a ``.syms`` file: ``<addr> <func|data> <name>  # optional note``."""
-    funcs, datas = {}, {}
-    if not path.exists():
-        return funcs, datas
-    for line in path.read_text().splitlines():
-        fields = line.split("#", 1)[0].split()
-        if not fields:
-            continue
-        addr, kind, name = int(fields[0], 16), fields[1], fields[2]
-        if kind == "func":
-            funcs[addr & ~1] = name
-        elif kind == "data":
-            datas[addr] = name
-        else:
-            raise ValueError(f"{path}: unknown kind {kind!r} in line {line!r}")
-    return funcs, datas
 
 
 def extract_rwdata(device_cls, internal):
@@ -434,7 +416,7 @@ def analyze(device, internal=None, external=None, repo=REPO):
         t = (a + struct.unpack_from("<i", internal, a - INT_BASE)[0]) & 0xFFFF_FFFF
         seeds.add(t)
         refs.append({"kind": "init table (self-relative)", "src": a, "target": t})
-    syms, _ = parse_syms(repo / "tools" / "re" / f"{device}.syms")
+    syms, _ = parse_syms(syms_path(device))
     seeds |= {a | 1 for a in syms if in_int(a)}
 
     # Other code regions first: their pointers into internal flash are seeds too.

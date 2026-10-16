@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from patches import Device
+from patches.syms import stock_functions
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -42,11 +43,12 @@ __RAM_LENGTH__ = 68308;
         ld_path.parent.mkdir(exist_ok=True)
         ld_path.write_text(new_ld)
 
-    # Stock functions our C code calls, as absolute Thumb function symbols, so
-    # ld emits plain BLs and each use is a relocation the patcher can follow.
+    # Every stock function in tools/re/<device>.syms as an absolute Thumb
+    # function symbol stock_<name>, so ld emits plain BLs and each use is a
+    # relocation the patcher can follow.
     syms_path = Path("build/stock_symbols.s")
     new_syms = ".syntax unified\n.thumb\n"
-    for name, addr in sorted(device.Int.STOCK_SYMBOLS.items()):
+    for name, addr in sorted(stock_functions(device.name).items()):
         new_syms += (
             f".global {name}\n.type {name}, %function\n.set {name}, 0x{addr:08X}\n"
         )

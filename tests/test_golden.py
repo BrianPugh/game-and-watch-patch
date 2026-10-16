@@ -68,7 +68,9 @@ def _copy_tree(dst):
     ).stdout.split(b"\0")
     for rel in files:
         rel = rel.decode()
-        if not rel or rel.startswith("build/") or not (REPO / rel).is_file():
+        if not rel or rel.startswith(("build/", ".claude/")):
+            continue
+        if not (REPO / rel).is_file():
             continue
         (dst / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / rel, dst / rel)

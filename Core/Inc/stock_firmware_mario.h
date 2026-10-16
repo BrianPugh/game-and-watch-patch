@@ -1,9 +1,10 @@
 #pragma once
 
 /**
- * Stock functions are absolute symbols (generated into build/stock_symbols.s from
- * STOCK_SYMBOLS in patches/<device>.py), so every use is an ELF relocation
- * the patcher can follow when it relocates stock code.
+ * Stock functions are absolute symbols: the build turns every function in
+ * tools/re/<device>.syms into stock_<name> (build/stock_symbols.s), so every
+ * use is an ELF relocation the patcher can follow when it relocates stock code.
+ * Declare a prototype here to call one.
  */
 void stock_Reset_Handler(void);
 
@@ -13,7 +14,7 @@ gamepad_t stock_read_buttons(void);
 /**
  * Returns `true` if USB power is connected, `false` otherwise.
  */
-bool is_usb_connected(void);
+bool stock_is_usb_connected(void);
 
 /**
  * Put system to sleep.
@@ -82,22 +83,22 @@ void stock_game_select_handle_input(gamepad_t held, gamepad_t pressed);
  * Returns a pointer to a 16x16 4bpp UI tile.
  * idx < 0x30: RAM font glyph; else iconset tile (idx - 0x30).
  */
-const uint8_t *ui_tile_ptr(uint8_t idx);
+const uint8_t *stock_ui_tile_ptr(uint8_t idx);
 
 /**
  * Draws an opaque 16x16 UI tile (palette 0xF0-0xFF) into the 320-wide framebuffer.
  */
-void ui_draw_tile16(uint8_t *dst, const uint8_t *tile);
+void stock_ui_draw_tile16(uint8_t *dst, const uint8_t *tile);
 
 /**
  * Opaque blit of a w*h region of the 256px-wide 4bpp iconset into the framebuffer.
  * Each pixel is written as (nibble | pal << 4).
  */
-void ui_blit_4bpp(uint8_t *dst, const uint8_t *src, uint32_t w, uint32_t h, uint8_t pal);
+void stock_ui_blit_4bpp(uint8_t *dst, const uint8_t *src, uint32_t w, uint32_t h, uint8_t pal);
 
-void ui_set_dirty_rect(ui_rect_t *rect, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
+void stock_ui_set_dirty_rect(ui_rect_t *rect, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
 /**
  * Filled rectangle: interior is `color`, 1px border is `color | 1`.
  */
-void ui_draw_panel(uint8_t *dst, uint32_t w, uint32_t h, uint8_t color);
+void stock_ui_draw_panel(uint8_t *dst, uint32_t w, uint32_t h, uint8_t color);

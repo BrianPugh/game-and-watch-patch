@@ -6,19 +6,703 @@
 0x0801ad48 func stock_Reset_Handler
 0x08016808 func read_buttons
 # --- game-select menu (external flash). Same code lineage as Mario's overlay UI.
-0x90315b30 func menu_variant_to_app_id              # variant id 1..9 -> app id (6,7,8,9,11,12,13,14,5; else 15). zelda.py --no-la zeroes the LA immediates
-0x90315b6c func menu_app_id_to_variant              # inverse of menu_variant_to_app_id
-0x90315baa func menu_app_id_to_row
-0x90315bd2 func menu_select_variant_for_app         # (row, app) -> stores chosen variant of row
-0x90315c10 func menu_init_selection_from_app
-0x90315c3c func menu_open
-0x90315d04 func ui_cursor_wrap_step                 # identical logic to Mario 0x0800c6e6
-0x90315d34 func ui_slider_step                      # identical logic to Mario 0x0800c716
-0x90315d68 func ui_reset_blink
-0x90315d74 func ui_cursor_wrap_step_dir             # like ui_cursor_wrap_step but returns -1/+1 direction (drives carousel slide)
-0x90315f6e func game_select_handle_input            # (held, pressed): UP/DOWN over 5 fixed rows, LEFT/RIGHT slides variant carousel, A switches
-0x903165e8 func game_select_draw_row_carousel       # uses slide offset (ui+0x28), thresholds 104/184
-0x9030d920 func memcpy_like                         # (dst, src, n); UNVERIFIED
+0x0000a0c0 func menu_variant_to_app_id              # variant id 1..9 -> app id (6,7,8,9,11,12,13,14,5; else 15). zelda.py --no-la zeroes the LA immediates (ITCM; copied from 0x90315b30)
+0x0000a0fc func menu_app_id_to_variant              # inverse of menu_variant_to_app_id (ITCM; copied from 0x90315b6c)
+0x0000a13a func menu_app_id_to_row  # ITCM; copied from 0x90315baa
+0x0000a162 func menu_select_variant_for_app         # (row, app) -> stores chosen variant of row (ITCM; copied from 0x90315bd2)
+0x0000a1a0 func menu_init_selection_from_app  # ITCM; copied from 0x90315c10
+0x0000a1cc func menu_open  # ITCM; copied from 0x90315c3c
+0x0000a294 func ui_cursor_wrap_step                 # identical logic to Mario 0x0800c6e6 (ITCM; copied from 0x90315d04)
+0x0000a2c4 func ui_slider_step                      # identical logic to Mario 0x0800c716 (ITCM; copied from 0x90315d34)
+0x0000a2f8 func ui_reset_blink  # ITCM; copied from 0x90315d68
+0x0000a304 func ui_cursor_wrap_step_dir             # like ui_cursor_wrap_step but returns -1/+1 direction (drives carousel slide) (ITCM; copied from 0x90315d74)
+0x0000a4fe func game_select_handle_input            # (held, pressed): UP/DOWN over 5 fixed rows, LEFT/RIGHT slides variant carousel, A switches (ITCM; copied from 0x90315f6e)
+0x0000ab78 func game_select_draw_row_carousel       # uses slide offset (ui+0x28), thresholds 104/184 (ITCM; copied from 0x903165e8)
+0x00001598 func memcpy_like                         # (dst, src, n); UNVERIFIED (ITCM; copied from 0x9030d920)
 0x902df1b0 data menu_rows                           # 5 rows x 11 bytes: [count, variant ids...]: {0,1} {2,3} {4,5,6,7} {8} {9}
 0x2001a7bc data ui_state                            # overlay UI struct; +0x28 s16 carousel slide offset, +0x2a row cursor, +0x2d chosen variant per row
 0x2000ab9f data current_app_id                      # UNVERIFIED
+# --- generated: names shared with the other G&W firmware (HAL/SDK/runtime matched by code) and session RE
+0x00000000 func nes_cpu_run                          # 6502 interpreter entry: registers live in r5-r8 (saved at nes+0xb24); NMI/IRQ checks, then dispatch; Mario runs it from ITCM 0x0000; runs in ITCM; copied from external flash 0x9030c388 by itcm_overlay_load
+0x00000192 func nes_cpu_op_group_a                   # opcode handler block (UNVERIFIED); runs in ITCM; copied from external flash 0x9030c51a by itcm_overlay_load
+0x000002cc func nes_cpu_dispatch                     # opcode dispatch loop (UNVERIFIED); runs in ITCM; copied from external flash 0x9030c654 by itcm_overlay_load
+0x000018cc func nes_ppu_render_a                     # PPU background/sprite rendering (nes+0xc3c/0xc4c tile pointers) (UNVERIFIED); runs in ITCM; copied from external flash 0x9030dc54 by itcm_overlay_load
+0x000019f0 func nes_ppu_render_b                     # PPU scanline rendering (UNVERIFIED); runs in ITCM; copied from external flash 0x9030dd78 by itcm_overlay_load
+0x00001d78 func nes_ppu_render_c                     # PPU attribute/sprite helper (UNVERIFIED); runs in ITCM; copied from external flash 0x9030e100 by itcm_overlay_load
+0x00001ec0 func nes_apu_write                        # APU register write handling ($4000-$4017) (UNVERIFIED); runs in ITCM; copied from external flash 0x9030b4f0 by itcm_overlay_load
+0x00002006 func nes_apu_envelope_update              # (UNVERIFIED); runs in ITCM; copied from external flash 0x9030b636 by itcm_overlay_load
+0x00002134 func nes_apu_pulse_render                 # (UNVERIFIED); runs in ITCM; copied from external flash 0x9030b764 by itcm_overlay_load
+0x00002234 func nes_apu_channel_step                 # (UNVERIFIED); runs in ITCM; copied from external flash 0x9030b864 by itcm_overlay_load
+0x0000224c func nes_apu_channel_step_inner           # (UNVERIFIED); runs in ITCM; copied from external flash 0x9030b87c by itcm_overlay_load
+0x00002308 func nes_apu_triangle_noise_render        # (UNVERIFIED); runs in ITCM; copied from external flash 0x9030b938 by itcm_overlay_load
+0x00002466 func nes_apu_noise_step                   # (UNVERIFIED); runs in ITCM; copied from external flash 0x9030ba96 by itcm_overlay_load
+0x00002aa4 func nes_apu_run_frame                    # generates one frame of APU samples (1 MHz timebase): pulse, triangle/noise and DMC channels; runs in ITCM; copied from external flash 0x9030c0d4 by itcm_overlay_load
+0x00002c56 func nes_audio_output                     # (nes): mixes the APU output in 240-sample blocks (volume >> 7) into the SAI queue (audio_* veneers); cleans the D-cache; runs in ITCM; copied from external flash 0x9030c286 by itcm_overlay_load
+0x00002d60 func gb_apu_write                         # (apu, reg, value): sound registers $FF10-$FF3F (NR52 $FF26 at apu+0x708); runs in ITCM; copied from external flash 0x9030e7d0 by itcm_overlay_load
+0x000030ac func gb_apu_render                        # generates GB sound samples (float scale 32768/8192) (UNVERIFIED); runs in ITCM; copied from external flash 0x9030eb1c by itcm_overlay_load
+0x00005778 func gb_mbc_write                         # cartridge MBC register writes (ROM/RAM bank select) (UNVERIFIED); runs in ITCM; copied from external flash 0x903111e8 by itcm_overlay_load
+0x000066f0 func gb_write                             # (ctx, addr, value): Game Boy bus write; addr >> 8 == 0xff goes to gb_write_io, else banked memory; runs in ITCM; copied from external flash 0x90312160 by itcm_overlay_load
+0x000066f4 func gb_write_io                          # $FF00-$FFFF register writes (joypad, timer, IF, LCD, sound via gb_apu_write, HRAM); runs in ITCM; copied from external flash 0x90312164 by itcm_overlay_load
+0x00006a84 func gb_read                              # (ctx, addr): Game Boy bus read; $FFxx via gb_read_io; runs in ITCM; copied from external flash 0x903124f4 by itcm_overlay_load
+0x00006a8a func gb_read_io                           # $FFxx register reads (STAT $FF41, LY $FF44 from gb_ppu+0x12, ...); runs in ITCM; copied from external flash 0x903124fa by itcm_overlay_load
+0x00006d4c func gb_timer_update                      # per-instruction timer/LCD/APU catch-up (UNVERIFIED); runs in ITCM; copied from external flash 0x903127bc by itcm_overlay_load
+0x00007abc func gb_cpu_execute                       # Sharp LR35902 interpreter main loop (opcode tables 0x902d1e50/0x902d2050) (UNVERIFIED table roles); runs in ITCM; copied from external flash 0x9031352c by itcm_overlay_load
+0x0000920c func gb_ppu_render_line                   # scanline renderer (UNVERIFIED); runs in ITCM; copied from external flash 0x90314c7c by itcm_overlay_load
+0x0000927e func gb_ppu_render_bg                     # (UNVERIFIED); runs in ITCM; copied from external flash 0x90314cee by itcm_overlay_load
+0x000093e6 func gb_ppu_render_sprites                # (UNVERIFIED); runs in ITCM; copied from external flash 0x90314e56 by itcm_overlay_load
+0x0000a094 func ui_draw_tile_string                  # (dst, tiles, n, stride): like Mario's; ui_blit per tile (0x90315a2e); runs in ITCM; copied from external flash 0x90315b04 by itcm_overlay_load
+0x0000a206 func ui_overlay_reset                     # clears the overlay edit/blink flags; runs in ITCM; copied from external flash 0x90315c76 by itcm_overlay_load
+0x0000a22a func ui_close_overlay_save_settings       # writes nvram ids 7 (brightness | ?<<16), 8, 9 and 6 through the nvram_set veneer; runs in ITCM; copied from external flash 0x90315c9a by itcm_overlay_load
+0x0000a34c func settings_clock_set_time_input        # (held, pressed): editing the RTC time (get/set through veneers 0x9031572c/0x90315734); runs in ITCM; copied from external flash 0x90315dbc by itcm_overlay_load
+0x0000a44a func settings_value_edit_input            # (held, pressed): edits ui byte 0x2001a7e3 (nvram id 9) (UNVERIFIED); runs in ITCM; copied from external flash 0x90315eba by itcm_overlay_load
+0x0000a604 func settings_clock_handle_input          # (held, pressed): 4-row cursor; row 0 brightness slider 0..10 (0x2001a7dc); runs in ITCM; copied from external flash 0x90316074 by itcm_overlay_load
+0x0000a67a func settings_toggle_edit_input           # (held, pressed): toggles ui byte 0x2001a7d4 (UNVERIFIED); runs in ITCM; copied from external flash 0x903160ea by itcm_overlay_load
+0x0000a6d0 func settings_game_handle_input           # (held, pressed): 2/3-row cursor (Mario 0x0800c990 analogue); runs in ITCM; copied from external flash 0x90316140 by itcm_overlay_load
+0x0000a740 func settings_game_handle_input_alt       # (held, pressed): 3/4-row variant (UNVERIFIED); runs in ITCM; copied from external flash 0x903161b0 by itcm_overlay_load
+0x0000a7d2 func ui_handle_input                      # (held, pressed): overlay input dispatcher; ignores input in apps 2/3 or while a mode request is pending; runs in ITCM; copied from external flash 0x90316242 by itcm_overlay_load
+0x0000a928 func ui_set_dirty_rect                    # same code as Mario 0x0800cb9e
+0x0000a936 func ui_flush_dirty_rect                  # (fb, rect*, src): copies the dirty rectangle rows (0x9030d8f0), clears it; runs in ITCM; copied from external flash 0x903163a6 by itcm_overlay_load
+0x0000a990 func ui_draw_panel                        # (dst, w, h, color): framed panel (min 24x24) with border colors 0x51cc/0x51ac; runs in ITCM; copied from external flash 0x90316400 by itcm_overlay_load
+0x0000aacc func ui_draw_bar                          # (dst, n, filled, colors...): segmented slider bar (UNVERIFIED); runs in ITCM; copied from external flash 0x9031653c by itcm_overlay_load
+0x0000ab5a func menu_find_variant_info               # (variant): entry of menu_variant_info whose [2] == variant, else 0; runs in ITCM; copied from external flash 0x903165ca by itcm_overlay_load
+0x0000ac74 func game_select_draw                     # draws the 5 game-select rows (menu_rows) and the carousel of the selected row; runs in ITCM; copied from external flash 0x903166e4 by itcm_overlay_load
+0x0000ae1c func settings_clock_draw                  # clock/settings overlay page (data 0x902df00c); runs in ITCM; copied from external flash 0x9031688c by itcm_overlay_load
+0x0000afce func settings_game_draw                   # in-game settings overlay page (data 0x902df090); runs in ITCM; copied from external flash 0x90316a3e by itcm_overlay_load
+0x0000b156 func settings_game_draw_alt               # second settings page layout (data 0x902df090) (UNVERIFIED); runs in ITCM; copied from external flash 0x90316bc6 by itcm_overlay_load
+0x0000b30a func ui_render_overlay                    # per-frame overlay renderer (Mario 0x0800d01c analogue); runs in ITCM; copied from external flash 0x90316d7a by itcm_overlay_load
+0x080002dc data save_erase_table                     # data: 13 u32 external-flash offsets erased by factory_reset_erase_saves
+0x080008cc data clock_hook_table                     # data: native handlers for the patched LoZ1 hook opcodes
+0x08000a3c data nes_rgb565_lut                       # data: 64 NES colors as RGB565 (u32 entries)
+0x08000b98 func MX_ADC2_Init                         # hadc2 (0x40022100): HAL_ADC_Init + HAL_ADC_ConfigChannel; battery voltage (UNVERIFIED)
+0x08000cfa func HAL_ADC_Init
+0x0800107e func HAL_ADC_Start_IT                     # HAL (matched against a gcc build of Drivers/)
+0x080011ae func ADC_Enable                           # HAL (matched against a gcc build of Drivers/)
+0x080011cc func HAL_ADC_IRQHandler                   # HAL (matched against a gcc build of Drivers/)
+0x080014fc func ADC_Disable                          # HAL (matched against a gcc build of Drivers/)
+0x0800156c func ADC_ConfigureBoostMode               # HAL (matched against a gcc build of Drivers/)
+0x08001660 func memset                               # (dst, c, n) -> aeabi_memset(dst, n, c)
+0x08001674 func HAL_GPIO_Init
+0x08001850 func HAL_GPIO_DeInit                      # HAL (matched against a gcc build of Drivers/)
+0x08001976 func HAL_GPIO_WritePin
+0x0800197e func HAL_GPIO_EXTI_IRQHandler             # HAL (matched against a gcc build of Drivers/)
+0x080019cc func NVIC_SetPriority                     # CMSIS __NVIC_SetPriority (IP / SHP registers)
+0x080019e6 func HAL_NVIC_SetPriorityGrouping         # SCB->AIRCR = 0x05fa0000 | group
+0x08001a00 func HAL_NVIC_SetPriority
+0x08001a3a func HAL_NVIC_EnableIRQ
+0x08001a50 func HAL_NVIC_DisableIRQ                  # NVIC ICER
+0x08001a6e func HAL_SYSTICK_Config                   # HAL (matched against a gcc build of Drivers/)
+0x08001a7c func SysTick_Config                       # HAL (matched against a gcc build of Drivers/)
+0x08001ac0 func battery_adc_start                    # HAL_ADC_Start_IT(&hadc2); flag 0x2001b1c8
+0x08001ad2 func adc_calibrate                        # HAL_ADCEx_Calibration_Start(&hadc2, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED); re-inits on failure
+0x08001ba0 func HAL_RCC_ClockConfig                  # HAL (matched against a gcc build of Drivers/)
+0x08001d90 func HAL_RCC_GetSysClockFreq              # PLL/HSI/CSI/HSE source decode with float fracn (older HAL)
+0x08001e8e func HAL_RCC_GetHCLKFreq                  # older HAL: SystemD2Clock = D1 clock >> HPRE
+0x0800239c func HAL_RCCEx_PeriphCLKConfig
+0x08002aa0 func HAL_RCCEx_GetPeriphCLKFreq           # HAL (matched against a gcc build of Drivers/)
+0x08002d00 func RTC_ByteToBcd2                       # HAL (matched against a gcc build of Drivers/)
+0x08002e3e func HAL_RCCEx_GetD1SysClockFreq          # older HAL: SystemCoreClock = sysclk >> D1CPRE
+0x08002e94 func RCCEx_PLL2_Config                    # HAL (matched against a gcc build of Drivers/)
+0x08002f40 func RCCEx_PLL3_Config                    # HAL (matched against a gcc build of Drivers/)
+0x08003058 func aeabi_memset                         # same code as Mario 0x08002b84
+0x0800306a func __scatterload_zeroinit               # init-table handler: zero-fills (size, addr) pairs (Zelda: DTCM 0x20000800+0xa000, AXI 0x24000000+0x10000, DTCM 0x2000b460+0xfdc0, AXI 0x240fd000+0x20c0)
+0x080030a4 func HAL_ADCEx_Calibration_Start
+0x0800340c func HAL_InitTick
+0x08003450 func NVIC_EnableIRQ_2                     # ISER, inlined copy
+0x08003466 func NVIC_DisableIRQ_2                    # ICER, inlined copy
+0x0800350e func power_pin_clear_pending              # EXTI PR1 + NVIC ICPR for the PC5 (IRQ 23) or PA2 (IRQ 8) wake pin by board variant
+0x080035da func pwr_clear_wakeup_flag2               # PWR_WKUPCR |= WKUPC2
+0x08003648 func tick_deadline                        # (ms): HAL_GetTick() + ms
+0x08003654 func tick_reached                         # (now, deadline): (int)(now - deadline) >= 0
+0x08003664 func debounce_bit                         # (level, threshold, bit, counter*, mask*): sets bit in *mask after threshold consecutive low samples, clears it on high
+0x08003688 func HAL_PWR_EnableBkUpAccess             # PWR_CR1 |= DBP
+0x08003694 func HAL_PWR_DisableWakeUpPin             # PWR_WKUPEPR &= ~(mask & 0x3f)
+0x080036d4 func aeabi_memclr4                        # -> 0x08003828
+0x08003720 func HAL_PWREx_ControlStopModeVoltageScaling
+0x08003732 func HAL_PWR_EnterSTOPMode                # (regulator, entry): LPDS, CPUCR, SLEEPDEEP, wfi/wfe
+0x08003776 func HAL_PWREx_EnableFlashPowerDown       # PWR_CR1 |= FLPS
+0x08003784 func HAL_PWREx_DisableFlashPowerDown
+0x08003800 func HAL_PWREx_DisableWakeUpPin           # PWR_WKUPEPR &= ~mask
+0x08003ac0 func memcpy                               # (dst, src, n)
+0x08003ae0 func memcpy_bytes                         # same code as Mario 0x08004b60
+0x08003b82 func MX_DAC1_Init                         # hdac1 = DAC1 (0x40007400); backlight
+0x08003bc8 func MX_DAC2_Init                         # hdac2 = DAC2 (0x58003400); backlight
+0x08003c20 func HAL_DAC_MspInit                      # HAL (matched against a gcc build of Drivers/)
+0x08003c98 func HAL_DAC_MspDeInit                    # HAL (matched against a gcc build of Drivers/)
+0x08003cc6 func MX_DAC1_DeInit
+0x08003ce2 func MX_DAC2_DeInit
+0x08003d24 func HAL_DAC_Init                         # HAL (matched against a gcc build of Drivers/)
+0x08003d4c func HAL_DAC_DeInit                       # HAL (matched against a gcc build of Drivers/)
+0x08003d6c func HAL_DAC_Start                        # HAL (matched against a gcc build of Drivers/)
+0x08003dce func HAL_DAC_Stop                         # HAL (matched against a gcc build of Drivers/)
+0x08003dea func HAL_DAC_SetValue
+0x08003eb6 func HAL_DAC_ConfigChannel                # HAL (matched against a gcc build of Drivers/)
+0x08003f4c func HAL_Delay
+0x08003f74 func MX_DMA_Init                          # DMA1 clock; NVIC DMA1_Stream6 (IRQ 17) and DMA1_Stream7 (IRQ 47)
+0x080041b0 func timer_scene_reset                    # (game*): memset + initial playfield
+0x080045d0 func timer_scene_step                     # scene animation step (UNVERIFIED)
+0x080054c0 func timer_draw_scene                     # draws the timer scene with the draw library (palette 0x902d4a90)
+0x08008144 func point_set                            # (pt*, x, y): s16 pair
+0x08008204 func point_copy                           # (dst*, src*)
+0x0800820e func point_add                            # (dst*, src*)
+0x08008234 func draw_set_color_rgb                   # same code as Mario 0x08016f48
+0x0800824a func draw_set_text_scale                  # (sx, sy) -> text state 0x2000ac4c (Zelda)
+0x0800825c func draw_clear                           # (rgb565): fills the 320x240 draw target
+0x080082ce func draw_pixel                           # (x, y) in the current color
+0x080082e6 func draw_fill_rect_pts                   # (p0*, p1*) inclusive
+0x0800835e func draw_fill_rect                       # (pos*, size*)
+0x0800837c func draw_line                            # (pos*, delta*): Bresenham
+0x08008406 func draw_rect_outline_pts                # (p0*, p1*)
+0x08008466 func draw_rect_outline                    # (pos*, size*)
+0x0800858a func draw_fill_circle                     # (center*, r, ...): x^2 + y^2 <= r^2 (UNVERIFIED)
+0x0800863e func draw_char                            # (pos*, c)
+0x0800871e func draw_string                          # (pos*, str): draw_char per byte, advancing 4 px * text scale
+0x08008764 func draw_printf                          # (pos*, fmt, ...): vsnprintf into a 128-byte buffer, then draw_string
+0x080087b8 func timer_shutdown                       # timer_stop(&timer_ctx) (0x08008814), then 0x0800385c(0x2001b0c8)
+0x080087ce func timer_open                           # app_load (app 5): timer_load(&timer_ctx)
+0x080087d4 func timer_tick_api                       # (a, b, c) -> timer_tick(&timer_ctx, ...); called from main_loop_tick
+0x080087e0 func timer_input_api                      # (buttons) -> timer_input(&timer_ctx, buttons)
+0x080087ea func timer_draw_api                       # -> timer_draw(&timer_ctx)
+0x080087f2 func timer_pause_api                      # -> timer_pause(&timer_ctx)
+0x080087f8 func timer_is_idle                        # ctx+0x80 state 0 with no timer, or state >= 3 (UNVERIFIED)
+0x080087fe func timer_set_resume_flag                # byte 0x200152fc = 1
+0x08008808 func timer_is_playing                     # ctx+0x80 == 1
+0x08008814 func timer_stop                           # (ctx)
+0x080088d6 func timer_pause                          # (ctx): (also saves via timer_save)
+0x08008920 func timer_load                           # (ctx): nvram_get_blob into the ctx (saved timer settings), game reset
+0x08008958 func timer_save                           # (ctx): nvram_set_blob with the timer settings
+0x08008c8c func timer_tick                           # (ctx, ...): per-frame game step
+0x080090b0 func timer_input                          # (ctx, buttons)
+0x08009b9c func timer_draw                           # (ctx)
+0x0800a5c8 func vsnprintf                            # (buf, n, fmt, va) -> _printf_core
+0x0800b460 func SCB_CleanInvalidateDCache_2          # second copy (nvram module)
+0x0800b4a4 func nvram_is_dirty                       # returns 0x2001b1ee
+0x0800b4ac func flash_begin_access                   # leaves memory-mapped mode, flash_reset + flash_set_quad_mode; error code in flash_error
+0x0800b50a func nvram_read_bank                      # (bank): reads external flash 0x0000/0x1000 into flash_bounce_buffer, decrypts (crypt_decrypt), checks
+0x0800b582 func nvram_write_bank                     # (bank): erase sector, encrypt (crypt_encrypt_wait), program 4 KB
+0x0800b5e8 func nvram_checksum                       # hash over nvram_ram+0xc .. +0x6c (seed 0x22360679)
+0x0800b614 func nvram_init                           # reads both banks, keeps the valid one (magic + checksum), else defaults
+0x0800b6e8 func nvram_get                            # (id): value from nvram_ram (ids 8/9 are bits of +0x28)
+0x0800b71c func nvram_set                            # (id, value): updates nvram_ram and marks it dirty
+0x0800b77a func nvram_set_blob                       # (src, extra): 0x3c-byte blob at nvram_ram+0x2c (Vermin high scores? UNVERIFIED)
+0x0800b798 func nvram_get_blob                       # (dst, extra*)
+0x0800b7b2 func save_slot_write                      # (buf, len, slot): writes a save record at external flash 0x2000 + slot*0x2000 via nvram_write_record
+0x0800b804 func nvram_commit                         # if dirty: flip to the other bank and nvram_write
+0x0800b82c func bit_swap                             # helper for nvram_write's seed scrambling
+0x0800b852 func nvram_write                          # (bank): checksum, scrambled seed from TIM5->CNT, nvram_write_bank
+0x0800b896 func nvram_reset                          # fills nvram_ram with 0xff and writes both banks (leaving main()'s power loop)
+0x0800b8bc func factory_reset_erase_saves            # erases the 13 external-flash sectors listed at save_erase_table
+0x0800b8fc func flash_end_access                     # back to memory-mapped mode (UNVERIFIED)
+0x0800b904 func nvram_write_both                     # nvram_write(0); nvram_write(1)
+0x0800b91a func flash_write_region                   # (addr, len, src): per 4 KB: erase + program through flash_bounce_buffer
+0x0800b990 func flash_err_flag_remap
+0x0800b99c func flash_read_region                    # (addr, len, dst): per 4 KB read through flash_bounce_buffer
+0x0800ba44 func audio_stream_reset                   # (stream, mode): drains/clears queued buffers, zeroes the 1024-sample ring
+0x0800ba94 func audio_stream_render                  # (stream, buf): 240 samples from the ring into buf, filtered by stream mode 0..3, volume table 0x2000ae1c
+0x0800bb5a func audio_stream_begin                   # (stream): renders while enough samples are queued; returns how many samples to produce this frame
+0x0800bb9a func audio_stream_target_samples          # helper of audio_stream_begin (UNVERIFIED)
+0x0800bbe4 func audio_stream_put_sample              # (stream, s16): append to the 1024-sample ring
+0x0800bbfe func audio_stream_set_volume              # (stream, vol 0..10): attenuation = 10 - vol
+0x0800bc06 func audio_stream_flush                   # (stream): renders and submits the remaining samples
+0x0800bc44 func audio_buffer_clear                   # memclr(buf, 240 samples)
+0x0800bc74 func nes_build_palette                    # converts the 64-entry NES RGB palette (Zelda 0x902d8160) to RGB565 at nes+0x4850, plus the 7 color-emphasis variants
+0x0800bd44 func fds_load_files                       # walks FDS disk blocks (block 3 file header / 4 file data) and loads files into PRG/CHR RAM
+0x0800beee func nes_cpu_read_block                   # (dst, nes, addr, n): reads n bytes of the 6502 address space ($0000-$1FFF RAM mirror, banks via nes+0xc88)
+0x0800bf30 func fds_read_file_header                 # (nes): reads 0x11 bytes at the FDS header pointer, then scans the disk image (UNVERIFIED)
+0x0800cfc4 func loz1_sleep_check_a                   # (nes_ram): RAM $12 (game mode) < 0x0d, or == 0x10 ... ; gate for idle sleep / pause in LoZ1 (apps 6/7) (UNVERIFIED semantics)
+0x0800cfda func loz1_sleep_check_b                   # (nes_ram): $12 != 0x13 && $10 != 0 (UNVERIFIED semantics)
+0x0800cfec func loz1_save_point_check                # (nes_ram): $12 game mode and $e0/$e1 checks (UNVERIFIED semantics)
+0x0800d622 func loz2_en_sleep_check_a                # (nes_ram): $100 bit 6 and $76c in {0,1,2,6} (app 8) (UNVERIFIED semantics)
+0x0800d63e func loz2_sleep_check_b                   # (nes_ram): $707 >= 3 (app 8)
+0x0800d6aa func loz2_save_point_check                # (nes_ram, is_en): $100 bit 6 / PRG byte 0x7ffb == 'm', $ea/$524 checks (UNVERIFIED semantics)
+0x0800da1c func loz2_jp_sleep_check_a                # (nes_ram): $100 == 0xc0 && $76b <= 3 (app 9) (UNVERIFIED semantics)
+0x0800da36 func loz2_jp_sleep_check_b                # (nes_ram): $707 >= 3 (app 9)
+0x0800dd80 func _printf_core                         # armcc printf engine (format parsing, %d/%x/%s, flags, width, '*')
+0x0800e13e func _printf_int                          # integer conversion for _printf_core (bases 8/10/16)
+0x0800e20c func _printf_putc                         # (out_fn, state, c): calls out_fn, counts chars
+0x0800e22c func _printf_putn                         # (out_fn, state, buf, n)
+0x0800e284 func flash_read                           # (dev, ...): external NOR read via flash_cmd_read (0x6b quad-output fast read); -2 if dev != 0
+0x0800e2aa func flash_read_quad_io                   # (dev, ...): read via flash_cmd_read_quad_io (4-line address/data)
+0x0800e2d6 func flash_program                        # (dev, buf, addr, len): WREN + page program in 256-byte pages, polls WIP
+0x0800e354 func flash_wip_poll                       # flash_wait_ready(handle, ...)
+0x0800e35c func flash_erase                          # (dev, addr, type 0/1/2): sector 4K (0x20) / block 32K (0x52) / block 64K (0xd8); timeouts 500/3000/6000 ms
+0x0800e3c4 func flash_enable_memory_mapped           # flash_cmd_memory_mapped(handle, quad); state = 2
+0x0800e3ec func flash_disable_memory_mapped          # HAL_OSPI_Abort; state = 1
+0x0800e41c func flash_set_quad_mode                  # (dev, quad): toggles the QE bit via flash_set_qe_bit
+0x0800e45c func flash_reset                          # (dev): reset-enable 0x66 + reset 0x99, wait ready, HAL_Delay(15)
+0x0800e4a4 func flash_set_qe_bit                     # (dev, enable): read status (0x05), set/clear bit 6 (QE), write status, verify
+0x0800e544 func MX_CRYP_Init                         # hcryp = CRYP (0x48021000), key 0x2000ad44, IV 0x2000ad54; save/NVRAM encryption
+0x0800e578 func crypt_encrypt_wait                   # HAL_CRYP_Encrypt_IT (0x08011e7e), wfi until done; bkpt if the handle is bad
+0x0800e590 func crypt_decrypt                        # HAL_CRYP_Decrypt_IT (0x08011f34)
+0x0800e5ec func memcmp
+0x0800e6ec func NVIC_SystemReset                     # AIRCR = VECTKEY | SYSRESETREQ, then spin
+0x0800e70a func SCB_EnableICache                     # ICIALLU + CCR.IC (CMSIS inline)
+0x0800e738 func SCB_CleanInvalidateDCache            # CSSELR = 0, DCCISW over all sets/ways
+0x0800e77c func PeriphCommonClock_Config             # HAL_RCCEx_PeriphCLKConfig(selection 0xa2481102)
+0x0800e7f2 func SystemClock_Config                   # HAL_PWREx_ConfigSupply/OscConfig, HAL_RCC_ClockConfig(&clk, FLASH_LATENCY_3), then PeriphCommonClock_Config
+0x0800e8e2 func power_event                          # (event from 0x080139d0): power state machine transitions (events 1..6)
+0x0800ea00 func system_state_dispatch                # (state = sysstate_get()): adr jump table; states 1/2 -> main_loop_tick(g_state[4]), others power/charge handlers
+0x0800ea30 func sysstate3_wake_tick                  # system_state_dispatch[3]: on wake re-reads board variant/battery (reset if bad), arms the power-button wakeup and enters stop mode via enter_stop_mode (UNVERIFIED)
+0x0800ea8c func sysstate4_tick                       # system_state_dispatch[4]: power state 6 + PA0 high: re-init RTC/wakeup (UNVERIFIED)
+0x0800eac4 func sysstate5_boot_tick                  # system_state_dispatch[5]: waits for the boot button combo, then game_reload(0xff00) or game_reload(0xffff00ff) (factory test)
+0x0800eb26 func boot_normal                          # power_on_init; game_reload(0xff00)
+0x0800eb38 func boot_factory_test                    # power_on_init; game_reload(0xffff00ff)
+0x0800eb44 func power_off                            # stops LTDC/ADC, powers down peripherals, power state = 6
+0x0800eb90 func sysstate_request                     # (s): if s < 6 and s != sysstate_get(): calls the transition handler from the table at 0x0800ebb8
+0x0800ebc8 func pwr_take_standby_flag                # returns 1 (and clears it via CPUCR.CSSF) if PWR_CPUCR.SBF says we woke from standby
+0x0800ebfa func buttons_gpio_init                    # clocks GPIOA/C/D, HAL_GPIO_Init(A: 0x5, C: 0x3822, D: 0xca21) = the G&W button pins
+0x0800ec7a func boot_combo_check                     # D-pad/buttons released and PC1/PC13 pattern + battery ok (UNVERIFIED semantics)
+0x0800ecbc func power_on_init                        # one-time init after deciding to boot: clocks (first time), peripherals, nvram, audio, LCD; power state = 4
+0x0800ed6e func power_long_press_tick                # Zelda: counts 10 x 100 ms while PA0 is held, then shuts down (0x08012a18, 0x0800e6ec)
+0x0800edb6 func usb_power_check                      # buttons released, PA0 low, PC13 ... (UNVERIFIED semantics)
+0x0800edfc func usb_power_tick                       # Zelda: counts 40 x 100 ms (0x0800edb6) then sets g_state[9] (leave the main loop)
+0x0800ee6e func power_down_peripherals               # HAL_Delay(20), LCD SPI/DAC/LTDC deinit, unused GPIOs to analog
+0x0800ee8e func read_pc8_with_pullup                 # momentarily enables a pull-up on PC8, returns 1 if it reads low (UNVERIFIED purpose)
+0x0800eef4 func resume_peripherals                   # MX_GPIO_Init, LCD SPI init/reset, MX_LTDC_Init, MX_OCTOSPI1_Init, 0x08013628
+0x0800ef12 func peripherals_deinit                   # DMA2D?/LTDC/OCTOSPI deinit + LCD panel power-off sequence
+0x0800ef44 func power_button_poll                    # (buttons): toggles the power-held flag on bit 0x200 (POWER) edges
+0x0800ef88 func power_off_poll                       # sysstate 3: once PA0 (power switch) releases, power state = 2
+0x0800efe0 func pin_pa2_or_pc5_low                   # reads PA2 (board variant 0) or PC5 (variant 1)
+0x0800f004 func pin_pc5_or_pa2_low                   # the complementary read of pin_pa2_or_pc5_low
+0x0800f040 func settings_save_and_request_mode4      # nvram_set(7, ...), nvram_set(6, ...), nvram_commit, mode_request(4) via 0x0800f02a
+0x0800f0be func app_is_clock_mode                    # g_app_id == 4 or 0x10, or (g_state+0xc == 4 and app 0x12) (UNVERIFIED names for apps 3/4/0x10-0x12)
+0x0800f17c func nvram_read_record                    # (state*, flash offset, ...) -> pointer to a valid record or 0 (UNVERIFIED)
+0x0800f1e4 func nvram_write_record                   # (state*, flash offset, size, len) (UNVERIFIED)
+0x0800f43c func app_switch_hook                      # (app): when it differs from g_state+0x10 (0x2000aba0): per-app teardown via tbb (UNVERIFIED)
+0x0800f518 func loz1_load                            # (demo): memcpy(AHB SRAM 0x30000000, LoZ1 EN ROM 0x90030000, 128K); nes_init(nes, ...); optional save template from 0x902df200
+0x0800f5b0 func loz1j_load                           # memcpy(0x30000000, LoZ1 JP FDS image 0x90050000, 0x1e000); FDS setup (0x0800d020); nes_init
+0x0800f628 func loz2_load                            # memcpy(0x30000000, LoZ2 EN ROM 0x90070000, 128K) + CHR at 0x90090000; nes_init
+0x0800f690 func loz2j_load                           # memcpy(0x30000000, LoZ2 JP FDS image 0x900b0000, 0x1e000); app 5 (timer) -> 0x0800f3f6, else 0x0800f3b6
+0x0800f71c func la_load_save_slot                    # (slot): reads 0xb20 B from external flash (0x2000 + slot*0x2000) through nvram_read_record into the LA save buffer, else zeroes it
+0x0800f784 func itcm_overlay_load                    # once per boot: copies the ITCM-linked blocks from external flash (0x9030c388 -> 0, 0x9030b4a0 -> 0x1e70, 0x9030e7c8 -> 0x2d58, 0x903156ec -> 0x9c7c) and 0x5d0 B of data (0x9030e1f8 -> 0x2000ae88)
+0x0800f7fc func app_id_is_clock_like                 # (app): app in {3, 0x10, 0x11, 0x12}
+0x0800f814 func app_load                             # per-app setup: copies a ROM from external flash (0x90020000 -> 0x24000000, 0x12d40 B) and calls the LoZ1 (0x0800cfec), LoZ2 (0x0800d6aa) or LA (0x08014938) loaders
+0x0800faae func get_nes_ram_2                        # returns nes_ram (0x20000b00)
+0x0800faba func get_nes_ram                          # returns nes_ram (0x20000b00)
+0x0800fbb0 func game_reload                          # (boot_arg): Zelda's game_reload; boot_arg 0xffff00ff selects the factory test, 0xff00 a normal boot
+0x0800fd64 func main_loop_tick                       # per-frame tick: debounced buttons, idle timers, per-app sleep checks, waits on g_frame_ready (wfi)
+0x0801051e func main                                 # called from __rt_entry; cache/MPU/clock/peripheral init, then the per-frame loop
+0x08010672 func mpu_wwdg_init_wrapper                # -> MX_WWDG1_Init
+0x080106c0 func MX_WWDG1_Init                        # WWDG1 0x50003000, prescaler 0x3800, window/counter 0x7f; handle hwwdg1
+0x08010714 func wwdg_refresh_every_50ms              # HAL_WWDG_Refresh when the 50 ms deadline passes
+0x08010734 func start_tick_deadline_50ms             # g = HAL_GetTick() + 50 (Zelda 0x2001b140)
+0x08010870 func audio_get_free_buffer                # (&buf): audio_queue_get(&audio_queue, &buf) (0x080183a8)
+0x08010878 func audio_queue_free_count               # audio_queue+0xb4
+0x08010880 func audio_submit_buffer                  # (buf): audio_queue_put(&audio_queue, buf) (0x080183ae)
+0x08010914 func HAL_RTC_Init                         # HAL (matched against a gcc build of Drivers/)
+0x080109b2 func HAL_RTC_SetTime                      # HAL (matched against a gcc build of Drivers/)
+0x08010ac8 func HAL_RTC_SetDate                      # HAL (matched against a gcc build of Drivers/)
+0x08010c1a func HAL_RTC_AlarmIRQHandler              # HAL (matched against a gcc build of Drivers/)
+0x08010c64 func RTC_ExitInitMode                     # HAL (matched against a gcc build of Drivers/)
+0x08010c78 func HAL_RTC_WaitForSynchro               # HAL (matched against a gcc build of Drivers/)
+0x08010c96 func RTC_EnterInitMode                    # HAL (matched against a gcc build of Drivers/)
+0x08010dcc func flash_wait_ready                     # (handle, timeout): auto-poll RDSR (0x05) until WIP clears
+0x08010e40 func flash_cmd_read                       # OSPI indirect read: 0x6b (1-1-4) or single-line by mode
+0x08010eb8 func flash_cmd_read_quad_io               # OSPI indirect read with 4-line address and data
+0x08010f3a func flash_cmd_page_program               # 0x02 (1-1-1) or 0x38 (1-4-4) page program + HAL_OSPI_Transmit
+0x08010fba func flash_cmd_erase                      # (handle, addr, type): 0x20 / 0x52 / 0xd8
+0x08011022 func flash_cmd_memory_mapped              # 0xeb quad I/O read command + HAL_OSPI_MemoryMapped
+0x080110b0 func flash_write_enable                   # WREN (0x06), auto-poll until WEL set
+0x0801116a func flash_cmd_read_status                # RDSR 0x05
+0x0801118e func flash_cmd_write_status               # WREN + WRSR with status/config bytes
+0x0801121c func flash_cmd_read_config                # RDCR 0x15 (Macronix)
+0x080112b6 func flash_cmd_reset_enable               # 0x66
+0x080112cc func flash_cmd_reset                      # 0x99
+0x080112e4 func HAL_OSPI_Init                        # HAL (matched against a gcc build of Drivers/)
+0x080113dc func HAL_OSPI_DeInit                      # HAL (matched against a gcc build of Drivers/)
+0x08011408 func HAL_OSPI_IRQHandler                  # HAL (matched against a gcc build of Drivers/)
+0x08011536 func HAL_OSPI_Command                     # HAL (matched against a gcc build of Drivers/)
+0x080115ec func HAL_OSPI_Transmit                    # HAL (matched against a gcc build of Drivers/)
+0x08011662 func HAL_OSPI_Receive                     # HAL (matched against a gcc build of Drivers/)
+0x0801171c func OSPI_WaitFlagStateUntilTimeout       # HAL (matched against a gcc build of Drivers/)
+0x08011720 func HAL_OSPI_AutoPolling                 # HAL (matched against a gcc build of Drivers/)
+0x080117c2 func HAL_OSPI_MemoryMapped                # HAL (matched against a gcc build of Drivers/)
+0x08011824 func HAL_OSPI_Abort                       # HAL (matched against a gcc build of Drivers/)
+0x08011892 func HAL_OSPIM_Config
+0x08011c26 func OSPI_ConfigCmd                       # HAL (matched against a gcc build of Drivers/)
+0x08011e0c func HAL_CRYP_Init
+0x08011e7e func HAL_CRYP_Encrypt_IT                  # UNVERIFIED (CRYP HAL is not in Drivers/)
+0x08011f34 func HAL_CRYP_Decrypt_IT                  # UNVERIFIED (CRYP HAL is not in Drivers/)
+0x08012144 func HAL_CRYP_IRQHandler                  # UNVERIFIED
+0x080128e2 func sysstate_set                         # writes the requested system state byte (Zelda 0x2001b218)
+0x080128e8 func sysstate_get                         # returns the current system state byte (Zelda 0x2001b219; 1/2 = running the app, 3 = power-off path)
+0x08012a32 func HAL_RTC_AlarmAEventCallback          # HAL (matched against a gcc build of Drivers/)
+0x08012a98 func power_button_wakeup_init             # PWR_WKUPEPR |= WKUPEN1 (PA0), PA0 input, NVIC EXTI0 (IRQ 6)
+0x08012b68 func enter_stop_mode                      # flash power-down, stop-mode voltage scaling, HAL_PWR_EnterSTOPMode, then restores
+0x08012bc4 func cpu_clock_profile_init               # sets 0x2001b1a8 = 1 and computes clock settings (0x08012d4a/0x08012cdc) (UNVERIFIED)
+0x08012e5c func HAL_TIM_IC_CaptureCallback           # HAL (matched against a gcc build of Drivers/)
+0x08012ee0 func HAL_Init                             # SystemCoreClock/SystemD2Clock from D1CorePrescTable, HAL_InitTick, HAL_MspInit
+0x08012f2a func syscfg_enable_compensation_cell      # SYSCFG_CCCSR |= EN
+0x08012f2e func syscfg_enable_io_hslv                # SYSCFG_CCCSR |= HSLV0-3
+0x08012f58 func MX_GPIO_Init                         # LCD/power/backlight/button GPIOs; pin choice depends on g_board_variant
+0x0801318c func lcd_spi2_init                        # SPI2 (0x40003800) register-level init + PB13/PB15 alternate function
+0x080131e6 func lcd_spi_deinit                       # GPIOB DeInit, reset SPI2
+0x08013228 func lcd_reset_pulse                      # PD1 low, HAL_Delay(1), PD4 high (UNVERIFIED pin roles)
+0x08013244 func lcd_panel_power_off                  # GPIOD pin writes with HAL_Delay (UNVERIFIED order)
+0x0801327c func MX_OCTOSPI1_Init                     # hospi1 (0x52005000, 16 MB, ...), HAL_OSPIM_Config, NVIC OCTOSPI1 (IRQ 92)
+0x0801344c func HAL_OSPI_MspDeInit                   # HAL (matched against a gcc build of Drivers/)
+0x0801349c func MX_OCTOSPI1_DeInit                   # disable OCTOSPI1 IRQ, HAL_OSPI_DeInit
+0x080134d4 func buttons_scan_init                    # first debounce sample in 10 ms
+0x080134e2 func buttons_scan_debounced               # every 10 ms: samples the GPIO button pins with debouncing; returns the GAMEPAD_* mask (Zelda 0x2001b180)
+0x08013694 func lcd_backlight_set_raw                # (dac value): HAL_DAC_SetValue on DAC1 ch1/ch2 and DAC2 ch1, then HAL_DAC_Start all three
+0x08013704 func MX_LTDC_Init                         # hltdc (LTDC 0x50001000), two HAL_LTDC_Init calls
+0x08013762 func HAL_LTDC_MspInit                     # HAL (matched against a gcc build of Drivers/)
+0x08013924 func HAL_LTDC_MspDeInit                   # HAL (matched against a gcc build of Drivers/)
+0x08013982 func MX_LTDC_DeInit                       # disable LTDC IRQs, HAL_LTDC_DeInit (0x08019812)
+0x080139d0 func hal_ltdc_poll_event                  # Zelda: 0x08019b24(&hltdc-like handle 0x2001b194)
+0x080139e8 func mode_request                         # (v): g_mode_request = v if none pending
+0x08013a48 func la_get_game_state                    # returns a Link's Awakening game-state byte (GB RAM)
+0x08013b16 func la_load_rom                          # (dst, lang): Link's Awakening ROMs live at 0x900d2000 (0x122c00 B, 4 languages); GB emulator init
+0x08013bbc func la_render_frame                      # copies the GB frame into the LCD framebuffer through the draw library (UNVERIFIED)
+0x08013db8 func la_sleep_check_2                     # LA game state not in {0, 0x80, 0xf8, 7} (UNVERIFIED semantics)
+0x08013e16 func la_pause_check                       # LA: game state (0x08013a48) not 1, or 1 with <3 or ==5 (UNVERIFIED semantics)
+0x08013e50 func la_request_pause                     # sets byte +0x3c of *(0x20015350) (UNVERIFIED)
+0x08013e66 func la_save_state_write                  # encrypts the GB state into 0x240fe000 and flash_write_region()s it (zelda.py skips the encryption at 0x08013ed8)
+0x08013f20 func la_save_state_read                   # flash_read_region + crypt_decrypt + memcmp check (zelda.py skips the decryption at 0x08013f52)
+0x0801401a func la_sleep_check                       # Link's Awakening (apps 11-14): game state (0x08013a48) in 1..8 and not 6/7/0xb
+0x08014084 func la_state_machine                     # LA session state machine driven by la_get_game_state
+0x08014364 func la_save_slot_a                       # builds and writes an LA save slot (save_slot_write) (UNVERIFIED)
+0x0801438c func la_save_slot_b                       # second save-slot writer (UNVERIFIED)
+0x080148f4 func app_is_not_nes                       # 1 for clock-like modes (0x080168c4), Vermin (15), LA (11-14) or the timer (5)
+0x08014918 func app_is_la                            # g_app_id in 11..14 (Link's Awakening EN/FR/DE/JP)
+0x08014938 func vermin_open                          # app_load (app 15): vermin_load(&vermin_ctx)
+0x0801493e func vermin_tick_api                      # (a, b) -> vermin_tick(&vermin_ctx, ...); main_loop_tick
+0x08014948 func vermin_input_api                     # (buttons) -> 0x0801514a(&vermin_ctx, buttons)
+0x08014952 func vermin_sound_api                     # vermin_sound_tick(&vermin_ctx)
+0x0801495a func vermin_reset_api                     # vermin_reset(&vermin_ctx)
+0x08014960 func vermin_is_running                    # vermin_ctx.state in 1..5; sets 0x20019e9d = 1
+0x08014986 func vermin_save_scores_api               # vermin_save_scores(&vermin_ctx)
+0x0801498c func vermin_load                          # (ctx): nvram_get x2 (high scores), then vermin_reset
+0x08014a80 func vermin_reset                         # (ctx): nvram_commit (UNVERIFIED)
+0x08014aae func vermin_save_scores                   # (ctx): nvram_set x2 + nvram_commit
+0x08014afc func vermin_tick                          # (ctx, ...): per-frame game step
+0x08016074 func vermin_sound_tick                    # (vermin_ctx): Vermin sound-effect sequencer (only caller: vermin_sound_api); samples in external flash (0x90322220, 0x90322a18, 0x903233b8, 0x903239b0); volume from 10 - 0x2001a7d1
+0x080162a2 func clock_handle_time_button             # (pressed, ...): TIME (0x100) saves brightness/volume (0x0800f040) and requests mode 4 (UNVERIFIED)
+0x0801630a func fb_fill_rect                         # (dst, w, h, rgb565): stride 640 B (320 px)
+0x0801632a func fb_copy_rows_20                      # (dst, src): 20 rows x 0x90 bytes, stride 640 B
+0x0801634a func fb_blit_masked_72x20                 # (dst, src): 20 rows x 72 px RGB565, 0xfffe = transparent
+0x08016372 func backdrop_blink_overlay               # (fb): 64-frame blink of a 72x20 sprite (0x9032494c) at fb+0x20de6 (UNVERIFIED role)
+0x080163e4 func backdrop_tick                        # (fb): Zelda's sleep_image_tick: 1st call decodes backdrop_images[g_backdrop_index] into fb with gif_decode (or clears it); 2nd call copies the 320x240 frame to the other buffer; app 2 (clock) also blits the clock sprite
+0x08016494 func otfdec_enable                        # re-maps external flash with OTFDEC (0x5200b800) decryption, key from 0x080165a4
+0x08016546 func otfdec_disable                       # OTFDEC off, leaves memory-mapped mode
+0x080165d6 func ltdc_config_layers                   # (fb0*, fb1*): fills the two LTDC_LayerCfgTypeDef (320x240 RGB565) at 0x2001aa08
+0x0801669c func lcd_start                            # (fb0*, fb1*): configure layers, enable, reload
+0x080166c4 func lcd_stop                             # waits for g_frame_ready, disables both LTDC layers
+0x08016778 func ltdc_request_reload                  # g_frame_ready = 0; LTDC reload on vblank (0x08019960)
+0x0801678a func lcd_backlight_set                    # (level 0..10): DAC value from the u16 table at 0x080167f0 -> DAC1 ch1/ch2 + DAC2 ch1
+0x080167c2 func HAL_LTDC_ReloadEventCallback         # HAL (matched against a gcc build of Drivers/)
+0x08016892 func is_usb_connected                     # same code as Mario 0x08010dc2
+0x08017028 func factory_test_draw_charge             # "CHARGE AND KEY TEST" / "CHECK CURRENT (n)" / "SLEEPING READY..." pages
+0x080171f8 func factory_test_draw_key                # "CHARGE AND KEY TEST" key page
+0x08017240 func factory_test_draw_rtc                # "RTC TEST" / "READY..."
+0x08017284 func factory_test_draw_rtc_calculating    # "CALCULATING..."
+0x08017384 func factory_test_draw_speaker            # "SPEAKER TEST"
+0x080174d4 func factory_test_draw_lcd                # "LCD TEST"
+0x0801761c func factory_test_draw_result             # "TEST RESULT : OK", "KEEP PUSHING B BUTTON", "COUNTDOWN %d"
+0x08017b94 func factory_test_draw_evaluation         # Zelda only: "EVALUATION MODE", "BATTERY VALUE:%d"
+0x08017c36 func factory_test_flash_test              # Zelda only: external flash read/write test ("EXTERNAL FLASH: %08X", "READ DATA ERROR : %d/4096")
+0x08017cbe func factory_test_flash_read_pass         # Zelda only: "READ TEST : PASS %d"
+0x080181c0 func tim5_free_running_init               # TIM5: PSC from 0x2000ace0 (Zelda) / ARR 0xffffffff, enabled; register-level, no HAL
+0x0801821c func HAL_TIM_PeriodElapsedCallback        # HAL (matched against a gcc build of Drivers/)
+0x0801824e func HAL_RTC_MspInit                      # HAL (matched against a gcc build of Drivers/)
+0x08018270 func HAL_WWDG_Init                        # HAL (matched against a gcc build of Drivers/)
+0x08018298 func HAL_WWDG_Refresh
+0x080182a2 func HAL_WWDG_MspInit                     # HAL (matched against a gcc build of Drivers/)
+0x080182a4 func audio_init                           # clears the audio buffers and starts SAI1 (UNVERIFIED)
+0x08018304 func audio_start_dma                      # SAI1 block A (0x40015804) DMA start (UNVERIFIED)
+0x080183a8 func audio_queue_get
+0x080183ae func audio_queue_put
+0x080183cc func MX_SAI1_Init                         # SAI1 block A/B (0x40015804 / 0x40015824) via HAL_SAI_Init
+0x0801847e func HAL_SAI_Init                         # HAL (matched against a gcc build of Drivers/)
+0x08018614 func HAL_SAI_DeInit                       # HAL (matched against a gcc build of Drivers/)
+0x0801867a func HAL_SAI_DMAStop                      # UNVERIFIED
+0x08018720 func HAL_SAI_IRQHandler                   # HAL (matched against a gcc build of Drivers/)
+0x08018888 func SAI_Disable                          # clears SAIEN, waits (timeout from SystemCoreClock)
+0x080188f8 func SAI_DMAAbort                         # HAL (matched against a gcc build of Drivers/)
+0x0801894c func HAL_SAI_Transmit_DMA                 # sets the DMA half/complete callbacks, HAL_DMA_Start_IT
+0x080189f4 func FLASH_WaitForLastOperation           # HAL (matched against a gcc build of Drivers/)
+0x08018a54 func HAL_DMA_Abort_IT                     # UNVERIFIED
+0x08018adc func HAL_DMA_Start_IT
+0x08018c86 func DMA_CalcBaseAndBitshift              # DMA1/DMA2 stream base and bit shift
+0x08018cf6 func HAL_RTCEx_AlarmBEventCallback        # HAL (matched against a gcc build of Drivers/)
+0x08018d0c func HAL_CRYP_MspInit                     # RCC AHB2ENR CRYP clock, NVIC CRYP_IRQn
+0x08018d60 func HAL_RTCEx_SetWakeUpTimer             # UNVERIFIED (armcc outlines its tails into the BL'd fragments that follow)
+0x08018daa func HAL_RTCEx_SetWakeUpTimer_IT          # configures EXTI line for the RTC wakeup (0x58000080)
+0x08018e50 func HAL_RTCEx_DeactivateWakeUpTimer
+0x08018eb2 func HAL_RTCEx_WakeUpTimerIRQHandler      # HAL (matched against a gcc build of Drivers/)
+0x080190bc func HAL_TIM_IRQHandler                   # HAL (matched against a gcc build of Drivers/)
+0x08019218 func HAL_TIM_PWM_PulseFinishedCallback    # HAL (matched against a gcc build of Drivers/)
+0x0801933e func HAL_TIM_ReadCapturedValue            # HAL (matched against a gcc build of Drivers/)
+0x080194c4 func TIM_CCxChannelCmd                    # HAL (matched against a gcc build of Drivers/)
+0x080194e0 func HAL_TIMEx_TISelection                # HAL (matched against a gcc build of Drivers/)
+0x08019540 func HAL_MspInit                          # RCC APB4ENR |= SYSCFG
+0x080195f6 func lcd_panel_power_on_UNVERIFIED        # same code as Mario 0x08013926
+0x0801967c func lcd_panel_init_seq                   # same code as Mario 0x080139ac
+0x080196b8 func lcd_spi_write_cmd_UNVERIFIED         # same code as Mario 0x080139e8
+0x080196c0 func lcd_spi_write_data_UNVERIFIED        # same code as Mario 0x080139f0
+0x08019728 func HAL_LTDC_Init                        # HAL (matched against a gcc build of Drivers/)
+0x08019812 func HAL_LTDC_DeInit
+0x0801982a func HAL_LTDC_IRQHandler                  # same code as Mario 0x08013b56
+0x080199ee func LTDC_SetConfig                       # HAL (matched against a gcc build of Drivers/)
+0x08019d30 func gif_decode_init                      # same code as Mario 0x080167f0
+0x08019dcc func gif_decode_pass                      # same code as Mario 0x08016886
+0x0801a2b2 func HAL_ADCEx_DisableVoltageRegulator    # HAL (matched against a gcc build of Drivers/)
+0x0801a2ca func HAL_SAI_MspDeInit                    # HAL (matched against a gcc build of Drivers/)
+0x0801a810 func HAL_DMA_IRQHandler                   # HAL (matched against a gcc build of Drivers/)
+0x0801ace4 func HAL_SAI_ErrorCallback                # HAL (matched against a gcc build of Drivers/)
+0x0801ace8 func _sys_exit
+0x0801acf4 func HAL_RTCEx_WakeUpTimerEventCallback   # HAL (matched against a gcc build of Drivers/)
+0x0801acfa func HAL_TIM_OC_DelayElapsedCallback      # HAL (matched against a gcc build of Drivers/)
+0x0801acfc func HAL_TIMEx_BreakCallback              # HAL (matched against a gcc build of Drivers/)
+0x0801acfe func HAL_TIMEx_Break2Callback             # HAL (matched against a gcc build of Drivers/)
+0x0801ad00 func HAL_TIM_TriggerCallback              # HAL (matched against a gcc build of Drivers/)
+0x0801ad02 func HAL_TIMEx_CommutCallback             # HAL (matched against a gcc build of Drivers/)
+0x0801ad06 func HAL_LTDC_ErrorCallback               # HAL (matched against a gcc build of Drivers/)
+0x0801ad08 func HAL_LTDC_LineEventCallback           # HAL (matched against a gcc build of Drivers/)
+0x0801ad58 func HAL_IncTick                          # HAL (matched against a gcc build of Drivers/)
+0x0801ad68 func HardFault_Handler                    # vector 3
+0x0801ad6a func SysTick_Handler                      # vector 15
+0x0801ad78 func EXTI2_IRQHandler                     # vector 24
+0x0801ad7e func DMA1_Stream6_IRQHandler              # vector 33
+0x0801ad84 func ADC_IRQHandler                       # HAL (matched against a gcc build of Drivers/)
+0x0801ad8a func EXTI9_5_IRQHandler                   # vector 39
+0x0801ad9a func RTC_Alarm_IRQHandler                 # HAL (matched against a gcc build of Drivers/)
+0x0801ada0 func DMA1_Stream7_IRQHandler              # vector 63
+0x0801ada2 func UART7_IRQHandler                     # vector 98
+0x0801ada4 func SAI1_IRQHandler                      # vector 103
+0x0801adaa func LTDC_IRQHandler                      # HAL (matched against a gcc build of Drivers/)
+0x0801adb0 func LTDC_ER_IRQHandler                   # HAL (matched against a gcc build of Drivers/)
+0x0801adb8 func OCTOSPI1_IRQHandler                  # vector 108
+0x0801adbe func EXTI0_IRQHandler                     # vector 22
+0x0801adc2 func RTC_WKUP_IRQHandler                  # HAL (matched against a gcc build of Drivers/)
+0x0801adc8 func TIM15_IRQHandler                     # vector 132
+0x0801adce func NMI_Handler                          # vector 2
+0x0801add0 func MemManage_Handler                    # vector 4
+0x0801add2 func BusFault_Handler                     # vector 5
+0x0801add4 func UsageFault_Handler                   # vector 6
+0x0801add6 func SVC_Handler                          # vector 11
+0x0801add8 func DebugMon_Handler                     # vector 12
+0x0801adda func PendSV_Handler                       # vector 14
+0x0801addc func DMA2D_IRQHandler                     # vector 106
+0x0801ae04 func DMA2_Stream6_IRQHandler              # vector 85
+0x0801ae12 func CRYP_IRQHandler                      # vector 95: bl 0x0800e540 (get handle) then HAL_CRYP_IRQHandler
+0x0801ae20 func SystemInit                           # same code as Mario 0x08017b20
+0x0801aeb0 func aeabi_l2d_UNVERIFIED                 # same code as Mario 0x08017bb0
+0x0801aef8 func aeabi_uldivmod                       # same code as Mario 0x08017bf8
+0x0801af86 func HAL_HSEM_Take                        # HAL (matched against a gcc build of Drivers/)
+0x0801b004 func _fp_init                             # CPACR |= CP10/CP11 full access; FPSCR = 0x02000000 (default NaN)
+0x0801b028 func __rt_entry                           # __scatterload (if enabled), then main(0), then exit
+0x0801b04c func __scatterload                        # walks the RWDATA/init table: each entry is a self-relative fn ptr + args (lz77_decompress_rwdata, bss_rwdata_init)
+0x0801b074 func exit                                 # never returns: loops calling _sys_exit
+0x0801b084 func call_init_array                      # (start, end): calls each self-relative function pointer (static ctors)
+0x0801b09c func __cpp_initialize__aeabi_             # runs the 6 static constructors (ctor table) through call_init_array; last RWDATA-table entry
+0x0801b0bc data ctor_table                           # data: 6 self-relative static-constructor offsets
+0x0801b106 func WWDG_IRQHandler                      # vector 16
+0x0801b10a func PVD_PVM_IRQHandler                   # vector 17
+0x0801b10e func RTC_TAMP_STAMP_CSS_LSE_IRQHandler    # HAL (matched against a gcc build of Drivers/)
+0x0801b112 func FLASH_IRQHandler                     # HAL (matched against a gcc build of Drivers/)
+0x0801b116 func RCC_IRQHandler                       # HAL (matched against a gcc build of Drivers/)
+0x0801b11a func EXTI1_IRQHandler                     # vector 23
+0x0801b11e func EXTI3_IRQHandler                     # vector 25
+0x0801b122 func EXTI4_IRQHandler                     # vector 26
+0x0801b126 func DMA1_Stream0_IRQHandler              # vector 27
+0x0801b12a func DMA1_Stream1_IRQHandler              # vector 28
+0x0801b12e func DMA1_Stream2_IRQHandler              # vector 29
+0x0801b132 func DMA1_Stream3_IRQHandler              # vector 30
+0x0801b136 func DMA1_Stream4_IRQHandler              # vector 31
+0x0801b13a func DMA1_Stream5_IRQHandler              # vector 32
+0x0801b13e func FDCAN1_IT0_IRQHandler                # vector 35
+0x0801b142 func FDCAN2_IT0_IRQHandler                # vector 36
+0x0801b146 func FDCAN1_IT1_IRQHandler                # vector 37
+0x0801b14a func FDCAN2_IT1_IRQHandler                # vector 38
+0x0801b14e func TIM1_BRK_IRQHandler                  # vector 40
+0x0801b152 func TIM1_UP_IRQHandler                   # vector 41
+0x0801b156 func TIM1_TRG_COM_IRQHandler              # vector 42
+0x0801b15a func TIM1_CC_IRQHandler                   # vector 43
+0x0801b15e func TIM2_IRQHandler                      # vector 44
+0x0801b162 func TIM3_IRQHandler                      # vector 45
+0x0801b166 func TIM4_IRQHandler                      # vector 46
+0x0801b16a func I2C1_EV_IRQHandler                   # vector 47
+0x0801b16e func I2C1_ER_IRQHandler                   # vector 48
+0x0801b172 func I2C2_EV_IRQHandler                   # vector 49
+0x0801b176 func I2C2_ER_IRQHandler                   # vector 50
+0x0801b17a func SPI1_IRQHandler                      # vector 51
+0x0801b17e func SPI2_IRQHandler                      # vector 52
+0x0801b182 func USART1_IRQHandler                    # vector 53
+0x0801b186 func USART2_IRQHandler                    # vector 54
+0x0801b18a func USART3_IRQHandler                    # vector 55
+0x0801b18e func EXTI15_10_IRQHandler                 # vector 56
+0x0801b192 func DFSDM2_IRQHandler                    # vector 58
+0x0801b196 func TIM8_BRK_TIM12_IRQHandler            # vector 59
+0x0801b19a func TIM8_UP_TIM13_IRQHandler             # vector 60
+0x0801b19e func TIM8_TRG_COM_TIM14_IRQHandler        # vector 61
+0x0801b1a2 func TIM8_CC_IRQHandler                   # vector 62
+0x0801b1a6 func FMC_IRQHandler                       # vector 64
+0x0801b1aa func SDMMC1_IRQHandler                    # vector 65
+0x0801b1ae func TIM5_IRQHandler                      # vector 66
+0x0801b1b2 func SPI3_IRQHandler                      # vector 67
+0x0801b1b6 func UART4_IRQHandler                     # vector 68
+0x0801b1ba func UART5_IRQHandler                     # vector 69
+0x0801b1be func TIM6_DAC_IRQHandler                  # vector 70
+0x0801b1c2 func TIM7_IRQHandler                      # vector 71
+0x0801b1c6 func DMA2_Stream0_IRQHandler              # vector 72
+0x0801b1ca func DMA2_Stream1_IRQHandler              # vector 73
+0x0801b1ce func DMA2_Stream2_IRQHandler              # vector 74
+0x0801b1d2 func DMA2_Stream3_IRQHandler              # vector 75
+0x0801b1d6 func DMA2_Stream4_IRQHandler              # vector 76
+0x0801b1da func FDCAN_CAL_IRQHandler                 # vector 79
+0x0801b1de func DFSDM1_FLT4_IRQHandler               # vector 80
+0x0801b1e2 func DFSDM1_FLT5_IRQHandler               # vector 81
+0x0801b1e6 func DFSDM1_FLT6_IRQHandler               # vector 82
+0x0801b1ea func DFSDM1_FLT7_IRQHandler               # vector 83
+0x0801b1ee func DMA2_Stream5_IRQHandler              # vector 84
+0x0801b1f2 func DMA2_Stream7_IRQHandler              # vector 86
+0x0801b1f6 func USART6_IRQHandler                    # vector 87
+0x0801b1fa func I2C3_EV_IRQHandler                   # vector 88
+0x0801b1fe func I2C3_ER_IRQHandler                   # vector 89
+0x0801b202 func OTG_HS_EP1_OUT_IRQHandler            # vector 90
+0x0801b206 func OTG_HS_EP1_IN_IRQHandler             # vector 91
+0x0801b20a func OTG_HS_WKUP_IRQHandler               # vector 92
+0x0801b20e func OTG_HS_IRQHandler                    # vector 93
+0x0801b212 func DCMI_PSSI_IRQHandler                 # vector 94
+0x0801b216 func HASH_RNG_IRQHandler                  # vector 96
+0x0801b21a func FPU_IRQHandler                       # vector 97
+0x0801b21e func UART8_IRQHandler                     # vector 99
+0x0801b222 func SPI4_IRQHandler                      # vector 100
+0x0801b226 func SPI5_IRQHandler                      # vector 101
+0x0801b22a func SPI6_IRQHandler                      # vector 102
+0x0801b22e func SAI2_IRQHandler                      # vector 107
+0x0801b232 func LPTIM1_IRQHandler                    # vector 109
+0x0801b236 func CEC_IRQHandler                       # vector 110
+0x0801b23a func I2C4_EV_IRQHandler                   # vector 111
+0x0801b23e func I2C4_ER_IRQHandler                   # vector 112
+0x0801b242 func SPDIF_RX_IRQHandler                  # vector 113
+0x0801b246 func DMAMUX1_OVR_IRQHandler               # vector 118
+0x0801b24a func DFSDM1_FLT0_IRQHandler               # vector 126
+0x0801b24e func DFSDM1_FLT1_IRQHandler               # vector 127
+0x0801b252 func DFSDM1_FLT2_IRQHandler               # vector 128
+0x0801b256 func DFSDM1_FLT3_IRQHandler               # vector 129
+0x0801b25a func SWPMI1_IRQHandler                    # vector 131
+0x0801b25e func TIM16_IRQHandler                     # vector 133
+0x0801b262 func TIM17_IRQHandler                     # vector 134
+0x0801b266 func MDIOS_WKUP_IRQHandler                # vector 135
+0x0801b26a func MDIOS_IRQHandler                     # vector 136
+0x0801b26e func JPEG_IRQHandler                      # vector 137
+0x0801b272 func MDMA_IRQHandler                      # vector 138
+0x0801b276 func SDMMC2_IRQHandler                    # vector 140
+0x0801b27a func HSEM1_IRQHandler                     # vector 141
+0x0801b27e func DAC2_IRQHandler                      # vector 143
+0x0801b282 func DMAMUX2_OVR_IRQHandler               # vector 144
+0x0801b286 func BDMA2_Channel0_IRQHandler            # vector 145
+0x0801b28a func BDMA2_Channel1_IRQHandler            # vector 146
+0x0801b28e func BDMA2_Channel2_IRQHandler            # vector 147
+0x0801b292 func BDMA2_Channel3_IRQHandler            # vector 148
+0x0801b296 func BDMA2_Channel4_IRQHandler            # vector 149
+0x0801b29a func BDMA2_Channel5_IRQHandler            # vector 150
+0x0801b29e func BDMA2_Channel6_IRQHandler            # vector 151
+0x0801b2a2 func BDMA2_Channel7_IRQHandler            # vector 152
+0x0801b2a6 func COMP_IRQHandler                      # vector 153
+0x0801b2aa func LPTIM2_IRQHandler                    # vector 154
+0x0801b2ae func LPTIM3_IRQHandler                    # vector 155
+0x0801b2b2 func UART9_IRQHandler                     # vector 156
+0x0801b2b6 func USART10_IRQHandler                   # vector 157
+0x0801b2ba func LPUART1_IRQHandler                   # vector 158
+0x0801b2be func CRS_IRQHandler                       # vector 160
+0x0801b2c2 func ECC_IRQHandler                       # vector 161
+0x0801b2c6 func DTS_IRQHandler                       # vector 163
+0x0801b2ca func WAKEUP_PIN_IRQHandler                # vector 165
+0x0801b2ce func OCTOSPI2_IRQHandler                  # vector 166
+0x0801b2d2 func OTFDEC1_IRQHandler                   # vector 167
+0x0801b2d6 func OTFDEC2_IRQHandler                   # vector 168
+0x0801b2da func GFXMMU_IRQHandler                    # vector 169
+0x0801b2de func BDMA1_IRQHandler                     # vector 170
+0x0801b2e2 func stock_main_entry                     # armcc entry (stock_Reset_Handler tail-jumps here): _fp_init then __rt_entry
+0x0801b2ee func lz77_decompress_rwdata               # same code as Mario 0x08018004
+0x0801b368 data scatterload_table                    # data: armcc init table (zero-init entry, RWDATA entry, __cpp_initialize__aeabi_)
+0x20000b00 data nes_ram                              # NES CPU RAM ($0000-$07FF) of the LoZ1/LoZ2 emulator (main_loop_tick passes it to the per-game sleep checks)
+0x2000a890 data timer_scene                          # Timer scene state (float/pi math: circular timer graphics, UNVERIFIED)
+0x2000a944 data backdrop_images                      # DTCM .data: 11 pointers to the backdrop GIF/LZW images in external flash (0x901f4c00-0x90288120)
+0x2000a974 data lcd_panel_ops                        # same code as Mario 0x20000fdc
+0x2000ab90 data g_state                              # main game-state struct: +0 power state, +9 leave-main-loop flag, +0xd app id (Zelda), +0xe pending mode request, +0x74/+0x78 idle counters (Zelda)
+0x2000ab92 data g_board_variant                      # g_state+2: read_pc8_with_pullup() at boot; picks PA2 vs PC5 for the same signal in MX_GPIO_Init and buttons_scan_debounced
+0x2000ab9b data g_backdrop_index                     # g_state+0xb: backdrop chosen each frame by main_loop_tick (2 clock-like, 3..10 per game/progress, <0 none)
+0x2000ab9d data g_app_id                             # g_state+0xd: 2 clock, 5 timer, 6/7 LoZ1 EN/JP, 8/9 LoZ2 EN/JP, 11-14 LA EN/FR/DE/JP, 15 Vermin (see menu_variant_to_app_id, app_load); 1 skips most of main_loop_tick
+0x2000ab9e data g_mode_request                       # g_state+0xe: set once by mode_request (e.g. 3 when the 3-minute idle counter g_state+0x74 reaches 10800 frames)
+0x2000accc data draw_ctx                             # draw library state: +0 u16 color, +4 target framebuffer
+0x2000acd4 data uwTickFreq                           # HAL uwTickFreq / tick state (HAL_IncTick adds it)
+0x2000acd8 data uwTick                               # HAL tick counter (HAL_GetTick reads 0x2000acd4+4)
+0x2000ace4 data hcryp                                # CRYP_HandleTypeDef
+0x2000ad64 data SystemCoreClock                      # CMSIS SystemCoreClock (HAL_Init writes it)
+0x2000ad68 data SystemD2Clock
+0x20014260 data timer_ctx                            # Timer (app 5) module state; app_load also runs loz2j_load and copies the timer data (0x900d0000) into the LoZ2 JP engine (zelda.py: the timer depends on the LoZ2 JP ROM)
+0x20015308 data la_emu                               # Link's Awakening Game Boy emulator context
+0x200173dc data gb_ctx                               # GB emulator core state (memory map, CPU)
+0x200190a8 data gb_ppu                               # GB LCD state: +0 LCDC, +0x10/+0x12 LY counters
+0x20019e4c data vermin_ctx                           # Vermin (app 15) game struct: +0 state, +0x1a game A/B, score table at +0xf/+0x27, sounds at +0x52 (vermin_sound_tick)
+0x2001a0c0 data clock_ctx                            # state of the native code that drives LoZ1 in the clock/demo mode (zelda.py: the clock needs the LoZ1 EN ROM)
+0x2001a518 data audio_queue                          # SAI output buffer queue (+0xb4 u16 buffers free); Mario's ITCM veneers reach the same accessors
+0x2001aad8 data hltdc                                # LTDC_HandleTypeDef
+0x2001aed8 data hadc2                                # ADC_HandleTypeDef
+0x2001af3c data hospi1                               # OSPI_HandleTypeDef
+0x2001b0f8 data flash_error                          # last external-flash error (2 read id, 3 reset, 4 read/quad, 6 erase, 7 program; +0x10 if re-mapping failed)
+0x2001b12c data hwwdg1                               # WWDG_HandleTypeDef
+0x2001b158 data hdac1                                # DAC_HandleTypeDef
+0x2001b16c data hdac2                                # DAC_HandleTypeDef
+0x2001b180 data g_buttons                            # debounced GAMEPAD_* mask from buttons_scan_debounced
+0x2001b1d4 data flash_state                          # external flash driver state: +0 state (1 idle, 2 memory-mapped), +1 quad mode, +8 OSPI handle pointer (0x2001b1dc)
+0x2001b208 data g_frame_ready                        # set by ltdc_reload_callback; main_loop_tick waits on it with wfi
+0x2001b20c data g_rand_state                         # same code as Mario 0x20010f20
+0x240fd000 data flash_bounce_buffer                  # 4 KB buffer for external-flash sector read/modify/write
+0x240ff000 data nvram_ram                            # RAM copy of the settings record (0x80 B): +0 magic 0xfeadbabe, +4 checksum, +0xc u32 values by id, +0x28 flag bits (ids 8/9), +0x2c 0x3c-byte blob, +0x6c scramble seed
+0x902d8160 data nes_palette_rgb                      # data: 64 x RGB888 NES palette
+0x902df160 data menu_variant_info                    # data: 10 x 8-byte entries, one per menu variant ([2] = variant id)
+0x9030aef4 data clock_patch_list                     # data: LoZ1 ROM patches for the clock/demo mode
+0x90317dc0 func HAL_Delay_ext_copy                   # a second HAL_Delay in external flash
+0x9031c38c func clock_patch_loz1_rom                 # (prg): applies the patch list at 0x9030aef4 (bank, address, length, bytes) to the LoZ1 PRG copy; loz1_load(demo)
+0x9031cc36 func rand_lcg                             # same code as Mario 0x08013e36
+0x9031cd20 func HAL_MDMA_DeInit                      # HAL (matched against a gcc build of Drivers/)
+0x9031d67c func HAL_GetTick                          # HAL (matched against a gcc build of Drivers/)
+0x9031e188 func clock_reset                          # resets clock_ctx (sprites, timers, flags)
+0x9031f2da func clock_rom_hook_dispatch              # (nes): calls the native handler clock_hook_table[PRG byte at the 6502 PC] (patched ROM hooks)
+0x9031fa6e func clock_tick                           # (nes_ram, buttons, ...): per-frame clock/demo logic; main_loop_tick through the 0x0800e6b4 veneer
+0x903200ce func clock_draw                           # per-frame clock/demo rendering; main_loop_tick through the 0x0800e6bc veneer (UNVERIFIED)
+0x903206d6 func nes_update_palette_lut               # (nes, ...): rebuilds the 32-entry RGB565 palette from NES palette RAM (nes+0x834) via nes_rgb565_lut
+# --- generated: ldr.w pc, [pc] veneers to named functions
+0x08008790 func nes_apu_run_frame_veneer
+0x0800bc50 func nes_cpu_run_veneer
+0x0800bc58 func nes_ppu_render_a_veneer
+0x0800bc60 func nes_ppu_render_b_veneer
+0x0800e654 func ui_overlay_reset_veneer
+0x0800e65c func ui_close_overlay_save_settings_veneer
+0x0800e664 func menu_init_selection_from_app_veneer
+0x0800e66c func clock_rom_hook_dispatch_veneer
+0x0800e674 func clock_patch_loz1_rom_veneer
+0x0800e68c func clock_reset_veneer
+0x0800e69c func menu_open_veneer
+0x0800e6ac func ui_handle_input_veneer
+0x0800e6b4 func clock_tick_veneer
+0x0800e6bc func clock_draw_veneer
+0x0800e6c4 func nes_update_palette_lut_veneer
+0x0800e6cc func nes_ppu_render_c_veneer
+0x0800e6d4 func nes_audio_output_veneer
+0x0800e6dc func ui_render_overlay_veneer
+0x08016270 func ui_draw_tile_string_veneer
+0x9030b4a0 func aeabi_uldivmod_veneer
+0x9030b4a8 func aeabi_l2d_UNVERIFIED_veneer
+0x9030b4b0 func aeabi_memset_veneer
+0x9030b4c0 func audio_queue_free_count_veneer
+0x9030b4d0 func audio_get_free_buffer_veneer
+0x9030b4d8 func audio_submit_buffer_veneer
+0x9030b4e0 func memcpy_veneer
+0x9030e7c8 func audio_stream_put_sample_veneer
+0x90312078 func aeabi_memclr4_veneer
+0x903156ec func memcpy_bytes_veneer
+0x903156f4 func nvram_init_veneer
+0x903156fc func nvram_is_dirty_veneer
+0x90315704 func nvram_get_veneer
+0x9031571c func mode_request_veneer
+0x90315724 func nvram_set_veneer
+0x9031574c func is_usb_connected_veneer
+0x90317238 func memcpy_veneer2
+0x90317240 func aeabi_memclr4_veneer2
+0x90317248 func memcpy_bytes_veneer2
+0x9031dbb0 func wwdg_refresh_every_50ms_veneer

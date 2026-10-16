@@ -6,6 +6,8 @@ The ELF maps every region the stock firmware runs from at its real address:
 * internal flash at ``0x0800_0000``
 * decrypted external flash at ``0x9000_0000``
 * each RWDATA init block (LZ77-decompressed) at its RAM destination (ITCM/DTCM)
+* the code/data the firmware copies from external flash to ITCM/DTCM at boot
+  (``itcm_copies`` / ``dtcm_copies`` in ``patches/xrefs.py`` ``LAYOUT``)
 
 Symbols come from ``tools/re/<device>.syms`` plus a few auto-detected ones
 (vector-table handlers and ``ldr.w pc, [pc]`` long-branch veneers).
@@ -29,10 +31,15 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from patches import Device  # noqa: E402
-from patches.xrefs import extract_rwdata, parse_syms  # noqa: E402,F401
+from patches.xrefs import (  # noqa: E402
+    EXT_BASE,
+    LAYOUT,
+    extract_rwdata,
+    itcm_image,
+    parse_syms,
+)
 
 INT_BASE = 0x0800_0000
-EXT_BASE = 0x9000_0000
 VECTOR_TABLE_END = 0x2CC  # STM32H7B0 vector table size; identical on both devices.
 
 # RAM regions with no initialized data get NOLOAD sections so that
@@ -41,6 +48,7 @@ RAM_REGIONS = [
     (0x0000_0000, 0x0001_0000),  # ITCM
     (0x2000_0000, 0x2002_0000),  # DTCM
     (0x2400_0000, 0x2410_0000),  # AXI SRAM
+    (0x3000_0000, 0x3002_0000),  # AHB SRAM1/2
 ]
 
 
@@ -126,12 +134,23 @@ def main():
         (".intflash", INT_BASE, internal, True),
         (".extflash", EXT_BASE, bytes(external), True),
     ]
-    for n, (dst, data) in enumerate(extract_rwdata(device_cls, internal)):
-        is_itcm = dst < 0x0001_0000
-        regions.append((f".rwdata{n}", dst, data, is_itcm))
-        print(
-            f"rwdata{n}: 0x{dst:08X} len=0x{len(data):X} ({'ITCM code' if is_itcm else 'data'})"
-        )
+    rwdata = extract_rwdata(device_cls, internal)
+    layout = LAYOUT.get(args.device, {})
+    # ITCM as it is after boot: the code the firmware copies there from external
+    # flash (LAYOUT itcm_copies) plus the ITCM rwdata block.
+    itcm = itcm_image(layout, bytes(external), rwdata)
+    if itcm:
+        regions.append((".itcm", 0, itcm, True))
+        print(f"itcm: 0x00000000 len=0x{len(itcm):X} (code)")
+    for n, (dst, data) in enumerate(rwdata):
+        if dst < 0x0001_0000:
+            continue  # part of .itcm
+        regions.append((f".rwdata{n}", dst, data, False))
+        print(f"rwdata{n}: 0x{dst:08X} len=0x{len(data):X} (data)")
+    for n, (src, dst, size) in enumerate(layout.get("dtcm_copies", [])):
+        data = bytes(external)[src - EXT_BASE : src - EXT_BASE + size]
+        regions.append((f".dtcmcopy{n}", dst, data, False))
+        print(f"dtcmcopy{n}: 0x{dst:08X} len=0x{size:X} (data copied from 0x{src:08X})")
 
     # Convert each region into an object file.
     objs = []

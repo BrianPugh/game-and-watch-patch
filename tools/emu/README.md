@@ -1,6 +1,6 @@
 # Emulator testing (GWemu)
 
-Run the patched Mario firmware in [GWemu](https://github.com/slash-proc/gwemu)
+Run the patched Mario or Zelda firmware in [GWemu](https://github.com/slash-proc/gwemu)
 (a QEMU fork for the G&W) via [gwprov](https://github.com/slash-proc/gwprov),
 drive it with frame-accurate button input, and take screenshots — no hardware
 needed.
@@ -33,6 +33,24 @@ build/gwprov-venv/bin/python tools/emu/mario_menu_test.py --gwemu-bin /path/to/g
 Screenshots go to `build/emu/shots_<bank2>/`. The script exits non-zero if a
 check fails.
 
+## Zelda test
+
+```bash
+make PATCH_PARAMS="--device=zelda"
+build/gwprov-venv/bin/python tools/emu/zelda_menu_test.py --gwemu-bin /path/to/gwemu [--only la_en,timer]
+```
+
+Leaves the first-boot PRESS TIME screen, then launches every game-select
+variant (LoZ1/LoZ2 EN/JP, LA EN/FR/DE/JP, Vermin, Timer) from the clock,
+checks `g_app_id` and that the frame isn't blank, and returns with TIME.
+Screenshots go to `build/emu/zelda_shots/`. A full run takes ~5 minutes.
+
+gwprov registers one backup pair per directory, so it only finds Mario when
+both pairs sit in the repo root. `emu_driver.make_profile` registers each
+model from its own directory of symlinks (`build/emu/<model>-backups/`).
+
+Shared pieces (`Driver`, profiles, button bits) live in `emu_driver.py`.
+
 ## How input works (and why not the keyboard)
 
 With stock Mario on GWemu 0.0.23:
@@ -41,8 +59,9 @@ With stock Mario on GWemu 0.0.23:
 * Even in a window, the firmware reads TIME as permanently held.
 
 So the harness injects buttons through GDB instead: every frame it stops at
-the instruction after `bl read_buttons` in `main_loop_tick` (`0x08006B56`,
-see `tools/re/mario.syms`) and overwrites `r0` with the desired button mask.
+the instruction after `bl read_buttons` in `main_loop_tick` (Mario
+`0x08006B56`, Zelda `0x0800FE58`; see `tools/re/<device>.syms`) and
+overwrites `r0` with the desired button mask.
 
 Run a whole sequence within one session. Once injection stops, the firmware
 sees the emulator's stuck TIME again, which registers as a fresh TIME press
@@ -52,15 +71,16 @@ sees the emulator's stuck TIME again, which registers as a fresh TIME press
 
 ```bash
 make PATCH_PARAMS="--device=mario"
-build/gwprov-venv/bin/python tools/emu/ram_probe.py --gwemu-bin /path/to/gwemu
+build/gwprov-venv/bin/python tools/emu/ram_probe.py --gwemu-bin /path/to/gwemu [--device zelda]
 ```
 
-Fills RAM with a marker at the stock `Reset_Handler`, plays clock, SMB1,
-SMB2, BALL and the pause menu, then lists regions that still hold the marker
+Fills RAM with a marker at the stock `Reset_Handler`, plays every mode
+(Mario: clock, SMB1, SMB2, BALL and the pause menu; Zelda: clock and every
+game), then lists regions that still hold the marker
 (never written by the stock firmware). Our own `.data`/`.bss`/stack is skipped.
 GWemu fills some buffers (e.g. audio) in some runs only, so run it more than
 once and trust only regions that are free every time. Results are recorded in
-`tools/re/mario.syms`.
+`tools/re/<device>.syms`.
 
 ## Function coverage
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Find RAM the stock Mario firmware never writes.
+"""Find RAM the stock firmware never writes.
 
 Boots the patched build in a headless GWemu, halts at the stock
 ``Reset_Handler`` (after our bootloader, before stock init), fills RAM with a
-marker pattern, then plays clock, SMB1, SMB2, BALL and the pause menu with
-injected buttons. Afterwards any 16-byte block still holding the marker was
+marker pattern, then plays every mode with injected buttons (Mario: clock,
+SMB1, SMB2, BALL and the pause menu; Zelda: clock and every game-select
+variant). Afterwards any 16-byte block still holding the marker was
 never written.
 
 Our own RAM (``build/gw_patch.elf`` .data/.bss/heap/stack) is left unpainted;
@@ -12,14 +13,14 @@ the unused rest of our linker RAM region is painted and reported.
 
 Caveats:
 * Coverage is limited to the paths played here. Sleep images, the Mario song
-  and nvram writes are not exercised.
+  and nvram writes are not exercised, and each game is only played briefly.
 * Some buffers (e.g. audio DMA) are filled by GWemu in some runs only. Run it
   more than once and trust only regions that are free in every run.
 
 Requires gwprov and a GWemu binary; see tools/emu/README.md.
 
 Usage:
-    python tools/emu/ram_probe.py --gwemu-bin /path/to/gwemu
+    python tools/emu/ram_probe.py --gwemu-bin /path/to/gwemu [--device zelda]
 """
 
 import argparse
@@ -31,11 +32,12 @@ from elftools.elf.elffile import ELFFile
 from gwprov.gwemu_manager import instances, start_instance, stop_instance
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import mario_menu_test as menu  # noqa: E402
+import mario_menu_test  # noqa: E402
+import zelda_menu_test  # noqa: E402
+from emu_driver import Driver, make_bank2, make_profile  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 
-STOCK_RESET_HANDLER = 0x08017A44  # See tools/re/mario.syms.
 MARKER = bytes.fromhex("a55ac33c")
 
 # (name, start, end) of every RAM bank on the STM32H7B0.
@@ -87,7 +89,7 @@ def untouched_runs(data: bytes, base: int):
         yield base + start, base + len(data)
 
 
-def exercise(driver: menu.Driver, idle_frames: int):
+def exercise_mario(driver: Driver):
     def play(downs: int):
         # The menu cursor starts on the current game.
         driver.tap("GAME", settle=40)
@@ -120,6 +122,43 @@ def exercise(driver: menu.Driver, idle_frames: int):
             lambda: (driver.tap("TIME", settle=60), driver.frames("", 300)),
         ),
     ]
+    return steps
+
+
+def exercise_zelda(driver: Driver):
+    zelda = zelda_menu_test
+
+    def play(name: str, row: int, variant: int, app_id: int):
+        zelda.launch(driver, row, variant, app_id)
+        driver.frames("", 120)
+        for _ in range(6):
+            driver.tap("START", settle=60)
+        for _ in range(20):
+            driver.frames("RIGHT", 20)
+            driver.frames("UP+A", 10)
+            driver.frames("LEFT+B", 10)
+        driver.shot(f"{name}_playing")
+        zelda.to_clock(driver)
+
+    steps = [
+        ("boot", lambda: (driver.frames("", 30), zelda.to_clock(driver))),
+        ("clock", lambda: driver.frames("", 600)),
+    ]
+    for name, row, variant, app_id in zelda.GAMES:
+        steps.append((name, lambda g=(name, row, variant, app_id): play(*g)))
+    return steps
+
+
+# Stock Reset_Handler (tools/re/<device>.syms), read_buttons return site,
+# and the play-through for each device.
+DEVICES = {
+    "mario": (0x08017A44, mario_menu_test.READ_BUTTONS_RETURN, exercise_mario),
+    "zelda": (0x0801AD48, zelda_menu_test.READ_BUTTONS_RETURN, exercise_zelda),
+}
+
+
+def exercise(driver: Driver, device: str, idle_frames: int):
+    steps = DEVICES[device][2](driver)
     if idle_frames:
         steps.append(("idle", lambda: driver.frames("", idle_frames)))
     for i, (name, step) in enumerate(steps):
@@ -135,6 +174,7 @@ def main():
     parser.add_argument(
         "--gwemu-bin", required=True, type=Path, help="Path to the GWemu executable."
     )
+    parser.add_argument("--device", choices=DEVICES, default="mario")
     parser.add_argument("--work-dir", type=Path, default=REPO / "build/emu")
     parser.add_argument(
         "--min-run", type=int, default=512, help="Smallest region to report (bytes)."
@@ -148,16 +188,18 @@ def main():
     args = parser.parse_args()
 
     work = args.work_dir.resolve()
-    out_dir = work / "ram_probe"
+    out_dir = work / f"ram_probe_{args.device}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    profile = work / "mario-profile"
+    profile = work / f"{args.device}-profile"
+    reset_handler, poll_pc, _ = DEVICES[args.device]
     bank2 = work / "bank2_erased.bin"
-    menu.make_bank2(bank2, "erased")
-    menu.make_profile(
+    make_bank2(bank2, "erased")
+    make_profile(
         profile,
         bank2,
         (REPO / "build/internal_flash_patched.bin").resolve(),
         (REPO / "build/external_flash_patched.bin").resolve(),
+        model=args.device,
     )
     skip = our_ram(REPO / "build/gw_patch.elf")
 
@@ -165,15 +207,15 @@ def main():
     pid = next(r["pid"] for r in instances() if r["profile"] == str(profile))
     try:
         time.sleep(3)
-        driver = menu.Driver(pid, out_dir)
+        driver = Driver(pid, out_dir, poll_pc)
         dbg, backend = driver.dbg, driver.dbg.backend
 
         dbg.halt()
-        dbg.bp(STOCK_RESET_HANDLER)
+        dbg.bp(reset_handler)
         backend.reset()
         regs = dbg.wait_stopped(10)["registers"]
-        dbg.clear_bp(STOCK_RESET_HANDLER)
-        if regs["pc"] != STOCK_RESET_HANDLER:
+        dbg.clear_bp(reset_handler)
+        if regs["pc"] != reset_handler:
             raise RuntimeError(
                 f"expected stock Reset_Handler, stopped at 0x{regs['pc']:08X}"
             )
@@ -183,7 +225,7 @@ def main():
             backend.write_memory(start, MARKER * ((end - start) // len(MARKER)))
         driver.run_to_poll()
 
-        exercise(driver, args.idle_frames)
+        exercise(driver, args.device, args.idle_frames)
 
         dbg.halt()
         print(

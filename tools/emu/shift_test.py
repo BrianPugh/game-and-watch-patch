@@ -30,6 +30,7 @@ from gwprov.gwemu_manager import (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mario_menu_test as menu  # noqa: E402
+from emu_driver import Driver, check, make_profile  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 DELTA = 0x10_0000
@@ -122,7 +123,6 @@ def main():
     )
     args = parser.parse_args()
 
-    menu.READ_BUTTONS_RETURN += args.delta  # Driver looks this up on every call.
     work = args.work_dir.resolve()
     out_dir = work / "shift"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -131,14 +131,14 @@ def main():
     bank1 = (args.bank1 or images / "bank1.bin").resolve()
     bank2 = (args.bank2 or images / "bank2.bin").resolve()
     external = (args.external or images / "external.bin").resolve()
-    menu.make_profile(profile, bank2, bank1, external)
+    make_profile(profile, bank2, bank1, external)
 
     start_instance(str(profile), headless=True, gwemu_bin=str(args.gwemu_bin.resolve()))
     pid = next(r["pid"] for r in instances() if r["profile"] == str(profile))
     ok = True
     try:
         time.sleep(3)
-        driver = menu.Driver(pid, out_dir)
+        driver = Driver(pid, out_dir, menu.READ_BUTTONS_RETURN + args.delta)
         for name, step, mode_ok in PHASES:
             try:
                 step(driver)
@@ -152,7 +152,7 @@ def main():
             mode = driver.read16(menu.GNW_MODE)
             pc = driver.pc()
             in_bank1 = args.delta and 0x0800_0000 <= pc < 0x0810_0000
-            ok &= menu.check(
+            ok &= check(
                 mode_ok(mode) and not in_bank1,
                 f"{name}: gnw_mode=0x{mode:X}, pc=0x{pc:08X}",
             )

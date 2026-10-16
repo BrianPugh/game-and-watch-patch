@@ -38,6 +38,7 @@ from gwprov.gwemu_manager import (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mario_menu_test as menu  # noqa: E402
+from emu_driver import Driver, make_bank2, make_profile, mask  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -88,7 +89,7 @@ def stock_functions(args) -> list[int]:
 
 
 class Tracer:
-    def __init__(self, driver: menu.Driver, funcs: list[int]):
+    def __init__(self, driver: Driver, funcs: list[int]):
         self.dbg, self.backend = driver.dbg, driver.dbg.backend
         self.armed = set()
         self.hits: dict[str, list[int]] = {}
@@ -127,9 +128,9 @@ class Tracer:
             self.dbg.resume()
 
     def frames(self, buttons: str = "", n: int = 1):
-        mask = sum(1 << menu.BITS[b] for b in buttons.split("+") if b)
+        value = mask(buttons)
         for _ in range(n):
-            self.frame(mask)
+            self.frame(value)
 
     def tap(self, buttons: str, settle: int = 8):
         self.frames(buttons, 2)
@@ -215,8 +216,8 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     profile = work / "mario-profile"
     bank2 = work / "bank2_erased.bin"
-    menu.make_bank2(bank2, "erased")
-    menu.make_profile(
+    make_bank2(bank2, "erased")
+    make_profile(
         profile,
         bank2,
         (REPO / "build/internal_flash_patched.bin").resolve(),
@@ -228,7 +229,7 @@ def main():
     pid = next(r["pid"] for r in instances() if r["profile"] == str(profile))
     try:
         time.sleep(3)
-        tracer = Tracer(menu.Driver(pid, out_dir), funcs)
+        tracer = Tracer(Driver(pid, out_dir, menu.READ_BUTTONS_RETURN), funcs)
         print(f"armed {len(tracer.armed)} functions", flush=True)
         for name, step in PHASES:
             tracer.phase = name

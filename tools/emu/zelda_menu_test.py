@@ -13,6 +13,9 @@ Requires gwprov and a GWemu binary; see tools/emu/README.md.
 
 Usage:
     python tools/emu/zelda_menu_test.py --gwemu-bin /path/to/gwemu [--only la_en,timer]
+
+With ``--relocate-stock=0x08120000``, add ``--bank2-image
+build/internal_flash_patched_bank2.bin --stock-offset 0x120000``.
 """
 
 import argparse
@@ -130,6 +133,18 @@ def main():
     parser.add_argument(
         "--external", type=Path, default=REPO / "build/external_flash_patched.bin"
     )
+    parser.add_argument(
+        "--bank2-image",
+        type=Path,
+        help="Bank-2 contents (e.g. build/internal_flash_patched_bank2.bin from "
+        "--relocate-stock); its first 16 bytes are erased.",
+    )
+    parser.add_argument(
+        "--stock-offset",
+        type=lambda s: int(s, 0),
+        default=0,
+        help="How far the stock firmware was relocated (--relocate-stock minus 0x08000000).",
+    )
     args = parser.parse_args()
     games = GAMES
     if args.only:
@@ -144,7 +159,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     profile = work / "zelda-profile"
     bank2 = work / "bank2_erased.bin"
-    make_bank2(bank2, "erased")
+    make_bank2(bank2, "erased", args.bank2_image)
     make_profile(
         profile,
         bank2,
@@ -157,7 +172,8 @@ def main():
     pid = next(r["pid"] for r in instances() if r["profile"] == str(profile))
     try:
         time.sleep(3)
-        ok = run(Driver(pid, out_dir, READ_BUTTONS_RETURN), games, args.run_frames)
+        poll_pc = READ_BUTTONS_RETURN + args.stock_offset
+        ok = run(Driver(pid, out_dir, poll_pc), games, args.run_frames)
     finally:
         stop_instance(pid=pid)
     print(f"Screenshots: {out_dir}")

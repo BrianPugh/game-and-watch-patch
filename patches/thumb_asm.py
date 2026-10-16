@@ -242,6 +242,12 @@ def _addsub_w(ops, base_hw1, name):
         raise ThumbAssemblyError(f"{name} cannot target pc")
     if rn == 15:  # pc source is the literal/ADR form, not this encoding
         raise ThumbAssemblyError(f"{name} cannot use pc as the source register")
+    # An sp destination is only defined for the SP plus/minus immediate form (rn == sp);
+    # keystone accepts e.g. "add.w sp, r0, #1" but it's UNPREDICTABLE on ARMv7-M.
+    if rd == 13 and rn != 13:
+        raise ThumbAssemblyError(
+            f"{name} can only target sp with sp as the source register"
+        )
     i, imm3, imm8 = _split_modified_immediate(_imm(ops[2]))
     hw1 = base_hw1 | (i << 10) | rn
     hw2 = (imm3 << 12) | (rd << 8) | imm8

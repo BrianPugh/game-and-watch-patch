@@ -429,6 +429,30 @@ def test_rejects_disallowed_registers(keystone, code):
         assemble(code)
 
 
+@pytest.mark.parametrize(
+    "code",
+    [
+        # UNPREDICTABLE on ARMv7-M, but keystone assembles them anyway.
+        "add.w sp, r0, #1",
+        "sub.w sp, r0, #1",
+        "add.w sp, r8, #0x10",
+        "sub.w sp, lr, #0x10",
+    ],
+)
+def test_add_sub_w_rejects_sp_destination(code):
+    with pytest.raises(ThumbAssemblyError):
+        assemble(code)
+
+
+@pytest.mark.parametrize("mnemonic", ["add.w", "sub.w"])
+def test_add_sub_w_sp_to_sp_capstone(mnemonic):
+    for value in [0, 8, 0x100, 0x1000]:
+        ((m, op_str),) = disasm(f"{mnemonic} sp, sp, #{value}")
+        assert m == mnemonic
+        assert op_str.startswith("sp, sp, #")
+        assert imm(op_str) == value
+
+
 # --------------------------------------------------------------------------- #
 # unit checks
 # --------------------------------------------------------------------------- #

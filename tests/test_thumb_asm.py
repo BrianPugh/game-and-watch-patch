@@ -68,7 +68,9 @@ PATCHER_INSTRUCTIONS = [
     ("movw r1, #5000", 0, [65, 242, 136, 49]),  # --hard-reset-time
     ("movw r2, #1500", 0, [64, 242, 220, 82]),  # --sleep-time
     ("movs r0, #0; nop", 0, [0, 32, 0, 191]),
-    ("cmp.w r0, #1080", 0, [176, 245, 135, 111]),  # --mario-song-time
+    # --mario-song-time (19 s, which cmp.w can't encode)
+    ("movw r1, #1140; cmp r0, r1; blt 0x20", 0, [64, 242, 116, 65, 136, 66, 11, 219]),
+    ("adds r3, #4", 0, [4, 51]),
     ("b 0x1c", 0, [12, 224]),
     ("mov.w r2, #45056", 0, [79, 244, 48, 66]),
     ("mov.w r3, #45056", 0, [79, 244, 48, 67]),
@@ -172,6 +174,35 @@ def test_movs_capstone():
             ((mnemonic, op_str),) = disasm(f"movs r{rd}, #{value}")
             assert (mnemonic, op_str.split(",")[0]) == ("movs", f"r{rd}")
             assert imm(op_str) == value
+
+
+def test_adds_capstone():
+    for rd in range(8):
+        for value in range(0x100):
+            ((mnemonic, op_str),) = disasm(f"adds r{rd}, #{value}")
+            assert (mnemonic, op_str.split(",")[0]) == ("adds", f"r{rd}")
+            assert imm(op_str) == value
+
+
+def test_cmp_register_capstone():
+    for rn in range(8):
+        for rm in range(8):
+            assert disasm(f"cmp r{rn}, r{rm}") == [("cmp", f"r{rn}, r{rm}")]
+
+
+CONDITIONS = ["eq", "ne", "hs", "lo", "mi", "pl", "vs", "vc"]
+CONDITIONS += ["hi", "ls", "ge", "lt", "gt", "le"]
+
+
+@pytest.mark.parametrize("cond", CONDITIONS)
+def test_b_cond_capstone(cond):
+    addr = 0x6FCA
+    for target in range(addr + 4 - 0x100, addr + 4 + 0x100, 2):
+        ((mnemonic, op_str),) = disasm(f"b{cond} #{target}", addr)
+        assert mnemonic == f"b{cond}" and imm(op_str) == target
+    for target in (addr + 4 - 0x102, addr + 4 + 0x100):
+        with pytest.raises(ThumbAssemblyError):
+            assemble(f"b{cond} #{target}", addr)
 
 
 def test_mov_register_capstone():
@@ -289,6 +320,30 @@ def test_movs(keystone):
             assert_match(keystone, f"movs r{rd}, #{value}")
 
 
+def test_adds(keystone):
+    for rd in range(8):
+        for value in range(0x100):
+            assert_match(keystone, f"adds r{rd}, #{value}")
+
+
+def test_cmp_register(keystone):
+    for rn in range(8):
+        for rm in range(8):
+            assert_match(keystone, f"cmp r{rn}, r{rm}")
+
+
+@pytest.mark.parametrize("cond", CONDITIONS)
+def test_b_cond(keystone, cond):
+    # keystone relaxes to the wide form near the top of the narrow range, so
+    # only compare where it picked the narrow one (capstone checks the rest).
+    addr = 0x1000
+    for target in range(addr + 4 - 0x100, addr + 4 + 0x100, 2):
+        code = f"b{cond} #{target}"
+        expected = ks_asm(keystone, code, addr)
+        if len(expected) == 2:
+            assert assemble(code, addr) == expected, code
+
+
 def test_mov_register_all_pairs(keystone):
     regs = [f"r{i}" for i in range(13)] + ["sp", "lr", "pc"]
     for rd in regs:
@@ -393,6 +448,9 @@ def test_encode_modified_immediate_examples():
         "nop r0",
         "movs r8, #1",  # keystone widens this to movs.w; the patches want 2 bytes
         "movs r0, #256",
+        "adds r8, #1",
+        "cmp r8, r0",
+        "bal #0x10",
         "movw r0, #65536",
         "sub sp, #2",
     ],

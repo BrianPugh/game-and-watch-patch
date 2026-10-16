@@ -10,12 +10,15 @@ this patcher):
                                              -- MOV (immediate), T2 (modified immediate)
 * ``mov    Rd, Rm``                          -- MOV (register), T1
 * ``movs   Rd, #imm8``                       -- MOV (immediate), T1
+* ``adds   Rdn, #imm8``                      -- ADD (immediate), T2
+* ``cmp    Rn, Rm``                          -- CMP (register), T1
 * ``cmp.w  Rn, #const``                      -- CMP (immediate), T2 (modified immediate)
 * ``add.w  Rd, Rn, #const`` (+ conditional)  -- ADD (immediate), T3 (modified immediate)
 * ``sub.w  Rd, Rn, #const`` (+ conditional)  -- SUB (immediate), T3 (modified immediate)
 * ``sub    sp, #imm``                        -- SUB (SP minus immediate), T2
 * ``ldr.w  Rt, [pc, #imm]``                  -- LDR (literal), T2 (signed offset)
 * ``b      <target>``                        -- B, T2 (narrow)
+* ``b<cond> <target>``                       -- B, T1 (narrow conditional, e.g. ``blt``)
 * ``b.w    #<target>``                       -- B, T4 (wide)
 * ``it``/``itt``/``ite``/...                 -- IT block
 * ``nop``                                    -- NOP, T1
@@ -67,6 +70,7 @@ _MOV_W_RE = re.compile(rf"^mov(?:{_COND_RE})?\.w$")
 _ADD_W_RE = re.compile(rf"^add(?:{_COND_RE})?\.w$")
 _SUB_W_RE = re.compile(rf"^sub(?:{_COND_RE})?\.w$")
 _PREDICATED_RE = re.compile(rf"^(?:mov|add|sub)({_COND_RE})\.w$")
+_B_COND_RE = re.compile(rf"^b({_COND_RE})$")
 # ``ldr.w Rt, [pc, #imm]`` -- PC-relative literal load with a signed byte offset.
 _LDR_W_PC_RE = re.compile(
     r"^ldr\.w\s+(\w+)\s*,\s*\[\s*pc\s*,\s*#\s*(-?(?:0x)?[0-9a-f]+)\s*\]$"
@@ -254,16 +258,27 @@ def _mov(ops):
     return _emit16(hw)
 
 
-def _movs(ops):
+def _low_reg_imm8(ops, base, name):
+    # MOVS (immediate) T1 and ADDS (immediate) T2: low register, 8-bit immediate.
     if len(ops) != 2:
-        raise ThumbAssemblyError("movs expects 'Rd, #imm8'")
+        raise ThumbAssemblyError(f"{name} expects 'Rd, #imm8'")
     rd = _reg(ops[0])
     if rd > 7:
-        raise ThumbAssemblyError(f"movs needs a low register, got {ops[0]}")
+        raise ThumbAssemblyError(f"{name} needs a low register, got {ops[0]}")
     imm = _imm(ops[1])
     if not 0 <= imm <= 0xFF:
-        raise ThumbAssemblyError(f"movs immediate 0x{imm:X} out of 8-bit range")
-    return _emit16(0x2000 | (rd << 8) | imm)
+        raise ThumbAssemblyError(f"{name} immediate 0x{imm:X} out of 8-bit range")
+    return _emit16(base | (rd << 8) | imm)
+
+
+def _cmp(ops):
+    if len(ops) != 2:
+        raise ThumbAssemblyError("cmp expects 'Rn, Rm'")
+    rn = _reg(ops[0])
+    rm = _reg(ops[1])
+    if rn > 7 or rm > 7:
+        raise ThumbAssemblyError("cmp (register) needs low registers")
+    return _emit16(0x4280 | (rm << 3) | rn)
 
 
 def _cmp_w(ops):
@@ -315,6 +330,22 @@ def _b(ops, addr):
             f"b target out of range for the narrow encoding (offset {offset})"
         )
     return _emit16(0xE000 | (imm & 0x7FF))
+
+
+def _b_cond(cond, ops, addr):
+    if len(ops) != 1:
+        raise ThumbAssemblyError(f"b{cond} expects a single target")
+    if cond == "al":
+        raise ThumbAssemblyError("use 'b' for an unconditional branch")
+    offset = _branch_target(ops[0]) - (addr + 4)
+    if offset & 1:
+        raise ThumbAssemblyError("branch target must be halfword-aligned")
+    imm = offset >> 1
+    if not -0x80 <= imm <= 0x7F:
+        raise ThumbAssemblyError(
+            f"b{cond} target out of range for the narrow encoding (offset {offset})"
+        )
+    return _emit16(0xD000 | (_CONDITIONS[cond] << 8) | (imm & 0xFF))
 
 
 def _b_w(ops, addr):
@@ -385,7 +416,11 @@ def _assemble_one(text: str, addr: int) -> List[int]:
     if mnemonic == "mov":
         return _mov(ops)
     if mnemonic == "movs":
-        return _movs(ops)
+        return _low_reg_imm8(ops, 0x2000, "movs")
+    if mnemonic == "adds":
+        return _low_reg_imm8(ops, 0x3000, "adds")
+    if mnemonic == "cmp":
+        return _cmp(ops)
     if mnemonic == "cmp.w":
         return _cmp_w(ops)
     if mnemonic == "nop" and not ops:
@@ -400,6 +435,9 @@ def _assemble_one(text: str, addr: int) -> List[int]:
         return _b_w(ops, addr)
     if mnemonic == "b":
         return _b(ops, addr)
+    b_cond = _B_COND_RE.match(mnemonic)
+    if b_cond:
+        return _b_cond(b_cond.group(1), ops, addr)
     if mnemonic.startswith("it"):
         return _it(mnemonic, ops)
 

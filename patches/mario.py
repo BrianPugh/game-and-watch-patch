@@ -233,7 +233,7 @@ class MarioGnW(Device, name="mario"):
         if self.args.mario_song_time and (
             self.args.mario_song_time < 1 or self.args.mario_song_time > 1092
         ):
-            parser.error("--mario_song-time must be in range [1, 1092]")
+            parser.error("--mario-song-time must be in range [1, 1092]")
 
         if len(self.args.smb1_graphics) > 8:
             parser.error("A maximum of 8 SMB1 graphics mods can be specified.")
@@ -371,7 +371,18 @@ class MarioGnW(Device, name="mario"):
         if self.args.mario_song_time:
             printi(f"Setting Mario Song time to {self.args.mario_song_time} seconds.")
             mario_song_frames = seconds_to_frames(self.args.mario_song_time)
-            self.internal.asm(0x6FC4, f"cmp.w r0, #{mario_song_frames}")
+            # Stock "cmp.w r0, #300; blt 0x6fe4" only takes modified immediates
+            # (no odd seconds), so load the frame count into r1, which is dead
+            # here (the song-start path zeroes it; the loop head rewrites it).
+            # The 2 extra bytes come from shifting the song-start path down and
+            # shortening its "orr.w r3, r3, #4" to "adds r3, #4": bit 2 of
+            # (mode & 0xc038) is clear, and the flags die at 0x6fee.
+            song_start = bytes(self.internal[0x6FCA:0x6FDC])
+            self.internal.asm(
+                0x6FC4, f"movw r1, #{mario_song_frames}; cmp r0, r1; blt 0x20", size=8
+            )
+            self.internal[0x6FCC:0x6FDE] = song_start
+            self.internal.asm(0x6FDE, "adds r3, #4", size=2)
 
         if not self.args.encrypt:
             # Disable OTFDEC

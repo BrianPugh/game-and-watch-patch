@@ -533,7 +533,6 @@ class MarioGnW(Device, name="mario"):
 
         # Starting here are BALL references
         self.move_to_compressed_memory(0xEBC4, 528, 0x4154)
-        self.rwdata_lookup(0xEBC4, 528)
 
         self.move_to_compressed_memory(0xEDD4, 100, 0x4570)
 
@@ -630,7 +629,6 @@ class MarioGnW(Device, name="mario"):
                 0x1199C,
             ]
             self.move_ext(0x1_2D44, mario_song_len, references)
-            self.rwdata_lookup(0x1_2D44, mario_song_len)
 
         # Each tile is 16x16 pixels, stored as 256 bytes in row-major form.
         # These index into one of the palettes starting at 0xbec68.
@@ -652,7 +650,6 @@ class MarioGnW(Device, name="mario"):
         # Its last 256 bytes are apu_reciprocal_table (0x900aabe4), loaded
         # through the ITCM rwdata literal at 0x2c88.
         self.move_to_compressed_memory(0xA_8C44, 8352, 0xBC44)
-        self.rwdata_ref(0x2C88)
 
         printe("Moving iconset.")
         # MODIFY THESE IF WE WANT CUSTOM GAME ICONS
@@ -744,13 +741,10 @@ class MarioGnW(Device, name="mario"):
         #    5. Palette
         #
         # The RLE encoded data could be background tilemap, animation routine, etc.
+        # Its pointers are "ext_pointer_tables" in patches/xrefs.py.
         lookup_table_start = 0xB_F4A0
         lookup_table_end = 0xB_F838
         lookup_table_len = lookup_table_end - lookup_table_start  # 46 * 5 * 4 = 920
-        for addr in range(lookup_table_start, lookup_table_end, 4):
-            self.external.lookup(addr)
-
-        # Now move the table
         self.move_to_compressed_memory(lookup_table_start, lookup_table_len, 0xDF88)
 
         # Not sure what this is
@@ -768,50 +762,12 @@ class MarioGnW(Device, name="mario"):
         self.move_to_compressed_memory(0xBFA0C, 784, 0x1_0F9C)
 
         # MOVE EXTERNAL FUNCTIONS
-        new_loc = self.move_ext(0xB_FD1C, 14244, None)
-        references = [  # internal references to external functions
-            0x00D330,
-            0x00D310,
-            0x00D308,
-            0x00D338,
-            0x00D348,
-            0x00D360,
-            0x00D368,
-            0x00D388,
-            0x00D358,
-            0x00D320,
-            0x00D350,
-            0x00D380,
-            0x00D378,
-            0x00D318,
-            0x00D390,
-            0x00D370,
-            0x00D340,
-            0x00D398,
-            0x00D328,
-        ]
-        for reference in references:
-            self.internal.lookup(reference)
-
-        references = [  # external references to external functions
-            0xC_1174,
-            0xC_313C,
-            0xC_049C,
-            0xC_1178,
-            0xC_220C,
-            0xC_3490,
-            0xC_3498,
-        ]
-        for reference in references:
-            reference = reference - 0xB_FD1C + new_loc
-            try:
-                self.internal.lookup(reference)
-            except (IndexError, KeyError):
-                self.external.lookup(reference)
+        # Their literals and the internal pointers to them (0x0800d308-0x0800d398)
+        # are relocated by fix_ext_refs().
+        self.move_ext(0xB_FD1C, 14244, None)
 
         # BALL sound samples.
         self.move_to_compressed_memory(0xC34C0, 6168, 0x43EC)
-        self.rwdata_lookup(0xC34C0, 6168)
         self.move_to_compressed_memory(0xC4CD8, 2984, 0x459C)
         self.move_to_compressed_memory(0xC5880, 120, 0x4594)
 
@@ -896,6 +852,7 @@ class MarioGnW(Device, name="mario"):
         self.external.replace(0xF5858, b"\x00" * 34728)  # refence at internal 0x7210
         self.ext_offset -= 34728
 
+        self.fix_ext_refs()
         if self.relocation:
             self.relocation.fix_ram_images()
 

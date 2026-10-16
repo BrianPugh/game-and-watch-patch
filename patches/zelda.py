@@ -409,6 +409,8 @@ class ZeldaGnW(Device, name="zelda"):
             # TODO: make this work with moving stuff around, currently just
             # removing to free up an island of space.
 
+        self.fix_ext_refs()
+
         # Compress, insert, and reference the modified rwdata
         self.int_pos += self.internal.rwdata.write_table_and_data(
             0x1B070, data_offset=self.int_pos

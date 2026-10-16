@@ -2,10 +2,11 @@
 """Print the map of stock internal code and every reference into it.
 
 The analysis lives in ``patches/xrefs.py`` (the patcher uses it to relocate
-stock code); this prints byte classification, the relocatable units (armcc
-shares literal pools across a module, so some functions must move together),
-branches between units, and every absolute or self-relative reference into
-internal code.
+stock code, and its references into external flash to move data); this
+prints byte classification, the relocatable units (armcc shares literal pools
+across a module, so some functions must move together), branches between
+units, every absolute or self-relative reference into internal code, and the
+references into external flash.
 
 Usage:
     python tools/re/xrefs.py --device=mario [--units] [--json build/re/mario_xrefs.json]
@@ -21,7 +22,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-from patches.xrefs import LAYOUT, analyze, units  # noqa: E402
+from patches.xrefs import LAYOUT, analyze, ext_refs, units  # noqa: E402
 
 
 def main():
@@ -84,6 +85,12 @@ def main():
     print("\nabsolute / self-relative references into internal code:")
     for kind, n in Counter(r["kind"] for r in refs).most_common():
         print(f"  {kind:32} {n}")
+    ext = ext_refs(a)
+    print(
+        "\nreferences into external flash (the patcher relocates moved data through them):"
+    )
+    for kind, n in Counter(r["kind"] for r in ext).most_common():
+        print(f"  {kind:32} {n}")
     print(
         f"\nunreferenced push prologues in non-code bytes (dead, or reached some way not modeled): "
         f"{len(unreferenced)}",
@@ -96,7 +103,13 @@ def main():
     if args.json:
         args.json.write_text(
             json.dumps(
-                {"units": spans, "refs": refs, "unreferenced": unreferenced}, indent=1
+                {
+                    "units": spans,
+                    "refs": refs,
+                    "ext_refs": ext,
+                    "unreferenced": unreferenced,
+                },
+                indent=1,
             )
         )
         print(f"\nWrote {args.json}")

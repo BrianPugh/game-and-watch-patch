@@ -46,6 +46,21 @@ nothing references: dead code, or reached some way it doesn't model. Both
 devices are described by `LAYOUT` in `patches/xrefs.py`; Zelda has no ITCM
 code (its external-flash code runs in place).
 
+## Functions shared by both firmwares (`match_roms.py`)
+
+```bash
+python tools/re/match_roms.py [--names] [--json build/re/rom_match.json]
+```
+
+Lists the stock functions that are identical in Mario and Zelda (both are built
+from the same SDK: HAL, C runtime, power/NVRAM management, flash driver, draw
+library, NES core). Bodies come from the `xrefs.py` map; signatures mask
+addresses but keep peripheral and small constants; unique signatures pair up,
+then callees pair up in call order. Bodies under `--min-insns` (default 6) are
+skipped because tiny thunks match by accident. It also reports pairs whose
+`.syms` names disagree, so shared code keeps one name in both files. These
+pairs are the code an amalgamated firmware could keep once.
+
 ## Relocation test (`shift_image.py`)
 
 ```bash

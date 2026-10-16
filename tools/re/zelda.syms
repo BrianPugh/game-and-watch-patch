@@ -401,7 +401,7 @@
 0x0801632a func fb_copy_rows_20                      # (dst, src): 20 rows x 0x90 bytes, stride 640 B
 0x0801634a func fb_blit_masked_72x20                 # (dst, src): 20 rows x 72 px RGB565, 0xfffe = transparent
 0x08016372 func backdrop_blink_overlay               # (fb): 64-frame blink of a 72x20 sprite (0x9032494c) at fb+0x20de6 (UNVERIFIED role)
-0x080163e4 func backdrop_tick                        # (fb): Zelda's sleep_image_tick: 1st call decodes backdrop_images[g_backdrop_index] into fb with gif_decode (or clears it); 2nd call copies the 320x240 frame to the other buffer; app 2 (clock) also blits the clock sprite
+0x080163e4 func backdrop_tick                        # (fb): Zelda's sleep_image_tick: 1st call decodes backdrop_images[g_backdrop_index] into fb with backdrop_decode (or clears it); 2nd call copies the 320x240 frame to the other buffer; app 2 (clock) also blits the clock sprite
 0x08016494 func otfdec_enable                        # re-maps external flash with OTFDEC (0x5200b800) decryption, key from 0x080165a4
 0x08016546 func otfdec_disable                       # OTFDEC off, leaves memory-mapped mode
 0x080165d6 func ltdc_config_layers                   # (fb0*, fb1*): fills the two LTDC_LayerCfgTypeDef (320x240 RGB565) at 0x2001aa08
@@ -465,6 +465,8 @@
 0x080199ee func LTDC_SetConfig                       # HAL (matched against a gcc build of Drivers/)
 0x08019d30 func gif_decode_init                      # same code as Mario 0x080167f0
 0x08019dcc func gif_decode_pass                      # same code as Mario 0x08016886
+0x08019f18 func gif_decode                           # (src, dst) -> u8 error; like Mario 0x080169cc. Decoder 0x08019ca4-0x08019f58 is only reached from backdrop_tick; patcher frees it
+0x08019f36 func backdrop_decode                      # (fb, index): gif_decode(backdrop_images[index], fb) for index < 11; backdrop_tick tail-calls it (hooked to backdrop_inflate)
 0x0801a2b2 func HAL_ADCEx_DisableVoltageRegulator    # HAL (matched against a gcc build of Drivers/)
 0x0801a2ca func HAL_SAI_MspDeInit                    # HAL (matched against a gcc build of Drivers/)
 0x0801a810 func HAL_DMA_IRQHandler                   # HAL (matched against a gcc build of Drivers/)

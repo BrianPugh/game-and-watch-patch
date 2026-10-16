@@ -9,3 +9,7 @@
 void stock_Reset_Handler(void);
 
 gamepad_t stock_read_buttons(void);
+
+#define ZELDA_BACKDROP_COUNT 11
+// DTCM .data: pointers to the backdrop images in external flash.
+static const uint8_t * const * const stock_backdrop_images = (const uint8_t * const *)0x2000a944;

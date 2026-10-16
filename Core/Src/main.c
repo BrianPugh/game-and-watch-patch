@@ -250,11 +250,10 @@ void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n){
     return dst;
 }
 
-#if GNW_DEVICE_MARIO
 #define SLEEP_IMAGE_PIXELS (320 * 240)
 
 /**
- * Replaces the stock GIF decoder for the sleep images.
+ * Replaces the stock GIF decoder for the sleep images (Zelda: backdrops).
  *
  * src is a 256-entry RGB565 palette followed by the LZMA-compressed 8-bit
  * pixel indices. The indices are inflated into the back half of the RGB565
@@ -274,9 +273,19 @@ uint8_t sleep_image_inflate(const uint8_t *src, uint16_t *dst){
     }
     return 0;
 }
-#endif
 
 #if GNW_DEVICE_ZELDA
+/**
+ * Replaces backdrop_tick's tail call to the stock decode-by-index helper
+ * (0x08019f36), which ignores an index past the last backdrop.
+ */
+uint8_t backdrop_inflate(uint16_t *dst, int32_t index){
+    if(index >= ZELDA_BACKDROP_COUNT){
+        return 0;
+    }
+    return sleep_image_inflate(stock_backdrop_images[index], dst);
+}
+
 /**
  * Replaces loz2j_load's call to the stock helper at 0x0800f6fa, which loads
  * r6 (the NES context) and tail-calls memcpy(0x30000000, r1, r2). loz2_load

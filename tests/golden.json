@@ -18,7 +18,7 @@
     },
     "mario_options": {
       "external_flash_patched.bin": "893d39d0740049113fc570a5afd85d63165cf7e8",
-      "internal_flash_patched.bin": "4167800a2c209b4b75d7225305c2e808f88ded5f"
+      "internal_flash_patched.bin": "b189f1e11f99cfafec9192f7cf24307567440d51"
     },
     "mario_relocate": {
       "external_flash_patched.bin": "5eddc8293da5dd64ad22a64cdef29dc090b7d03e",

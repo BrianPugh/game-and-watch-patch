@@ -32,7 +32,7 @@ CONFIGS = {
     "mario": "--device=mario",
     "mario_internal_only": "--device=mario --internal-only",
     "mario_relocate": "--device=mario --slim --no-factory-test --no-mario-song "
-    "--relocate-stock=0x08120000",
+    "--mario-song-time=5 --relocate-stock=0x08120000",
     "mario_options": "--device=mario --game-select-dual-boot --sleep-time=5 "
     "--sleep-on-usb --hard-reset-time=3 --mario-song-time=5 --no-save --encrypt "
     "--triple-boot --smb1-graphics {ips}",

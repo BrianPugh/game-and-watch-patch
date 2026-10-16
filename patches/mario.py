@@ -380,7 +380,8 @@ class MarioGnW(Device, name="mario"):
             for call, expect in {0x6BA6: "4:93e9491c", 0x6BEE: "4:defc4f62"}.items():
                 self.internal.asm(call, "movs r0, #0; nop", size=4, expect=expect)
 
-        if self.args.mario_song_time:
+        # Without the song (--no-mario-song), 0x6FC8 just skips its start.
+        if self.args.mario_song_time and not self.args.no_mario_song:
             printi(f"Setting Mario Song time to {self.args.mario_song_time} seconds.")
             mario_song_frames = seconds_to_frames(self.args.mario_song_time)
             # Stock "cmp.w r0, #300; blt 0x6fe4" only takes modified immediates

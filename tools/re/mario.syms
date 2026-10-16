@@ -68,6 +68,11 @@
 0x0800c8d8 func settings_clock_handle_input
 0x0800c990 func settings_game_handle_input
 0x0800d01c func ui_render_overlay                     # per-frame overlay renderer; called at 0x08007070
+0x0800d39c func clock_scene_load                      # (scene): clock_scene_table entry -> 3 tile layers (w*h u16, decoded by 0x08013ee0) at 0x2000ee6c/0x2000f4c8/0x2000fb24, palette (320 B) to 0x20010554
+0x0800d600 func clock_digit_shatter                   # spawns 4 random brick particles per filled cell of a clock_digit_glyphs digit (index = high nibble of a BCD byte at 0x20010228) (UNVERIFIED)
+0x0800e7fc func clock_digit_clear_blocks              # zeroes 5 x 3 cells of SMB1's block buffer (NES RAM +0x500) at an offset from 0x900bf888 (UNVERIFIED)
+0x08015de0 func clock_mario_drive                     # drives Mario on the clock through SMB1 RAM (0x756, 0x705, ...); plays clock_mario_input_script (UNVERIFIED)
+0x0800b030 func nes_init                              # sets up the NES context: opcode dispatch from nes_opcode_table, handler tables 0x900a9844/0x900a9a84/0x900a9aa4, then calls the init in the 0x900a9ce4 record selected by ctx+0x8ef (< 0xc0) (UNVERIFIED)
 0x0800cca2 func game_select_draw                      # called once at 0x0800d236
 0x0800cd60 func settings_clock_draw
 0x0800ceb6 func settings_game_draw
@@ -128,10 +133,17 @@
 0x0800b758 func ext_table_stubs_0x800b758             # 0x0800b758-0x0800b801: tiny handlers reached only through ext_fn_table_0x900a9ce4
 0x08006010 func adr_jump_table_dispatch               # adr r0, tbl; ldr r1, [r0, r5, lsl #2]; bx r1 -- absolute targets inline (0x08006020); also 0x08005e7c
 # --- external flash (decrypted)
-0x900a9ce4 data ext_fn_table_0x900a9ce4               # 18 thumb fn pointers (20-byte records) into ext_table_stubs_0x800b758; inside the 8352-B blob at 0x900a8c44 the patcher moves to SRAM3 (ref 0x0800bc44)
+0x900a9ce4 data ext_fn_table_0x900a9ce4               # 18 thumb fn pointers (20-byte records) into ext_table_stubs_0x800b758; inside the 8352-B blob at 0x900a8c44 the patcher moves to SRAM3 (ref 0x0800bc44); 192 records in all, nes_init picks one by ctx+0x8ef and calls [0] (mapper table?)
+0x900a8c44 data nes_opcode_table                      # 256 x 12-B 6502 opcode records (start of the 8352-B NES-tables blob the patcher moves to SRAM3)
 0x900aabe4 data apu_reciprocal_table                  # 64 x s32 65536/n, n=1..64 (end of the 0x900a8c44 blob); loaded at ITCM 0x275e through the ITCM-rwdata literal 0x2c88. That code looks like FDS expansion audio (64-sample wavetable, signed 6-bit mod); stock SMB1/SMB2 never reached it in GWemu (UNVERIFIED)
 0x900aace4 data iconset_4bpp                          # 256px wide, 16x16 tiles, 0x80 B/tile
 0x900aebe4 data ui_font_1bpp                          # 0x2c 8x8 glyphs, expanded by ui_expand_1bpp_font
+0x900bec58 data press_button_text                     # "PRESS\0\0\0BUTTON\0\0" as SMB font tile indices (0x0a = A)
+0x900bf410 data clock_mario_input_script              # NES pad byte per step: 0x01 Right, 0x81 A+Right, 0xff ends
+0x900bf4a0 data clock_scene_table                     # 46 x 5 pointers: header (w, h tiles), 3 tile layers, palette
+0x900bf838 data clock_digit_tables                    # 280 B; 0x900bf888 = per-position block-buffer offsets (UNVERIFIED)
+0x900bf950 data clock_digit_glyphs                    # 12 x 15 cells (5 rows x 3 columns, 0/1/2)
+0x900f4d18 data press_time_graphic                    # TIME graphic of the first-boot screen (2880 B)
 0x200010b4 data g_input                               # +6: u16 buttons held last frame (main_loop_tick stores read_buttons() result here)
 # --- generated: names shared with the other G&W firmware (HAL/SDK/runtime matched by code) and session RE
 0x00000000 func nes_cpu_run                          # 6502 interpreter entry: registers live in r5-r8 (saved at nes+0xb24); NMI/IRQ checks, then dispatch; Mario runs it from ITCM 0x0000
@@ -320,6 +332,7 @@
 0x08010698 func otfdec_disable                       # OTFDEC off, leaves memory-mapped mode
 0x0801077c func fb_fill_rect                         # (dst, w, h, rgb565): stride 640 B (320 px)
 0x0801080c func fb_copy_rows_20                      # (dst, src): 20 rows x 0x90 bytes, stride 640 B
+0x0801084a func press_time_screen_draw                # first-boot PRESS TIME BUTTON screen: blinks the TIME graphic (0x900f4d18) and "PRESS"/"BUTTON" (press_button_text) on a 64-frame counter
 0x08010a94 func lcd_stop                             # waits for g_frame_ready, disables both LTDC layers
 0x08010b14 func ltdc_request_reload                  # g_frame_ready = 0; LTDC reload on vblank (0x08019960)
 0x08012012 func factory_test_draw_charge             # "CHARGE AND KEY TEST" / "CHECK CURRENT (n)" / "SLEEPING READY..." pages

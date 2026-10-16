@@ -527,8 +527,7 @@ class MarioGnW(Device, name="mario"):
             smb1_addr, smb1_size, [0x7368, 0x10954, 0x7218, patch_smb1_refr]
         )
 
-        # I think these are all scenes for the clock, but not 100% sure.
-        # The giant lookup table references all these
+        # Clock scene tile layers; only the scene table (below) points here.
         self.move_to_compressed_memory(0xBE60, 11620, None)
 
         # Starting here are BALL references
@@ -645,10 +644,9 @@ class MarioGnW(Device, name="mario"):
         printe("Moving NES emulator palette.")
         self.move_to_compressed_memory(0xA_8B84, 192, 0xB720)
 
-        # Note: UNKNOWN* represents a block of data that i haven't decoded
-        # yet. If you know what the block of data is, please let me know!
-        # Its last 256 bytes are apu_reciprocal_table (0x900aabe4), loaded
-        # through the ITCM rwdata literal at 0x2c88.
+        # NES emulator tables, read by nes_init and the core: 6502 opcode
+        # records (256 x 12 B), handler tables, a 192 x 20-B table at
+        # 0x900a9ce4 (mapper init functions?) and apu_reciprocal_table.
         self.move_to_compressed_memory(0xA_8C44, 8352, 0xBC44)
 
         printe("Moving iconset.")
@@ -705,7 +703,8 @@ class MarioGnW(Device, name="mario"):
                 0x6A1E, f"mov.w r3, #{compressed_len}", expect="4:fb92ccd0"
             )
 
-        # Not sure what this data is
+        # "PRESS" and "BUTTON" as font tile indices, for the first-boot
+        # PRESS TIME BUTTON screen (press_time_screen_draw).
         self.move_to_compressed_memory(0xBEC58, 8 * 2, 0x10964)
 
         printe("Moving Palettes")
@@ -716,38 +715,36 @@ class MarioGnW(Device, name="mario"):
         self.move_to_compressed_memory(
             0xBEEE8, 320, None
         )  # Underwater palette (between 1200 and 2400 at XX:30)
-        self.move_to_compressed_memory(
-            0xBF028, 320, None
-        )  # Unknown palette. Maybe bowser castle? need to check...
+        # The dawn palette with 3 of its 80 colors changed. In each run of 10
+        # scenes, slots 7 and 8 use it, between dawn (6) and night (9).
+        self.move_to_compressed_memory(0xBF028, 320, None)
         self.move_to_compressed_memory(0xBF168, 320, None)  # Dawn palette [0500, 0600)
 
-        # These are scene headers, each containing 2x uint32_t's.
-        # They are MOSTLY [0x36, 0xF], but there are a few like [0x30, 0xF] and [0x20, 0xF],
+        # Scene headers: (width, height) in 16-px tiles, 2 x uint32 each.
+        # Mostly (0x36, 0xF), a few (0x30, 0xF) and (0x20, 0xF).
         # Referenced by the scene table
         self.move_to_compressed_memory(0xBF2A8, 45 * 8, None)
 
-        # IDK what this is.
+        # Scripted NES pad input for Mario on the clock, one byte per step
+        # (0x01 Right, 0x81 A+Right, 0xFF ends), read by clock_mario_drive.
         self.move_to_compressed_memory(0xBF410, 144, 0x1658C)
 
         # SCENE TABLE
         # Goes in chunks of 20 bytes (5 addresses)
-        # Each scene is represented by 5 pointers:
-        #    1. Pointer to a 2x uint32_t header (I think it's total tile (w, h) )
-        #            The H is always 15, which would be 240 pixels tall.
-        #            The W is usually 54, which would be 864 pixels (probably the flag pole?)
-        #    2. RLE something. Usually 32 bytes.
-        #    3. RLE something
-        #    4. RLE something
-        #    5. Palette
-        #
-        # The RLE encoded data could be background tilemap, animation routine, etc.
+        # Each scene is represented by 5 pointers (clock_scene_load):
+        #    1. Header: (w, h) in tiles. h is always 15 (240 px); w is
+        #       usually 54 (864 px).
+        #    2-4. 3 compressed layers of w * h uint16 tiles, decoded by
+        #         0x08013ee0 into 0x2000ee6c, 0x2000f4c8 and 0x2000fb24.
+        #    5. Palette (copied to 0x20010554).
         # Its pointers are "ext_pointer_tables" in patches/xrefs.py.
         lookup_table_start = 0xB_F4A0
         lookup_table_end = 0xB_F838
         lookup_table_len = lookup_table_end - lookup_table_start  # 46 * 5 * 4 = 920
         self.move_to_compressed_memory(lookup_table_start, lookup_table_len, 0xDF88)
 
-        # Not sure what this is
+        # Clock digit tables: where each digit's bricks go in SMB1's block
+        # buffer (NES RAM 0x500), read by the clock module (UNVERIFIED).
         references = [
             0xE8F8,
             0xF4EC,
@@ -757,7 +754,10 @@ class MarioGnW(Device, name="mario"):
         ]
         self.move_to_compressed_memory(0xBF838, 280, references)
 
+        # Clock digit glyphs: 12 x (5 rows x 3 columns) brick cells, indexed
+        # by a BCD time digit; clock_digit_shatter breaks them into particles.
         self.move_to_compressed_memory(0xBF950, 180, [0xE2E4, 0xF4FC])
+        # Bytes clock_mario_drive copies into its state (UNVERIFIED).
         self.move_to_compressed_memory(0xBFA04, 8, 0x1_6590)
         self.move_to_compressed_memory(0xBFA0C, 784, 0x1_0F9C)
 
@@ -844,12 +844,12 @@ class MarioGnW(Device, name="mario"):
                 self.move_ext(start, len(blob), literals[start])
                 self.ext_offset -= end - start - len(blob)
 
-        # Definitely at least contains part of the TIME graphic on startup screen.
+        # The TIME graphic of the first-boot PRESS TIME BUTTON screen.
         self.move_to_compressed_memory(0xF4D18, 2880, 0x10960)
 
-        # What is this data?
-        # The memcpy to this address is all zero, so i guess its not used?
-        self.external.replace(0xF5858, b"\x00" * 34728)  # refence at internal 0x7210
+        # An ITCM overlay that game_reload copies with length 0 (literal at
+        # 0x08007210), so it's never used.
+        self.external.replace(0xF5858, b"\x00" * 34728)
         self.ext_offset -= 34728
 
         self.fix_ext_refs()

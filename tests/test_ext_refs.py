@@ -143,3 +143,37 @@ def test_reference_in_our_code_is_relocated(monkeypatch):
     device._expect_refs(0x90, 0x40, 4)
     assert device.fix_ext_refs() == {"our pointer": 1}
     assert word(device.internal, 0x90) == 0x240F_2124
+
+
+def test_lookup_ranges_latest_move_wins():
+    lookup = Lookup()
+    assert not lookup
+    lookup.add(0x9000_0040, 0x240F_2124, 8)
+    lookup.add(0x9000_0044, 0x9000_0004, 4)
+    assert lookup[0x9000_0040] == 0x240F_2124
+    assert lookup[0x9000_0047] == 0x9000_0007
+    assert lookup.get(0x9000_0048) is None
+    assert 0x9000_003F not in lookup
+    with pytest.raises(KeyError):
+        lookup[0x9000_0048]
+
+
+def test_ext_drop_shifts_the_rest_in_aligned_steps(monkeypatch):
+    device = make_device({0x0800_0010: 0x9000_00C4}, monkeypatch)
+    device.EXT_SHIFT_ALIGN = 0x20
+    device.ext_offset = 0
+    device.ext_cursor = 0x10
+    device.external[0x00:0x100] = bytes(range(0x100))
+    put(device.internal, 0x10, 0x9000_00C4)
+
+    device.ext_drop(0x40, 0x88)  # 0x48 bytes: the shift grows by 0x40
+    device.ext_keep(0xD0)
+
+    assert device.ext_offset == -0x40
+    assert device.external[0x00:0x40] == bytes(range(0x40))
+    # The 8 bytes left of the dropped range are zero padding.
+    assert device.external[0x40:0x48] == b"\x00" * 8
+    assert device.external[0x48:0x90] == bytes(range(0x88, 0xD0))
+    assert device.external[0x90:0xD0] == b"\x00" * 0x40
+    assert device.fix_ext_refs() == {"literal": 1}
+    assert word(device.internal, 0x10) == 0x9000_0084

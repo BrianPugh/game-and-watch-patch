@@ -45,18 +45,19 @@ Start      End        Description
 
 0x325490   0x3E0000   Empty  (764,784 bytes)
 
-0x3E0000   0x3E8000   Cleared when you reset the GW
-0x3E8000   0x3F0000   Launched LA, didn't save. Generic GB stuff?
-0x3F0000   0x400000   Empty
+0x3E0000   0x400000   LA save states, 32 KB per LA language
+
+The patch keeps 0x00000-0x20000 in place, closes the gaps after it, and puts
+the LA save states right after the data (see ZeldaGnW._compact_ext).
 """
 
 
 from pathlib import Path
 
-from .exception import InvalidStockRomError
+from .exception import InvalidStockRomError, NotEnoughSpaceError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
 from .tileset import decode_backdrop
-from .utils import fds_remove_crc_gaps, printd, printi
+from .utils import fds_remove_crc_gaps, printd, printi, round_up_page, round_up_word
 
 build_dir = Path("build")  # TODO: expose this properly or put in better location
 
@@ -96,7 +97,7 @@ class ZeldaGnW(Device, name="zelda"):
         group.add_argument(
             "--no-sleep-images",
             action="store_true",
-            help="Remove the 5 sleeping images.",
+            help="Remove the 11 backdrop images (sleep and first-boot screens).",
         )
         group.add_argument(
             "--loz1",
@@ -324,15 +325,92 @@ class ZeldaGnW(Device, name="zelda"):
         self.internal.nop(0xB52A, 1, expect="2:aeb8096b")
         self.internal.replace(0xB54C, b"\xc0\xb1", expect="2:7fa409bc")
 
-    def _erase_savedata(self):
-        self.external.set_range(0x0000, 0x12000, b"\xFF")
-        self.external.set_range(0x3E_8000, 0x3F_0000, b"\xFF")
+    def _compact_ext(self):
+        """Close the gaps in external flash and put the LA save states after it.
 
-    def patch(self):
+        Everything from 0x20000 on shifts down (``ext_keep``/``ext_drop``), so
+        offsets inside a block, like LA's bank addressing off one ROM base,
+        stay intact. Stock leaves 764 KB empty between the data (ENC_END) and
+        the LA save states at 0x3E0000; the image now ends at the save states.
+        The NVRAM banks and save slots below 0x20000 stay put.
+        """
         b_w_memcpy_inflate_asm = "b.w #" + hex(
             0xFFFFFFFE & self.internal.address("memcpy_inflate")
         )
+        self.ext_cursor = 0x2_0000
 
+        # loz2j_load copies the 0x1e000-byte FDS image into AHB SRAM, so it can be
+        # stored compressed (in external flash when it doesn't fit internal).
+        printd("Compressing LoZ2 JP ROM")
+        loz2j, loz2j_end = 0xB_0000, 0xD_0000
+        compressed_len = self.external.compress(loz2j, 0x1_E000)
+        self.internal.bl(0xF69A, "loz2j_rom_inflate", expect="4:2ce1dfce")
+        try:
+            self.move_to_int(loz2j, compressed_len, 0xFD1C)
+            self.ext_drop(loz2j, loz2j_end)
+        except NotEnoughSpaceError:
+            self._expect_refs(0xFD1C, loz2j, compressed_len)
+            self.ext_drop(loz2j + round_up_word(compressed_len), loz2j_end)
+
+        printd("Compressing and moving LoZ2 TIMER data to int")
+        timer, timer_end = 0xD_0000, 0xD_2000
+        compressed_len = self.external.compress(timer, timer_end - timer)
+        self.internal.asm(0xF430, b_w_memcpy_inflate_asm, expect="4:625bb93e")
+        self.move_to_int(timer, compressed_len, 0xFCF8)
+        self.ext_drop(timer, timer_end)
+
+        if self.args.no_la:
+            self.ext_drop(0xD_2000, 0x1F_4C00)
+
+        if self.args.no_sleep_images:
+            self.ext_drop(0x1F_4C00, 0x28_8120)
+
+        stock_end = self.external.ENC_END
+        self.ext_keep(stock_end)
+        data_end = stock_end + self.ext_offset
+        self.external.ENC_END = data_end
+
+        # LA save states: 4 x 32 KB (one per language) at 0x3E0000 + lang *
+        # 0x8000, erased as 32 KB blocks by factory_reset_erase_saves, so the
+        # region stays 32 KB aligned.
+        if self.args.no_la:
+            end = round_up_page(data_end)
+            # Nothing to erase; repeat the last stock save block (0x18000).
+            la_blocks = [0x1_8000] * 4
+        else:
+            la_base = (data_end + 0x7FFF) & ~0x7FFF
+            end = la_base + 0x2_0000
+            la_blocks = [la_base + i * 0x8000 for i in range(4)]
+            self.external.set_range(la_base, end, b"\xFF")
+            printi(f"Moving the LA save states to 0x{la_base:06X}")
+            # la_save_state_write and la_save_state_read: 0x3e0000 + lang << 15
+            self.internal.asm(
+                0x1_3ED2, f"add.w r5, r5, #{hex(la_base)}", expect="4:2fae8900"
+            )
+            self.internal.asm(
+                0x1_3F3E, f"add.w r0, r0, #{hex(la_base)}", expect="4:681a8dbd"
+            )
+        # save_erase_table entries 9-12.
+        self.internal.replace(
+            0x300,
+            b"".join(x.to_bytes(4, "little") for x in la_blocks),
+            expect="16:c1ea59b1",
+        )
+
+        # Like stock, the region covers the data and stops before the LA save states.
+        printi("Updating end of OTFDEC region")
+        self.internal.replace(
+            0x1_659C,
+            self.external.FLASH_BASE + round_up_page(data_end) - 1,
+            size=4,
+            expect="4:db3e36fa",
+        )
+        del self.external[end:]
+
+    def _erase_savedata(self):
+        self.external.set_range(0x0000, 0x12000, b"\xFF")
+
+    def patch(self):
         self._dump_roms()
         self._dump_backdrops()
 
@@ -376,38 +454,22 @@ class ZeldaGnW(Device, name="zelda"):
             # Disable TIME/CLOCK second beep
             self.external.nop(0x32002E, 1, expect="2:41261d95")
 
-        if False:
-            # This doesn't quite work yet
-            # I think RWData stuff probably needs to be updated
-            printd("Compressing and moving LoZ2 JP ROM data to int")
-            compressed_len = self.external.compress(0xB_0000, 0x1E000)
-            self.internal.asm(0xF702, b_w_memcpy_inflate_asm)
-            self.move_to_int(0xB_0000, compressed_len, 0xFD1C)
-
-        printd("Compressing and moving LoZ2 TIMER data to int")
-        compressed_len = self.external.compress(0xD_0000, 0x2000)
-        self.internal.asm(0xF430, b_w_memcpy_inflate_asm, expect="4:625bb93e")
-        self.move_to_int(0xD_0000, compressed_len, 0xFCF8)
-
         if self.args.no_la:
             printi("Removing Link's Awakening (All Languages)")
-            self.external.clear_range(0xD2000, 0x1F4C00)
             self.external[0x315B54] = 0x00  # Ignore LA EN menu selection
             self.external[0x315B58] = 0x00  # Ignore LA FR menu selection
             self.external[0x315B5C] = 0x00  # Ignore LA DE menu selection
             self.external[0x315B60] = 0x00  # Ignore LA JP menu selection
-            # TODO: make this work with moving stuff around, currently just
-            # removing to free up an island of space.
+            # The LA ROM base (la_load): nothing can launch LA any more.
+            self.internal.replace(0x1_4418, b"\x00" * 4, expect="4:5ca874f5")
 
         if self.args.no_sleep_images:
-            self.external.clear_range(0x1F4C00, 0x288120)
+            # backdrop_tick's "no backdrop" path (g_backdrop_index < 0): clear
+            # the frame instead of decoding backdrop_images[index].
+            self.internal.b(0x1_6426, 0x1_6430, expect="2:eb4a57f1")
+            self.rwdata_erase(0x1F_4C00, 0x28_8120 - 0x1F_4C00)
 
-            # setting this to NULL doesn't just display a black image, I
-            # don't think the drawing code has a NULL check.
-            # self.rwdata_erase(0x1f4c00, 0x288120 - 0x1f4c00)
-
-            # TODO: make this work with moving stuff around, currently just
-            # removing to free up an island of space.
+        self._compact_ext()
 
         self.fix_ext_refs()
 

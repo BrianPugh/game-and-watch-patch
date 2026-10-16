@@ -24,17 +24,45 @@ def _val_to_color(val):
         return ""
 
 
-class Lookup(dict):
+class Lookup:
+    """Where moved data went: stock address -> new address.
+
+    Moves are kept as (old, new, size) ranges; a later move of the same bytes
+    wins.
+    """
+
+    def __init__(self):
+        self.ranges = []
+
+    def add(self, old: int, new: int, size: int):
+        if size > 0:
+            self.ranges.append((old, new, size))
+
+    def get(self, addr: int, default=None):
+        for old, new, size in reversed(self.ranges):
+            if old <= addr < old + size:
+                return new + addr - old
+        return default
+
+    def __getitem__(self, addr: int) -> int:
+        new = self.get(addr)
+        if new is None:
+            raise KeyError(addr)
+        return new
+
+    def __contains__(self, addr: int) -> bool:
+        return self.get(addr) is not None
+
+    def __bool__(self):
+        return bool(self.ranges)
+
     def __repr__(self):
         substrs = []
         substrs.append("{")
-        for k, v in sorted(self.items()):
-            k_color = _val_to_color(k)
-            v_color = _val_to_color(v)
-
+        for old, new, size in sorted(self.ranges):
             substrs.append(
-                f"    {k_color}0x{k:08X}{Style.RESET_ALL}: "
-                f"{v_color}0x{v:08X}{Style.RESET_ALL},"
+                f"    {_val_to_color(old)}0x{old:08X}{Style.RESET_ALL} +0x{size:X}: "
+                f"{_val_to_color(new)}0x{new:08X}{Style.RESET_ALL},"
             )
         substrs.append("}")
         return "\n".join(substrs)
@@ -474,6 +502,10 @@ class Device:
     # packed, which can grow them a few bytes (7 B for Mario at lc=0).
     COMPRESSED_FIXUP_SLACK = 64
 
+    # ext_drop() shifts the data after a dropped range by a multiple of this,
+    # which keeps any stock alignment up to a flash sector.
+    EXT_SHIFT_ALIGN = 0x1000
+
     def __init_subclass__(cls, name, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.name = name
@@ -492,6 +524,8 @@ class Device:
         self.compressed_memory._lookup = self.lookup
 
         self.ext_offset = 0
+        # Stock external offset up to which ext_keep()/ext_drop() have placed data.
+        self.ext_cursor = 0
         self.int_pos = 0
         self.compressed_memory_pos = 0
         # [start, end) internal offsets of removed stock code, reusable for data.
@@ -616,10 +650,7 @@ class Device:
         if delete:
             src.clear_range(src_offset, src_offset + size)
 
-        for i in range(size):
-            self.lookup[src.FLASH_BASE + src_offset + i] = (
-                dst.FLASH_BASE + dst_offset + i
-            )
+        self.lookup.add(src.FLASH_BASE + src_offset, dst.FLASH_BASE + dst_offset, size)
 
         return size
 
@@ -764,6 +795,29 @@ class Device:
         new_loc = ext + self.ext_offset
 
         return new_loc
+
+    def ext_keep(self, end: int):
+        """Shift the stock external data [ext_cursor, end) down by ext_offset.
+
+        With ``ext_drop`` this compacts the external image in address order:
+        every stock byte from the cursor on is either kept (shifted) or dropped.
+        """
+        start = self.ext_cursor
+        if end > start and self.ext_offset:
+            self.external.move(start, self.ext_offset, size=end - start)
+        self.ext_cursor = max(start, end)
+
+    def ext_drop(self, start: int, end: int):
+        """Leave the stock external data [start, end) out of the image.
+
+        Data from the cursor to ``start`` is kept. The shift only grows in
+        ``EXT_SHIFT_ALIGN`` steps; the rest of the range stays as zero padding.
+        """
+        self.ext_keep(start)
+        n = (end - start) // self.EXT_SHIFT_ALIGN * self.EXT_SHIFT_ALIGN
+        self.external.clear_range(start, end)
+        self.ext_cursor = start + n
+        self.ext_offset -= n
 
     def move_ext(self, ext, size, reference):
         """Attempt to relocate in priority order:

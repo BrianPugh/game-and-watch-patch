@@ -111,8 +111,32 @@ LAYOUT = {
             (0x9003_0000, 0x900D_2000),  # LoZ1/LoZ2 (EN/JP) ROMs and the timer data
             (0x900D_2000, 0x901F_4C00),  # Link's Awakening ROMs
             (0x901F_4C00, 0x9028_8120),  # 11 backdrop images
+            (0x9028_8120, 0x902B_FA00),  # app_load_pcm (s16 PCM)
+            (0x902B_FA00, 0x902C_ADE0),  # ui_tiles (4bpp)
+            (0x902E_9064, 0x9030_A7F4),  # clock_sprite_gfx
             # Unencrypted tail: empty, reset-cleared and LA scratch areas.
             (0x9032_54A0, 0x9040_0000),
+        ],
+        # External data that holds pointers into external flash (ext_refs).
+        "ext_pointer_tables": [
+            # Sprite frames: 145 x 16 B, two graphics pointers at +8 and +12.
+            (0x902D_5710, 0x902D_6020),
+            # Sprite descriptors: 432 x 16 B, a frame pointer at +12.
+            (0x902D_6020, 0x902D_7B20),
+            (0x902D_F160, 0x902D_F1B0),  # menu_variant_info: 10 x 8 B, pointer at +4
+            (0x902E_3BD4, 0x902E_3C24),  # Vermin sprite lists
+            (0x902E_3C78, 0x902E_3D10),  # Vermin (pointer, u32) pairs
+        ],
+        # Pointer-like words that aren't pointers (ext_refs ignores them).
+        "not_ext_pointers": [
+            (0x902D_CCA4, 0x902D_CCA8),  # timer byte pairs
+            (0x902E_35F8, 0x902E_35FC),  # bit-pattern table
+            (0x9030_AA48, 0x9030_AB00),  # 16-bit coordinate curves
+            # clock_patch_list: LoZ1 ROM patches (6502 code).
+            (0x9030_AEF4, 0x9030_B0E8),
+            # Code the descent doesn't reach (a branch table of unrolled
+            # `strb.w r9, [r0, #n]` after an unconditional branch).
+            (0x9031_D17A, 0x9031_D404),
         ],
     },
 }

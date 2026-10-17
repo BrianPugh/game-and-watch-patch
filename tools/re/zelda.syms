@@ -69,6 +69,8 @@
 0x0000920c func gb_ppu_render_line                   # scanline renderer (UNVERIFIED); runs in ITCM; copied from external flash 0x90314c7c by itcm_overlay_load
 0x0000927e func gb_ppu_render_bg                     # (UNVERIFIED); runs in ITCM; copied from external flash 0x90314cee by itcm_overlay_load
 0x000093e6 func gb_ppu_render_sprites                # (UNVERIFIED); runs in ITCM; copied from external flash 0x90314e56 by itcm_overlay_load
+0x00009f3a func ui_draw_cursor                       # (row, color): the overlay's row cursor arrow, nothing if color is 0 (the blink phase); runs in ITCM; copied from external flash 0x903159aa by itcm_overlay_load
+0x00009f5a func ui_draw_text                         # (dst, tiles, n): n u16 font tiles (A-P 0xa240.., Q-Z 0xa280.., space 0x9442) left to right; runs in ITCM; copied from external flash 0x903159ca by itcm_overlay_load
 0x0000a094 func ui_draw_tile_string                  # (dst, tiles, n, stride): like Mario's; ui_blit per tile (0x90315a2e); runs in ITCM; copied from external flash 0x90315b04 by itcm_overlay_load
 0x0000a206 func ui_overlay_reset                     # clears the overlay edit/blink flags; runs in ITCM; copied from external flash 0x90315c76 by itcm_overlay_load
 0x0000a22a func ui_close_overlay_save_settings       # writes nvram ids 7 (brightness | ?<<16), 8, 9 and 6 through the nvram_set veneer; runs in ITCM; copied from external flash 0x90315c9a by itcm_overlay_load

@@ -58,6 +58,7 @@ from pathlib import Path
 from .compression import lzma_compress
 from .exception import InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
+from .thumb_asm import assemble as thumb_assemble
 from .tileset import decode_backdrop
 from .utils import fds_remove_crc_gaps, printd, printi, round_up_page, round_up_word
 
@@ -90,6 +91,9 @@ OVERLAY_COPIES = [
     (0xFD5C, 0x31_56EC, 0x1B44),
 ]
 OVERLAY_START, OVERLAY_END = 0x30_B4A0, 0x31_7230
+# The last copy is the menu UI, linked at ITCM 0x9C7C. ITCM past its end is
+# never loaded, so veneers from ITCM to our code are appended to it.
+ITCM_MENU, ITCM_MENU_SRC, ITCM_MENU_SIZE = 0x9C7C, 0x31_56EC, 0x1B44
 
 
 class ZeldaGnW(Device, name="zelda"):
@@ -151,7 +155,7 @@ class ZeldaGnW(Device, name="zelda"):
         group.add_argument(
             "--no-second-beep",
             action="store_true",
-            help="Remove the second beep in TIME/CLOCK.",
+            help="Default the clock's SECOND BEEP setting (PAUSE/SET menu) to OFF.",
         )
         group.add_argument(
             "--no-hour-tune",
@@ -176,6 +180,65 @@ class ZeldaGnW(Device, name="zelda"):
         )
         self.args = parser.parse_args()
         return self.args
+
+    def _itcm_menu_patch(self, itcm, code, expect):
+        """Assemble ``code`` at ITCM address ``itcm`` in the menu UI copy."""
+        offset = ITCM_MENU_SRC + itcm - ITCM_MENU
+        self.external.replace(offset, bytes(thumb_assemble(code, itcm)), expect=expect)
+
+    def _itcm_veneer(self, symbol):
+        """ITCM address of a new ``ldr.w pc`` veneer to one of our functions."""
+        itcm = ITCM_MENU + ITCM_MENU_SIZE + len(self.itcm_tail)
+        target = self.internal.address(symbol) | 1
+        self.itcm_tail += bytes(thumb_assemble("ldr.w pc, [pc, #0]"))
+        self.itcm_tail += target.to_bytes(4, "little")
+        return itcm
+
+    def _second_beep_setting(self):
+        """SECOND BEEP ON/OFF: a 5th row in the clock's PAUSE/SET overlay.
+
+        The setting is bit 2 of nvram word +0x28 (nvram_ram 0x240ff000). See
+        second_beep_draw/second_beep_input in main.c.
+        """
+        printi("Add a SECOND BEEP ON/OFF row to the clock settings overlay.")
+        # clock_tick queues the hour tune (0x60) or the second beep (0x40) into
+        # LoZ1's sound register (nes RAM 0x603) when the second changes. The
+        # 4 hour-tune bytes are [r8, #24..27] (r1 = byte 27); r2/r3 are dead
+        # after the block (the next call takes r0/r1).
+        hour = "b 0x90320016" if self.args.no_hour_tune else "cbnz r2, 0x90320016"
+        block = "; ".join(
+            [
+                "add.w r3, r9, #0x600",
+                "ldr.w r2, [r8, #24]",
+                hour,
+                "movs r0, #0x60",
+                "strb r0, [r3, #3]",
+                "b 0x90320030",
+                # 0x90320016: the second beep, unless the setting is off.
+                "ldr.w r0, [pc, #0x10]",
+                "ldr.w r0, [r0]",
+                "lsls r0, r0, #29",
+                "bmi 0x90320030",
+                "movs r1, #0x40",
+                "strb r1, [r3, #3]",
+                "b 0x90320030",
+            ]
+        )
+        code = bytes(thumb_assemble(block, 0x9032_0006))
+        code += (0x240F_F028).to_bytes(4, "little") + bytes(thumb_assemble("nop; nop"))
+        assert len(code) == 0x2A, len(code)
+        self.external.replace(0x32_0006, code, expect="42:70a3d5df")
+
+        # settings_clock_handle_input: 5 rows; row 4 goes to second_beep_input
+        # (rows past 3 used to reset the cursor to 0).
+        self._itcm_menu_patch(0xA620, "movs r1, #5", expect="2:69dcc7a5")
+        veneer = self._itcm_veneer("settings_row_input")
+        self._itcm_menu_patch(0xA63E, f"b.w #{veneer:#x}", expect="4:59165ff1")
+        # settings_clock_draw: rows 24 lines apart instead of 32 (main.c's
+        # SETTINGS_ROW_STEP), and second_beep_draw after the AUTO SLEEP text.
+        self._itcm_menu_patch(0xAF3E, "mov.w r4, #0x1e00", expect="4:a97cfd34")
+        veneer = self._itcm_veneer("settings_draw_tail")
+        self._itcm_menu_patch(0xAFBA, f"b.w #{veneer:#x}", expect="4:7ab9482a")
 
     def _flash_roms(self):
         # English Zelda 1
@@ -471,7 +534,14 @@ class ZeldaGnW(Device, name="zelda"):
             src = self.overlay_pos + offset - OVERLAY_START
             if self.internal.int(literal) != self.external.FLASH_BASE + src:
                 raise ValueError(f"Unexpected overlay literal at 0x{literal:X}")
-            blobs.append(lzma_compress(bytes(self.external[src : src + size])))
+            data = bytes(self.external[src : src + size])
+            if offset == ITCM_MENU_SRC:
+                data += self.itcm_tail
+            blobs.append(lzma_compress(data))
+        # itcm_overlay_load's size for the menu UI copy.
+        self.internal.replace(
+            0xFD58, ITCM_MENU_SIZE + len(self.itcm_tail), size=4, expect="4:25415ce7"
+        )
         self.external.clear_range(self.overlay_pos, len(self.external))
         data_end = self.overlay_pos
         for (literal, offset, size), blob in zip(OVERLAY_COPIES, blobs):
@@ -532,6 +602,8 @@ class ZeldaGnW(Device, name="zelda"):
         self.external.set_range(0x0000, 0x12000, b"\xFF")
 
     def patch(self):
+        self.itcm_tail = bytearray()  # _itcm_veneer()'s veneers
+
         if self.args.relocate_stock:
             from .relocate import Relocation
 
@@ -576,22 +648,19 @@ class ZeldaGnW(Device, name="zelda"):
         self.internal.nop(0x1_81A8, 2, expect="4:709be8de")
         # nvram_init's default for id 7 (brightness | volume << 16), as on Mario,
         # so a commit before the settings are first saved doesn't bring 7 back.
-        self.internal.asm(0xB6D8, "mov.w r1, #0x00000", expect="4:42e9afc9")
+        # Bit 2 is the SECOND BEEP setting (set: off).
+        second_beep_off = 4 if self.args.no_second_beep else 0
+        self.internal.asm(
+            0xB6D8, f"mov.w r1, #{second_beep_off:#x}", expect="4:42e9afc9"
+        )
+
+        self._second_beep_setting()
 
         if not self.args.encrypt:
             # Disable OTFDEC
             self.internal.nop(0x16536, 2, expect="4:3c5c53f3")
             self.internal.nop(0x1653A, 1, expect="2:fdbf91e5")
             self.internal.nop(0x1653C, 1, expect="2:f588a917")
-
-        if self.args.no_hour_tune:
-            # Disable TIME/CLOCK hour tune
-            # Change 'bne' to 'b'. Will replace the 'hour tune' with a 'second beep'
-            self.external[0x320025] = 0xE0
-
-        if self.args.no_second_beep:
-            # Disable TIME/CLOCK second beep
-            self.external.nop(0x32002E, 1, expect="2:41261d95")
 
         if self.args.no_la:
             printi("Removing Link's Awakening (All Languages)")

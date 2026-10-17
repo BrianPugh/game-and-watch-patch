@@ -89,7 +89,7 @@ Each device class adds its own CLI arguments via `argparse()` method.
 - `bl()`, `b()`, `nop()` - ARM branch/nop helpers
 - `compress()` - LZMA compression for data relocation
 
-Data relocation priority: compressed memory (SRAM3) > internal flash > external flash.
+Data relocation priority: compressed memory (SRAM3) > internal flash > external flash. Each target is a `Region` (`patches/layout.py`) on the Device: `int_space` (cursor from `__flash_end__`, holes from `free_int`, room held back for the compressed rwdata/SRAM3 images), `sram3_space`, `ext_space` (`ExtRegion`, in-order compaction) and `bank2_space`. Every allocation records its owner and label.
 
 Other key modules: `compression.py` (LZMA/LZ77), `ips.py` (IPS patch format), `tileset.py` (NES graphics), `utils.py` (helpers).
 
@@ -97,7 +97,7 @@ Other key modules: `compression.py` (LZMA/LZ77), `ips.py` (IPS patch format), `t
 - Internal flash: up to 256KB (128KB standard, 256KB with `--extended`)
 - External flash: device-dependent (4MB Zelda stock, upgradeable)
 - Our RAM (`.data`/`.bss`, from `build/device.ld`): Mario `0x30010000`, Zelda `0x240d3560`-`0x240d6000`. Most Zelda AXI RAM that looks free is stock's per-app state (`app_state_*` in `zelda.syms`): zeroed at boot after our init and saved on every app switch, so anything we keep there must be boot-only. Find free RAM with `ram_probe.py --stock` (the patched-build probe skips our own region).
-- Zelda external flash (`ZeldaGnW._compact_ext`/`_finish_ext`): 0-0x20000 (NVRAM banks, save slots, factory scratch) stays put; the data from 0x20000 is compacted with `Device.ext_keep`/`ext_drop`/`ext_pack` (shifts in 4 KB steps, `EXT_SHIFT_ALIGN`). Blocks stock memcpy's into RAM (NES ROMs, clock graphics, the ITCM/DTCM overlay) are LZMA'd and loaded with `memcpy_inflate`; the overlay holds pointers, so it's compressed after `fix_ext_refs()` and appended at the end. Then the LA save states (4 x 32 KB, 32 KB aligned for `factory_reset_erase_saves`' block erases) follow it. Stock reads saves by flash offset only below 0x20000 and at the LA save states.
+- Zelda external flash (`ZeldaGnW._compact_ext`/`_finish_ext`): 0-0x20000 (NVRAM banks, save slots, factory scratch) stays put; the data from 0x20000 is compacted with `ExtRegion.keep`/`drop`/`pack` (`patches/layout.py`, `self.ext_space`; shifts in 4 KB steps, `EXT_SHIFT_ALIGN`, word steps for Mario). Blocks stock memcpy's into RAM (NES ROMs, clock graphics, the ITCM/DTCM overlay) are LZMA'd and loaded with `memcpy_inflate`; the overlay holds pointers, so it's compressed after `fix_ext_refs()` and appended at the end. Then the LA save states (4 x 32 KB, 32 KB aligned for `factory_reset_erase_saves`' block erases) follow it. Stock reads saves by flash offset only below 0x20000 and at the LA save states.
 - LZMA uses lc=0: the props in `patches/compression.py` and `LZMA_PROP_DATA`/`LZMA_BUF_SIZE` in `main.c` must match. The heap is only the probability model (the output buffer is the dictionary), so lc sets its size.
 - The SRAM3 packer fills internal flash to within bytes, and the pointer fixups after packing can grow the compressed blobs; `Device.COMPRESSED_FIXUP_SLACK` covers that. A `NotEnoughSpaceError` a few bytes past 0x20000 at `write_table_and_data` means it was too small.
 - Firmware metadata at internal vector table offset `0x01B8`: 4-byte structure encoding external flash size and device type (magic value `0x4` distinguishes from executable code)

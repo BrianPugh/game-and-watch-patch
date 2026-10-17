@@ -4,6 +4,7 @@ import pytest
 
 import patches.xrefs
 from patches.firmware import Device, Firmware, Lookup
+from patches.layout import ExtRegion, Region
 
 
 class Int(Firmware):
@@ -39,7 +40,7 @@ def make_device(refs, monkeypatch, extra=()):
     device.lookup = Lookup()
     for fw in (device.internal, device.external, device.compressed_memory):
         fw._lookup = device.lookup
-    device.int_freed = []
+    device.int_space = Region("internal", Int.FLASH_BASE, Int.FLASH_LEN)
     device.expected_refs = []
     device.ext_refs_fixed = False
     device._stock_map = object()
@@ -92,7 +93,7 @@ def test_leaves_unmoved_erased_and_freed_sites(monkeypatch):
     put(device.internal, 0x10, 0x9000_0080)  # data that doesn't move
     put(device.internal, 0x14, 0)  # a patch erased this reference
     put(device.internal, 0x18, 0x9000_0040)
-    device.int_freed.append((0x18, 0x1C))  # stock code the patcher removed
+    device.int_space.free(0x18, 0x1C)  # stock code the patcher removed
     device._move(device.compressed_memory, 0, device.external, 0x40, 4)
 
     assert device.fix_ext_refs() == {}
@@ -158,18 +159,16 @@ def test_lookup_ranges_latest_move_wins():
         lookup[0x9000_0048]
 
 
-def test_ext_drop_shifts_the_rest_in_aligned_steps(monkeypatch):
+def test_drop_shifts_the_rest_in_aligned_steps(monkeypatch):
     device = make_device({0x0800_0010: 0x9000_00C4}, monkeypatch)
-    device.EXT_SHIFT_ALIGN = 0x20
-    device.ext_offset = 0
-    device.ext_cursor = 0x10
+    ext = ExtRegion("external", device.external, 0x20, cursor=0x10)
     device.external[0x00:0x100] = bytes(range(0x100))
     put(device.internal, 0x10, 0x9000_00C4)
 
-    device.ext_drop(0x40, 0x88)  # 0x48 bytes: the shift grows by 0x40
-    device.ext_keep(0xD0)
+    ext.drop(0x40, 0x88)  # 0x48 bytes: the shift grows by 0x40
+    ext.keep(0xD0)
 
-    assert device.ext_offset == -0x40
+    assert ext.shift == -0x40
     assert device.external[0x00:0x40] == bytes(range(0x40))
     # The 8 bytes left of the dropped range are zero padding.
     assert device.external[0x40:0x48] == b"\x00" * 8
@@ -179,24 +178,22 @@ def test_ext_drop_shifts_the_rest_in_aligned_steps(monkeypatch):
     assert word(device.internal, 0x10) == 0x9000_0084
 
 
-def test_ext_pack_maps_each_block_and_shifts_the_rest(monkeypatch):
+def test_pack_maps_each_block_and_shifts_the_rest(monkeypatch):
     device = make_device(
         {0x0800_0010: 0x9000_0060, 0x0800_0014: 0x9000_00C4}, monkeypatch
     )
-    device.EXT_SHIFT_ALIGN = 0x20
-    device.ext_offset = 0
-    device.ext_cursor = 0x10
+    ext = ExtRegion("external", device.external, 0x20, cursor=0x10)
     device.external[0x00:0x100] = bytes(range(0x100))
     put(device.internal, 0x10, 0x9000_0060)
     put(device.internal, 0x14, 0x9000_00C4)
-    device.ext_drop(0x20, 0x40)  # shift 0x20 before the packed range
+    ext.drop(0x20, 0x40)  # shift 0x20 before the packed range
 
     # 0x50 stock bytes -> 2 blocks of 6 (word aligned to 8) and 4 bytes; the
     # shift grows by 0x40, leaving 0x10 for the 0xC packed bytes.
-    device.ext_pack(0x40, 0x90, [(0x40, b"\xaa" * 6), (0x60, b"\xbb" * 4)])
-    device.ext_keep(0xD0)
+    ext.pack(0x40, 0x90, [(0x40, b"\xaa" * 6), (0x60, b"\xbb" * 4)])
+    ext.keep(0xD0)
 
-    assert device.ext_offset == -0x60
+    assert ext.shift == -0x60
     assert device.external[0x20:0x30] == b"\xaa" * 6 + b"\x00" * 2 + b"\xbb" * 4 + (
         b"\x00" * 4
     )
@@ -206,9 +203,16 @@ def test_ext_pack_maps_each_block_and_shifts_the_rest(monkeypatch):
     assert word(device.internal, 0x14) == 0x9000_0064
 
 
-def test_ext_pack_rejects_blocks_larger_than_the_range(monkeypatch):
+def test_pack_rejects_blocks_larger_than_the_range(monkeypatch):
     device = make_device({}, monkeypatch)
-    device.ext_offset = 0
-    device.ext_cursor = 0
+    ext = ExtRegion("external", device.external, 0x20)
     with pytest.raises(ValueError):
-        device.ext_pack(0x40, 0x48, [(0x40, b"\xaa" * 12)])
+        ext.pack(0x40, 0x48, [(0x40, b"\xaa" * 12)])
+
+
+def test_drop_after_a_partial_drop_counts_from_the_cursor(monkeypatch):
+    device = make_device({}, monkeypatch)
+    ext = ExtRegion("external", device.external, 4)
+    ext.drop(0x00, 0x0B)  # a block moved out; its last 3 bytes stay
+    ext.drop(0x00, 0x20)  # the rest of its stock range
+    assert (ext.cursor, ext.shift) == (0x20, -0x20)

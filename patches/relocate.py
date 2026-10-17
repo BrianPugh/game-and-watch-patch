@@ -114,7 +114,7 @@ class Relocation:
     def freed(self, addr):
         """In stock code the patcher removed; it may hold data now."""
         base = self.device.internal.FLASH_BASE
-        return any(base + s <= addr < base + e for s, e in self.device.int_freed)
+        return self.device.int_space.is_freed(addr - base)
 
     def _count(self, kind):
         self.counts[kind] = self.counts.get(kind, 0) + 1
@@ -293,6 +293,7 @@ class Relocation:
         if out is None:
             raise NotImplementedError("only relocation into bank 2 is supported")
         off = self.dst - BANK2_BASE
+        d.bank2_space.reserve(off, len(moved), d.name, "stock code")
         if len(out) < off + len(moved):
             out.extend(b"\xff" * (off + len(moved) - len(out)))
         out[off : off + len(moved)] = moved

@@ -516,7 +516,7 @@ class ZeldaGnW(Device, name="zelda"):
             palette = self.external[start + 6 : start + 6 + 2 * palette_size]
             blob = bytes(palette).ljust(512, b"\x00") + lzma_compress(img.tobytes())
             blocks.append((start, blob))
-        self.ext_pack(BACKDROP_STARTS[0], BACKDROP_END, blocks)
+        self.ext_space.pack(BACKDROP_STARTS[0], BACKDROP_END, blocks)
         printd(
             f"    {BACKDROP_END - BACKDROP_STARTS[0]} -> "
             f"{sum(round_up_word(len(b)) for _, b in blocks)} bytes"
@@ -526,12 +526,12 @@ class ZeldaGnW(Device, name="zelda"):
         """LZMA the ``size`` bytes at ``start`` and drop the rest up to ``end``."""
         compressed_len = self.external.compress(start, size)
         self._expect_refs(reference, start, compressed_len)
-        self.ext_drop(start + round_up_word(compressed_len), end)
+        self.ext_space.drop(start + round_up_word(compressed_len), end)
 
     def _compact_ext(self):
         """Close the gaps in external flash; _finish_ext() ends the image.
 
-        Everything from 0x20000 on shifts down (``ext_keep``/``ext_drop``), so
+        Everything from 0x20000 on shifts down (``ExtRegion.keep``/``drop``), so
         offsets inside a block, like LA's bank addressing off one ROM base,
         stay intact. Stock leaves 764 KB empty between the data (ENC_END) and
         the LA save states at 0x3E0000; the image now ends at the save states.
@@ -540,7 +540,7 @@ class ZeldaGnW(Device, name="zelda"):
         b_w_memcpy_inflate_asm = "b.w #" + hex(
             0xFFFFFFFE & self.internal.address("memcpy_inflate")
         )
-        self.ext_cursor = 0x2_0000
+        self.ext_space.cursor = 0x2_0000
 
         # Stock memcpy's these into RAM before use, so they're stored LZMA
         # compressed (in place; internal flash is kept for smaller data).
@@ -572,24 +572,24 @@ class ZeldaGnW(Device, name="zelda"):
         compressed_len = self.external.compress(timer, timer_end - timer)
         self.internal.asm(0xF430, b_w_memcpy_inflate_asm, expect="4:625bb93e")
         self.move_to_int(timer, compressed_len, 0xFCF8)
-        self.ext_drop(timer, timer_end)
+        self.ext_space.drop(timer, timer_end)
 
         if self.args.no_la:
-            self.ext_drop(0xD_2000, 0x1F_4C00)
+            self.ext_space.drop(0xD_2000, 0x1F_4C00)
 
         if self.args.no_sleep_images:
-            self.ext_drop(BACKDROP_STARTS[0], BACKDROP_END)
+            self.ext_space.drop(BACKDROP_STARTS[0], BACKDROP_END)
         else:
             self._recompress_backdrops()
 
         # The overlay code holds pointers that fix_ext_refs() rewrites, so it's
         # appended uncompressed for now and compressed by _finish_ext().
         overlay = bytes(self.external[OVERLAY_START:OVERLAY_END])
-        self.ext_drop(OVERLAY_START, OVERLAY_END)
+        self.ext_space.drop(OVERLAY_START, OVERLAY_END)
 
         stock_end = self.external.ENC_END
-        self.ext_keep(stock_end)
-        self.overlay_pos = stock_end + self.ext_offset
+        self.ext_space.keep(stock_end)
+        self.overlay_pos = stock_end + self.ext_space.shift
         self.external[self.overlay_pos : self.overlay_pos + len(overlay)] = overlay
         base = self.external.FLASH_BASE
         self.lookup.add(base + OVERLAY_START, base + self.overlay_pos, len(overlay))
@@ -800,15 +800,7 @@ class ZeldaGnW(Device, name="zelda"):
         self._finish_ext()
 
         # Compress, insert, and reference the modified rwdata
-        self.int_pos += self.internal.rwdata.write_table_and_data(
-            0x1B070, data_offset=self.int_pos
+        rwdata_len = self.internal.rwdata.write_table_and_data(
+            0x1B070, data_offset=self.int_space.pos
         )
-
-        internal_remaining_free = (
-            len(self.internal) - self.int_pos + self.int_hole_space
-        )
-        compressed_memory_free = (
-            len(self.compressed_memory) - self.compressed_memory_pos
-        )
-
-        return internal_remaining_free, compressed_memory_free
+        self.int_space.append(rwdata_len, self.name, "rwdata (LZMA)")

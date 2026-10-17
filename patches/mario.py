@@ -19,7 +19,6 @@ from .utils import (
     printd,
     printe,
     printi,
-    round_down_word,
     round_up_page,
     round_up_word,
     seconds_to_frames,
@@ -29,6 +28,9 @@ build_dir = Path("build")  # TODO: expose this properly or put in better locatio
 
 
 class MarioGnW(Device, name="mario"):
+    # Mario's external data is packed word by word.
+    EXT_SHIFT_ALIGN = 4
+
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
 
@@ -505,7 +507,7 @@ class MarioGnW(Device, name="mario"):
         self.internal.bl(0x665C, "memcpy_inflate", expect="4:919d5894")
         self.move_ext(0x0, compressed_len, 0x7204)
         # Note: the 4 bytes between 7772 and 7776 is padding.
-        self.ext_offset -= 7776 - round_down_word(compressed_len)
+        self.ext_space.drop(0x0, 7776)
 
         # SMB1 ROM (plus loading custom ROM)
         printd("Compressing and moving SMB1 ROM to compressed_memory.")
@@ -611,7 +613,7 @@ class MarioGnW(Device, name="mario"):
             printe("Erasing Mario Song")
             self.external.replace(0x1_2D44, b"\x00" * mario_song_len)
             self.rwdata_erase(0x1_2D44, mario_song_len)
-            self.ext_offset -= mario_song_len
+            self.ext_space.drop(0x1_2D44, 0x1_2D44 + mario_song_len)
 
             self.internal.asm(0x6FC8, "b 0x1c", expect="2:fc6d56af")
         else:
@@ -637,7 +639,7 @@ class MarioGnW(Device, name="mario"):
 
         printe("Moving clock graphics")
         self.move_ext(0x9_8B84, compressed_len, 0x7350)
-        self.ext_offset -= 0x1_0000 - round_down_word(compressed_len)
+        self.ext_space.drop(0x9_8B84, 0xA_8B84)
 
         # Note: the clock uses a different palette; this palette only applies
         # to ingame Super Mario Bros 1 & 2
@@ -677,7 +679,7 @@ class MarioGnW(Device, name="mario"):
                 smb2_addr,
                 b"\x00" * smb2_size,
             )
-            self.ext_offset -= smb2_size
+            self.ext_space.drop(smb2_addr, smb2_end)
 
             # Replace conditional-branch with unconditional
             # TODO: this prevents hardlocking when selecting SMB2 from the menu,
@@ -688,9 +690,7 @@ class MarioGnW(Device, name="mario"):
             compressed_len = self.external.compress(smb2_addr, smb2_size)
             self.internal.bl(0x6A12, "memcpy_inflate", expect="4:9760e95f")
             self.move_to_compressed_memory(smb2_addr, compressed_len, 0x7374)
-            self.ext_offset -= smb2_size - round_down_word(
-                compressed_len
-            )  # Move by the space savings.
+            self.ext_space.drop(smb2_addr, smb2_end)  # Move by the space savings.
 
             # Round to nearest page so that the length can be used as an imm
             compressed_len = round_up_page(compressed_len)
@@ -808,7 +808,7 @@ class MarioGnW(Device, name="mario"):
             self.external.replace(0xC58F8, b"\x00" * total_image_length)
             for reference in references:
                 self.internal.replace(reference, b"\x00" * 4)  # Erase image references
-            self.ext_offset -= total_image_length
+            self.ext_space.drop(0xC58F8, 0xC58F8 + total_image_length)
         else:
             printe("Recompressing sleeping images.")
             # Replace the stock GIF decoder (tail-called at 0x10938) with ours.
@@ -842,7 +842,7 @@ class MarioGnW(Device, name="mario"):
                 self.external.clear_range(start, end)
                 self.external[start : start + len(blob)] = blob
                 self.move_ext(start, len(blob), literals[start])
-                self.ext_offset -= end - start - len(blob)
+                self.ext_space.drop(start, end)
 
         # The TIME graphic of the first-boot PRESS TIME BUTTON screen.
         self.move_to_compressed_memory(0xF4D18, 2880, 0x10960)
@@ -850,27 +850,29 @@ class MarioGnW(Device, name="mario"):
         # An ITCM overlay that game_reload copies with length 0 (literal at
         # 0x08007210), so it's never used.
         self.external.replace(0xF5858, b"\x00" * 34728)
-        self.ext_offset -= 34728
+        self.ext_space.drop(0xF5858, 0xF5858 + 34728)
 
         self.fix_ext_refs()
         if self.relocation:
             self.relocation.fix_ram_images()
 
-        if self.compressed_memory_pos:
+        if self.sram3_space.pos:
             # Compress and copy over compressed_memory
             self.internal.rwdata.append(
-                self.compressed_memory[: self.compressed_memory_pos].copy(),
+                self.compressed_memory[: self.sram3_space.pos].copy(),
                 self.compressed_memory.FLASH_BASE,
             )
 
         # Compress, insert, and reference the modified rwdata
-        self.int_pos += self.internal.rwdata.write_table_and_data(
-            0x17DB4, data_offset=self.int_pos
+        rwdata_len = self.internal.rwdata.write_table_and_data(
+            0x17DB4, data_offset=self.int_space.pos
         )
+        self.int_space.append(rwdata_len, self.name, "rwdata (LZMA)")
 
-        # Shorten the external firmware
-        # This rounds the negative self.ext_offset towards zero.
-        self.ext_offset = round_up_page(self.ext_offset)
+        # Shorten the external firmware. The NVRAM banks go at the end, after
+        # the compacted data; rounding the negative shift towards zero leaves
+        # them page aligned.
+        ext_shift = round_up_page(self.ext_space.shift)
 
         if self.args.no_save:
             # Disable nvram loading
@@ -886,35 +888,26 @@ class MarioGnW(Device, name="mario"):
             # This just skips the body of the nvram_write_bank function
             self.internal.b(0x48BE, 0x4912, expect="2:f02c2fc0")
 
-            self.ext_offset -= 8192
+            ext_shift -= 8192
         else:
             printi("Update NVRAM read addresses")
             self.internal.asm(
                 0x4856,
                 "ite ne; "
-                f"movne.w r4, #{hex(0xff000 + self.ext_offset)}; "
-                f"moveq.w r4, #{hex(0xfe000 + self.ext_offset)}",
+                f"movne.w r4, #{hex(0xff000 + ext_shift)}; "
+                f"moveq.w r4, #{hex(0xfe000 + ext_shift)}",
                 expect="10:08ae9d3d",
             )
             printi("Update NVRAM write addresses")
             self.internal.asm(
                 0x48C0,
                 "ite ne; "
-                f"movne.w r4, #{hex(0xff000 + self.ext_offset)}; "
-                f"moveq.w r4, #{hex(0xfe000 + self.ext_offset)}",
+                f"movne.w r4, #{hex(0xff000 + ext_shift)}; "
+                f"moveq.w r4, #{hex(0xfe000 + ext_shift)}",
                 expect="10:08ae9d3d",
             )
 
         # Finally, shorten the firmware
         printi("Updating end of OTFDEC pointer")
-        self.internal.add(0x1_06EC, self.ext_offset, expect="4:0e03246b")
-        self.external.shorten(self.ext_offset)
-
-        internal_remaining_free = (
-            len(self.internal) - self.int_pos + self.int_hole_space
-        )
-        compressed_memory_free = (
-            len(self.compressed_memory) - self.compressed_memory_pos
-        )
-
-        return internal_remaining_free, compressed_memory_free
+        self.internal.add(0x1_06EC, ext_shift, expect="4:0e03246b")
+        self.external.shorten(ext_shift)

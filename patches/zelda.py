@@ -59,7 +59,13 @@ from .compression import lzma_compress
 from .exception import InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
 from .thumb_asm import assemble as thumb_assemble
-from .tileset import decode_backdrop
+from .tileset import (
+    ZELDA_GAME_SELECT_PALETTE,
+    ZELDA_ICON_ROLES,
+    decode_backdrop,
+    png_to_icon_4bpp,
+    render_label_icon,
+)
 from .utils import fds_remove_crc_gaps, printd, printi, round_up_page, round_up_word
 
 build_dir = Path("build")  # TODO: expose this properly or put in better location
@@ -169,6 +175,28 @@ class ZeldaGnW(Device, name="zelda"):
             help="Remove the factory CHARGE AND KEY TEST screens (~9KB of internal code).",
         )
 
+        group = parser.add_argument_group("Game-select menu")
+        group.add_argument(
+            "--game-select-dual-boot",
+            action="store_true",
+            help="Add a row to the GAME menu that launches the dual-boot target "
+            "(same as LEFT+GAME). Only shown if a valid target is flashed.",
+        )
+        mgroup = group.add_mutually_exclusive_group()
+        mgroup.add_argument(
+            "--game-select-dual-boot-icon",
+            type=Path,
+            default=Path(__file__).parent / "assets" / "retro_go_icon_zelda.png",
+            help="96x32 image for the dual-boot menu row; colors are mapped to the "
+            "nearest menu palette color. Defaults to a Retro-Go logo.",
+        )
+        mgroup.add_argument(
+            "--game-select-dual-boot-label",
+            type=str,
+            default=None,
+            help="Instead of an image, draw this text on the dual-boot menu row's icon.",
+        )
+
         group = parser.add_argument_group("Experimental")
         group.add_argument(
             "--relocate-stock",
@@ -181,9 +209,13 @@ class ZeldaGnW(Device, name="zelda"):
         self.args = parser.parse_args()
         return self.args
 
+    def _itcm_menu_offset(self, itcm):
+        """External flash offset of ITCM address ``itcm`` in the menu UI copy."""
+        return self.overlay_pos + ITCM_MENU_SRC - OVERLAY_START + itcm - ITCM_MENU
+
     def _itcm_menu_patch(self, itcm, code, expect):
         """Assemble ``code`` at ITCM address ``itcm`` in the menu UI copy."""
-        offset = ITCM_MENU_SRC + itcm - ITCM_MENU
+        offset = self._itcm_menu_offset(itcm)
         self.external.replace(offset, bytes(thumb_assemble(code, itcm)), expect=expect)
 
     def _itcm_veneer(self, symbol):
@@ -239,6 +271,46 @@ class ZeldaGnW(Device, name="zelda"):
         self._itcm_menu_patch(0xAF3E, "mov.w r4, #0x1e00", expect="4:a97cfd34")
         veneer = self._itcm_veneer("settings_draw_tail")
         self._itcm_menu_patch(0xAFBA, f"b.w #{veneer:#x}", expect="4:7ab9482a")
+
+    def _game_select_dual_boot(self):
+        """DUAL BOOT as a 6th game-select row, scrolled into a 5-row window.
+
+        See the Zelda section of game_select.c. Runs after fix_ext_refs(), so
+        the menu_rows literals hold their final address.
+        """
+        printi("Add dual-boot entry to the game-select menu.")
+        # game_select_handle_input's UP/DOWN step over the 5 rows.
+        veneer = self._itcm_veneer("game_select_row_step")
+        self._itcm_menu_patch(0xA576, f"bl #{veneer:#x}", expect="4:9be285a5")
+        # ui_handle_input's call to game_select_handle_input.
+        veneer = self._itcm_veneer("game_select_handle_input")
+        self._itcm_menu_patch(0xA886, f"bl #{veneer:#x}", expect="4:3066bdda")
+        # ui_render_overlay's call to game_select_draw.
+        veneer = self._itcm_veneer("game_select_draw")
+        self._itcm_menu_patch(0xB532, f"bl #{veneer:#x}", expect="4:937c01f9")
+        # game_select_draw's 2 loads of menu_rows (0x0000acfa, 0x0000ad76) use
+        # the literal at 0x0000b788, which nothing else reads: point it at the
+        # rows in the window. 0x0000ac60 holds menu_rows for everything else.
+        literal = self._itcm_menu_offset(0xB788)
+        menu_rows = self.external.int(self._itcm_menu_offset(0xAC60))
+        if self.external.int(literal) != menu_rows:
+            raise ValueError("game_select_draw's menu_rows literal moved")
+        self.external.replace(
+            literal, self.internal.address("game_select_view_rows"), size=4
+        )
+
+        if self.args.game_select_dual_boot_label:
+            icon = render_label_icon(
+                self.args.game_select_dual_boot_label, 96, 32, ZELDA_ICON_ROLES
+            )
+        else:
+            icon = png_to_icon_4bpp(
+                self.args.game_select_dual_boot_icon, 96, 32, ZELDA_GAME_SELECT_PALETTE
+            )
+        self.internal.replace(
+            self.internal.address("GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
+            icon,
+        )
 
     def _flash_roms(self):
         # English Zelda 1
@@ -603,6 +675,7 @@ class ZeldaGnW(Device, name="zelda"):
 
     def patch(self):
         self.itcm_tail = bytearray()  # _itcm_veneer()'s veneers
+        self.overlay_pos = OVERLAY_START  # Until _compact_ext() moves it.
 
         if self.args.relocate_stock:
             from .relocate import Relocation
@@ -718,6 +791,8 @@ class ZeldaGnW(Device, name="zelda"):
         self._compact_ext()
 
         self.fix_ext_refs()
+        if self.args.game_select_dual_boot:
+            self._game_select_dual_boot()
         if self.relocation:
             # Before _finish_ext() compresses the ITCM overlay.
             self.relocation.fix_ram_images()

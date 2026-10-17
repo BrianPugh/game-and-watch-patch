@@ -40,7 +40,7 @@ CONFIGS = {
     "mario_clock_only": "--device=mario --clock-only --disable-sleep --debug",
     "zelda": "--device=zelda",
     "zelda_options": "--device=zelda --no-la --no-sleep-images --no-factory-test "
-    "--no-second-beep --no-hour-tune --encrypt --debug",
+    "--no-second-beep --no-hour-tune --encrypt --debug --game-select-dual-boot",
     "zelda_relocate": "--device=zelda --relocate-stock=0x08120000",
 }
 

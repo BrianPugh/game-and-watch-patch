@@ -24,6 +24,7 @@ this patcher):
 * ``b      <target>``                        -- B, T2 (narrow)
 * ``b<cond> <target>``                       -- B, T1 (narrow conditional, e.g. ``blt``)
 * ``b.w    #<target>``                       -- B, T4 (wide)
+* ``bl     #<target>``                       -- BL, T1
 * ``it``/``itt``/``ite``/...                 -- IT block
 * ``nop``                                    -- NOP, T1
 
@@ -412,14 +413,16 @@ def _b_cond(cond, ops, addr):
     return _emit16(0xD000 | (_CONDITIONS[cond] << 8) | (imm & 0xFF))
 
 
-def _b_w(ops, addr):
+def _b_w(ops, addr, name="b.w", link=False):
     if len(ops) != 1:
-        raise ThumbAssemblyError("b.w expects a single target")
+        raise ThumbAssemblyError(f"{name} expects a single target")
     offset = _branch_target(ops[0]) - (addr + 4)
     if offset & 1:
         raise ThumbAssemblyError("branch target must be halfword-aligned")
     if not -(1 << 24) <= offset < (1 << 24):
-        raise ThumbAssemblyError(f"b.w target out of +/-16MB range (offset {offset})")
+        raise ThumbAssemblyError(
+            f"{name} target out of +/-16MB range (offset {offset})"
+        )
     s = (offset >> 24) & 1
     i1 = (offset >> 23) & 1
     i2 = (offset >> 22) & 1
@@ -428,7 +431,7 @@ def _b_w(ops, addr):
     j1 = (~(i1 ^ s)) & 1
     j2 = (~(i2 ^ s)) & 1
     hw1 = 0xF000 | (s << 10) | imm10
-    hw2 = 0x9000 | (j1 << 13) | (j2 << 11) | imm11
+    hw2 = (0xD000 if link else 0x9000) | (j1 << 13) | (j2 << 11) | imm11
     return _emit32(hw1, hw2)
 
 
@@ -508,6 +511,8 @@ def _assemble_one(text: str, addr: int) -> List[int]:
         return _sub_sp(ops)
     if mnemonic == "b.w":
         return _b_w(ops, addr)
+    if mnemonic == "bl":
+        return _b_w(ops, addr, "bl", link=True)
     if mnemonic == "b":
         return _b(ops, addr)
     b_cond = _B_COND_RE.match(mnemonic)

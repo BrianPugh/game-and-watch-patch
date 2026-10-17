@@ -16,6 +16,12 @@ Usage:
 
 With ``--relocate-stock=0x08120000``, add ``--bank2-image
 build/internal_flash_patched_bank2.bin --stock-offset 0x120000``.
+
+For a ``--game-select-dual-boot`` build, ``--dual-boot spin`` puts a tiny
+valid image in bank 2 (``b .`` at 0x08100008) and checks the DUAL BOOT row
+after the games: 6 rows that wrap, LEFT/RIGHT inert on it, a carousel slide
+while the window is scrolled, and A ending with the CPU spinning in bank 2.
+``--dual-boot erased`` checks that the row is hidden (5 rows).
 """
 
 import argparse
@@ -35,7 +41,10 @@ APP_ID = 0x2000AB9D  # g_app_id
 APP_FIRST_BOOT, APP_CLOCK, APP_MENU = 2, 4, 0x12
 UI_STATE = 0x2001A7BC
 UI_ROW = UI_STATE + 0x2A  # u8 row cursor
+UI_SLIDE = UI_STATE + 0x2C  # s8 carousel slide direction, 0 when idle
 UI_VARIANT = UI_STATE + 0x2D  # u8 chosen variant of each row, stride 2
+DUAL_BOOT_ROW = 5
+BANK2_SPIN_PC = 0x0810_0008
 
 # (name, menu row, variant id, g_app_id); rows are menu_rows in zelda.syms.
 GAMES = [
@@ -83,7 +92,62 @@ def launch(d: Driver, row: int, variant: int, app_id: int):
     d.press_until("A", lambda: app(d) == app_id, f"g_app_id {app_id}")
 
 
-def run(d: Driver, games, run_frames: int) -> bool:
+def step(d: Driver, buttons: str):
+    cur = d.read8(UI_ROW)
+    d.press_until(buttons, lambda: d.read8(UI_ROW) != cur, "the row cursor to move")
+
+
+def dual_boot(d: Driver, bank2: str) -> bool:
+    ok = True
+    d.press_until("GAME", lambda: app(d) == APP_MENU, "the game-select menu")
+    while d.read8(UI_ROW) != 0:
+        step(d, "UP")
+    rows = []
+    for _ in range(6):
+        step(d, "DOWN")
+        rows.append(d.read8(UI_ROW))
+    if bank2 == "erased":
+        d.shot("90_menu_no_dual_boot")
+        return check(rows == [1, 2, 3, 4, 0, 1], f"DUAL BOOT row hidden (DOWN: {rows})")
+    ok &= check(rows == [1, 2, 3, 4, 5, 0], f"6 rows, DOWN wraps (DOWN: {rows})")
+    step(d, "UP")
+    ok &= check(
+        d.read8(UI_ROW) == DUAL_BOOT_ROW, "UP from the first row wraps to DUAL BOOT"
+    )
+    d.shot("90_menu_dual_boot")
+
+    # Everything from the slide offset on, past the blink counter (+0x08).
+    before = d.read(UI_STATE + 0x28, 0x28)
+    d.tap("LEFT")
+    d.tap("RIGHT")
+    after = d.read(UI_STATE + 0x28, 0x28)
+    ok &= check(
+        before == after and app(d) == APP_MENU, "LEFT/RIGHT do nothing on DUAL BOOT"
+    )
+
+    # Slide LA's carousel with the window scrolled down by a row.
+    while d.read8(UI_ROW) != 2:
+        step(d, "UP")
+    variant = d.read8(UI_VARIANT + 2 * 2)
+    d.press_until(
+        "RIGHT",
+        lambda: d.read8(UI_VARIANT + 2 * 2) != variant,
+        "LA's variant to change",
+    )
+    d.wait_until(lambda: d.read8(UI_SLIDE) == 0, "the carousel slide")
+    d.shot("91_menu_scrolled_carousel")
+    ok &= check(app(d) == APP_MENU, "carousel slides in the scrolled window")
+
+    while d.read8(UI_ROW) != DUAL_BOOT_ROW:
+        step(d, "DOWN")
+    d.last_frame("A")  # The firmware resets during this frame.
+    time.sleep(1)
+    pc = d.pc()
+    ok &= check(pc & ~1 == BANK2_SPIN_PC, f"A on DUAL BOOT runs bank 2 (pc=0x{pc:08X})")
+    return ok
+
+
+def run(d: Driver, games, run_frames: int, bank2: str = None) -> bool:
     ok = True
     d.frames("", 30)
     ok &= check(app(d) == APP_FIRST_BOOT, f"first-boot screen (g_app_id={app(d)})")
@@ -107,7 +171,12 @@ def run(d: Driver, games, run_frames: int) -> bool:
             to_clock(d)
         except RuntimeError as e:
             ok &= check(False, f"{name}: {e}")
-            break  # The firmware is likely stuck; later checks would only time out.
+            return ok  # The firmware is likely stuck; later checks would only time out.
+    if bank2:
+        try:
+            ok &= dual_boot(d, bank2)
+        except RuntimeError as e:
+            ok &= check(False, f"dual boot: {e}")
     return ok
 
 
@@ -125,6 +194,11 @@ def main():
     )
     parser.add_argument(
         "--run-frames", type=int, default=300, help="Frames to run each game."
+    )
+    parser.add_argument(
+        "--dual-boot",
+        choices=("spin", "erased"),
+        help="Check a --game-select-dual-boot build with this bank 2 (see above).",
     )
     parser.add_argument("--work-dir", type=Path, default=REPO / "build/emu")
     parser.add_argument(
@@ -158,8 +232,8 @@ def main():
     out_dir = work / "zelda_shots"
     out_dir.mkdir(parents=True, exist_ok=True)
     profile = work / "zelda-profile"
-    bank2 = work / "bank2_erased.bin"
-    make_bank2(bank2, "erased", args.bank2_image)
+    bank2 = work / f"bank2_{args.dual_boot or 'erased'}.bin"
+    make_bank2(bank2, args.dual_boot or "erased", args.bank2_image, BANK2_SPIN_PC)
     make_profile(
         profile,
         bank2,
@@ -173,7 +247,7 @@ def main():
     try:
         time.sleep(3)
         poll_pc = READ_BUTTONS_RETURN + args.stock_offset
-        ok = run(Driver(pid, out_dir, poll_pc), games, args.run_frames)
+        ok = run(Driver(pid, out_dir, poll_pc), games, args.run_frames, args.dual_boot)
     finally:
         stop_instance(pid=pid)
     print(f"Screenshots: {out_dir}")

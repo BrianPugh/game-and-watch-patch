@@ -194,6 +194,7 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=game_select_handle_input \
 		  -Wl,--undefined=game_select_next \
 		  -Wl,--undefined=game_select_prev \
+		  -Wl,--undefined=game_select_row_step \
 		  -Wl,--undefined=loz2_set_chr \
 		  -Wl,--undefined=LOZ2_CHR \
 		  -Wl,--undefined=memcpy_inflate \

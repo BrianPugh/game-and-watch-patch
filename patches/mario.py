@@ -4,6 +4,7 @@ from PIL import Image
 
 import patches
 
+from . import writelog
 from .compression import lzma_compress
 from .exception import BadImageError, InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
@@ -17,7 +18,6 @@ from .tileset import (
 )
 from .utils import (
     fds_remove_crc_gaps,
-    printd,
     printe,
     printi,
     round_up_page,
@@ -459,7 +459,7 @@ class MarioGnW(Device, name="mario"):
             self.internal.asm(0x6FDE, "adds r3, #4", size=2)
 
         if not self.args.encrypt:
-            # Disable OTFDEC
+            printi("Disable OTFDEC (external flash stays unencrypted).")
             self.internal.nop(0x10688, 2, expect="4:83fb638f")
             self.internal.nop(0x1068E, 1, expect="2:f588a917")
 
@@ -555,7 +555,17 @@ class MarioGnW(Device, name="mario"):
                 self.int_pointers.append(table)
                 table += 4
 
-        printd("Compressing and moving stuff stuff to internal firmware.")
+        printi("Compressing and moving stuff stuff to internal firmware.")
+        # game_reload copies it to ITCM 0: the NES CPU core.
+        self.ram_images.append(
+            writelog.RamImage(
+                0,
+                bytes(self.external[:7772]),
+                self.external_stock[:7772],
+                writelog.provenance(self.external, 0, 7772),
+                "NES core",
+            )
+        )
         compressed_len = self.external.compress(
             0x0, 7772
         )  # Dst expects only 7772 bytes, not 7776
@@ -565,7 +575,7 @@ class MarioGnW(Device, name="mario"):
         self.ext_space.drop(0x0, 7776)
 
         # SMB1 ROM (plus loading custom ROM)
-        printd("Compressing and moving SMB1 ROM to compressed_memory.")
+        printi("Compressing and moving SMB1 ROM to compressed_memory.")
         smb1_addr, smb1_size = 0x1E60, 40960
         # Adding the header for patching convenience.
         (build_dir / "smb1.nes").write_bytes(
@@ -896,6 +906,7 @@ class MarioGnW(Device, name="mario"):
                 # literal pool reference relocate through the normal lookup.
                 self.external.clear_range(start, end)
                 self.external[start : start + len(blob)] = blob
+                self.external.compressed.append((start, end - start))
                 self.move_ext(start, len(blob), literals[start])
                 self.ext_space.drop(start, end)
 

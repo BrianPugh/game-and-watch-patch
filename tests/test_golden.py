@@ -1,7 +1,8 @@
 """Whole-build regression test: patch fixed flag sets, compare output hashes.
 
 Each config builds a copy of the working tree (C code and patch) and checks the
-SHA1 of every output image against ``tests/golden.json``. The C build makes the
+SHA1 of every output image against ``tests/golden.json``, and that the patch
+manifest and patched ELF (``patches/manifest.py``) are complete. The C build makes the
 hashes depend on the toolchain, so they're recorded with the gcc version and
 the test skips under a different one. Skips without the stock backups.
 
@@ -20,6 +21,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from elftools.elf.elffile import ELFFile
+
+from patches import syms
 
 REPO = Path(__file__).resolve().parents[1]
 GOLDEN = Path(__file__).with_name("golden.json")
@@ -81,12 +85,15 @@ def _copy_tree(dst):
         shutil.copy2(REPO / rel, dst / rel)
 
 
-def _backups(params):
+def _models(params):
     device = params.split()[0].split("=")[1]
-    models = ["mario", "zelda"] if device == "amalgam" else [device]
+    return ["mario", "zelda"] if device == "amalgam" else [device]
+
+
+def _backups(params):
     return [
         name
-        for m in models
+        for m in _models(params)
         for name in (f"internal_flash_backup_{m}.bin", f"flash_backup_{m}.bin")
     ]
 
@@ -111,7 +118,28 @@ def _build(tmp_path, params):
         path = tree / "build" / name
         if path.exists():
             hashes[name] = hashlib.sha1(path.read_bytes()).hexdigest()
+    _check_debug_outputs(tree, params)
     return hashes
+
+
+def _check_debug_outputs(tree, params):
+    """The patch manifest names every change, and the patched ELF has each
+    model's stock ``main`` where its code is now."""
+    header = (tree / "build" / "manifest.txt").read_text().splitlines()[2]
+    assert header.endswith(" 0 unattributed"), header
+
+    with open(tree / "build" / "patched.elf", "rb") as f:
+        elf = ELFFile(f)
+        symtab = elf.get_section_by_name(".symtab")
+        assert symtab.get_symbol_by_name("bootloader")
+        for model in _models(params):
+            stock = (REPO / f"internal_flash_backup_{model}.bin").read_bytes()
+            main = syms.load(model)["main"]
+            [sym] = symtab.get_symbol_by_name(syms.c_name(model, "main"))
+            addr = sym["st_value"] & ~1
+            sec = elf.get_section(sym["st_shndx"])
+            data = sec.data()[addr - sec["sh_addr"] :][:16]
+            assert data == stock[main - 0x0800_0000 :][:16], model
 
 
 @pytest.mark.parametrize("config", CONFIGS)

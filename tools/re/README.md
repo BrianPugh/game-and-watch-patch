@@ -28,6 +28,10 @@ is mapped NOLOAD like the other RAM. Function symbols come from the
 `.syms` file plus auto-detected vector-table handlers, `ldr.w pc, [pc]`
 veneers, and literal-pool pointers to external-flash function prologues.
 
+Every `patch.py` run also writes `build/patched.elf`, the same kind of ELF for
+the patched output: our symbols plus the `.syms` names as `stock_<device>_<name>`
+at their final addresses (see `patches/manifest.py`).
+
 ## Code references (`xrefs.py`)
 
 ```bash

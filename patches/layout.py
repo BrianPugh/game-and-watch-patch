@@ -11,6 +11,7 @@ A ``Layout`` holds every region of a build and the devices placed in them.
 
 from dataclasses import dataclass
 
+from . import writelog
 from .exception import NotEnoughSpaceError
 from .utils import round_up_word
 
@@ -154,20 +155,31 @@ class ExtRegion(Region):
         self.align = align
         self.cursor = cursor
         self.shift = 0
+        # (stock offset, offset, size, packed) of the stock data in the image.
+        self.kept = []
+        # The end of a dropped range, past the cursor when drop() left part of
+        # it as padding.
+        self.dropped_end = 0
 
     @property
     def used(self):
         return len(self.buf)
 
-    def keep(self, end):
+    def keep(self, end, label=None):
         """Shift the stock data [cursor, end) down by the current shift."""
         start = self.cursor
         if end > start:
             if self.shift:
                 self.buf.move(start, self.shift, size=end - start)
             self.note(
-                start + self.shift, end - start, self.owner, f"stock 0x{start:06X}"
+                start + self.shift,
+                end - start,
+                self.owner,
+                label or f"stock 0x{start:06X}",
             )
+            data = max(start, min(self.dropped_end, end))
+            if data < end:
+                self.kept.append((data, data + self.shift, end - data, False))
         self.cursor = max(start, end)
 
     def drop(self, start, end):
@@ -179,8 +191,10 @@ class ExtRegion(Region):
         self.keep(start)
         start = max(start, self.cursor)
         n = (end - start) // self.align * self.align
-        self.buf.clear_range(start, end)
+        with writelog.untracked():
+            self.buf.clear_range(start, end)
         self.cursor = start + n
+        self.dropped_end = end
         self.shift -= n
 
     def pack(self, start, end, blocks):
@@ -205,11 +219,13 @@ class ExtRegion(Region):
         # Nothing keeps (and so re-maps) [start, end) after this: the cursor
         # moves to the end, and the next kept data lands after the padding.
         dst = start + self.shift
-        self.buf.clear_range(dst, end)
+        with writelog.untracked():
+            self.buf.clear_range(dst, end)
         self.buf[dst : dst + len(packed)] = packed
         for offset, pos, size in new:
             self.buf._lookup.add(self.base + offset, self.base + dst + pos, size)
             self.note(dst + pos, size, self.owner, f"packed stock 0x{offset:06X}")
+            self.kept.append((offset, dst + pos, size, True))
         self.cursor = end
         self.shift -= n
 

@@ -55,6 +55,9 @@ _finish_ext).
 
 from pathlib import Path
 
+import numpy as np
+
+from . import writelog
 from .compression import lzma_compress
 from .exception import InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
@@ -226,8 +229,12 @@ class ZeldaGnW(Device, name="zelda"):
         """ITCM address of a new ``ldr.w pc`` veneer to one of our functions."""
         itcm = ITCM_MENU + ITCM_MENU_SIZE + len(self.itcm_tail)
         target = self.internal.address(symbol) | 1
+        self.patcher_funcs.append((itcm, f"{symbol}_veneer", 4))
         self.itcm_tail += bytes(thumb_assemble("ldr.w pc, [pc, #0]"))
         self.itcm_tail += target.to_bytes(4, "little")
+        self.itcm_tail_write = writelog.new(
+            "ITCM veneers to our code, after the menu UI copy"
+        )
         return itcm
 
     def _second_beep_setting(self):
@@ -462,7 +469,7 @@ class ZeldaGnW(Device, name="zelda"):
             # print(hex(start + consumed))
 
     def _disable_save_encryption(self):
-        # Skip ingame save encryption
+        printi("Skip the in-game save encryption.")
         self.internal.nop(0xF222, 1, expect="2:ffdd0216")
         self.internal.asm(0xF228, "add.w r2,r1,#0x10", expect="4:73f6ed6f")
         self.internal.asm(0xF22C, "sub.w r1,r8,#0x10", expect="4:d7270cd6")
@@ -544,8 +551,7 @@ class ZeldaGnW(Device, name="zelda"):
         b_w_memcpy_inflate_asm = "b.w #" + hex(
             0xFFFFFFFE & self.internal.address("memcpy_inflate")
         )
-        self.ext_space.cursor = 0x2_0000
-        self.ext_space.note(0, 0x2_0000, self.name, "NVRAM banks, save slots (fixed)")
+        self.ext_space.keep(0x2_0000, "NVRAM banks, save slots (fixed)")
 
         # Stock memcpy's these into RAM before use, so they're stored LZMA
         # compressed (in place; internal flash is kept for smaller data).
@@ -572,7 +578,7 @@ class ZeldaGnW(Device, name="zelda"):
         # loz2j_load: the 0x1e000-byte FDS image.
         self._compress_in_place(0xB_0000, 0x1_E000, 0xD_0000, 0xFD1C)
 
-        printd("Compressing and moving LoZ2 TIMER data to int")
+        printi("Compressing and moving LoZ2 TIMER data to int")
         timer, timer_end = 0xD_0000, 0xD_2000
         compressed_len = self.external.compress(timer, timer_end - timer)
         self.internal.asm(0xF430, b_w_memcpy_inflate_asm, expect="4:625bb93e")
@@ -590,12 +596,15 @@ class ZeldaGnW(Device, name="zelda"):
         # The overlay code holds pointers that fix_ext_refs() rewrites, so it's
         # appended uncompressed for now and compressed by _finish_ext().
         overlay = bytes(self.external[OVERLAY_START:OVERLAY_END])
+        prov = writelog.provenance(self.external, OVERLAY_START, OVERLAY_END)
         self.ext_space.drop(OVERLAY_START, OVERLAY_END)
 
         stock_end = self.external.ENC_END
         self.ext_space.keep(stock_end)
         self.overlay_pos = stock_end + self.ext_space.shift
-        self.external[self.overlay_pos : self.overlay_pos + len(overlay)] = overlay
+        with writelog.untracked():
+            self.external[self.overlay_pos : self.overlay_pos + len(overlay)] = overlay
+        writelog.set_provenance(self.external, self.overlay_pos, prov)
         base = self.external.FLASH_BASE
         self.lookup.add(base + OVERLAY_START, base + self.overlay_pos, len(overlay))
 
@@ -605,15 +614,33 @@ class ZeldaGnW(Device, name="zelda"):
         Runs after fix_ext_refs(): the overlay's pointers are final, and
         nothing points at the overlay except itcm_overlay_load's literals.
         """
+        from .xrefs import LAYOUT
+
         printi("Compressing the ITCM/DTCM overlay copies")
+        base = self.external.FLASH_BASE
+        copies = LAYOUT[self.name]["itcm_copies"] + LAYOUT[self.name]["dtcm_copies"]
+        run = {src - base: dst for src, dst, _ in copies}
         blobs = []
         for literal, offset, size in OVERLAY_COPIES:
             src = self.overlay_pos + offset - OVERLAY_START
-            if self.internal.int(literal) != self.external.FLASH_BASE + src:
+            if self.internal.int(literal) != base + src:
                 raise ValueError(f"Unexpected overlay literal at 0x{literal:X}")
             data = bytes(self.external[src : src + size])
+            prov = writelog.provenance(self.external, src, src + size)
             if offset == ITCM_MENU_SRC:
                 data += self.itcm_tail
+                prov = np.concatenate(
+                    [prov, np.full(len(self.itcm_tail), self.itcm_tail_write)]
+                )
+            self.ram_images.append(
+                writelog.RamImage(
+                    run[offset],
+                    data,
+                    self.external_stock[offset : offset + size],
+                    prov,
+                    f"overlay 0x{offset:06X}",
+                )
+            )
             blobs.append(lzma_compress(data))
         # itcm_overlay_load's size for the menu UI copy.
         self.internal.replace(
@@ -689,10 +716,12 @@ class ZeldaGnW(Device, name="zelda"):
             )
 
     def _erase_savedata(self):
+        printi("Erase the NVRAM banks and save slots.")
         self.external.set_range(0x0000, 0x12000, b"\xFF")
 
     def patch(self):
         self.itcm_tail = bytearray()  # _itcm_veneer()'s veneers
+        self.itcm_tail_write = -1  # Their writelog index.
         self.overlay_pos = OVERLAY_START  # Until _compact_ext() moves it.
 
         if self.args.relocate_stock:
@@ -768,7 +797,7 @@ class ZeldaGnW(Device, name="zelda"):
         self._second_beep_setting()
 
         if not self.args.encrypt:
-            # Disable OTFDEC
+            printi("Disable OTFDEC (external flash stays unencrypted).")
             self.internal.nop(0x16536, 2, expect="4:3c5c53f3")
             self.internal.nop(0x1653A, 1, expect="2:fdbf91e5")
             self.internal.nop(0x1653C, 1, expect="2:f588a917")
@@ -783,6 +812,7 @@ class ZeldaGnW(Device, name="zelda"):
             self.internal.replace(0x1_4418, b"\x00" * 4, expect="4:5ca874f5")
 
         if self.args.no_sleep_images:
+            printi("Remove the sleep backdrops.")
             # backdrop_tick's "no backdrop" path (g_backdrop_index < 0): clear
             # the frame instead of decoding backdrop_images[index].
             self.internal.b(0x1_6426, 0x1_6430, expect="2:eb4a57f1")

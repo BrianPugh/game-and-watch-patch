@@ -2,12 +2,18 @@ from math import ceil
 
 from colorama import Fore, Style
 
+from . import writelog
+
 
 def printi(msg, *args):
+    """Announce a patch step; the manifest names the writes after it with ``msg``."""
+    writelog.set_step(msg)
     print(Fore.MAGENTA + msg + Style.RESET_ALL, *args)
 
 
 def printe(msg, *args):
+    """Announce a patch step, like ``printi``."""
+    writelog.set_step(msg)
     print(Fore.YELLOW + msg + Style.RESET_ALL, *args)
 
 

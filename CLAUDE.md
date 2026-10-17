@@ -101,6 +101,10 @@ Data relocation priority: compressed memory (SRAM3) > internal flash > external 
 
 Other key modules: `compression.py` (LZMA/LZ77), `ips.py` (IPS patch format), `tileset.py` (NES graphics), `utils.py` (helpers).
 
+Debug outputs (`patches/manifest.py`, written by every `patch.py` run):
+- `build/manifest.txt` lists every stock byte the output changed: internal code (at its relocated place too), kept external data and the RAM images (rwdata blocks, `Device.ram_images`), diffed against the backups, so it's complete. Each run of changes names its writer: the patch step (the last `printi`/`printe` message, or a `writelog.step` block) and the patcher source line. The provenance lives per byte in `Firmware.prov` (`patches/writelog.py`). A copy of data that's already there must run `writelog.untracked()` and carry it with `provenance`/`set_provenance` (like `_move_copy`), and a write that bypasses `__setitem__` (`struct.pack_into`, see `relocate._pack`) must call `writelog.record`. The golden test fails on any "(unattributed)" entry, which usually means a new step without a `printi` or one of those.
+- `build/patched.elf` maps the output images (plus the RAM images, single-model builds) with our symbols and every stock symbol as `stock_<device>_<name>` at its final address (`DeviceImages.final_address`). Load it in gdb or a disassembler; add `build/gw_patch.elf` for our C source lines in `--debug` builds. `patches/elf_image.py` links it (shared with `tools/re/build_elf.py`).
+
 ### Memory Layout
 - Internal flash: up to 256KB (128KB standard, 256KB with `--extended`)
 - External flash: device-dependent (4MB Zelda stock, upgradeable)

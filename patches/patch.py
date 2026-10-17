@@ -1,5 +1,6 @@
 import zlib
 
+from . import writelog
 from .compression import lzma_compress
 from .exception import UnexpectedBytesError
 from .thumb_asm import assemble as thumb_assemble
@@ -216,20 +217,23 @@ class FirmwarePatchMixin:
         new_start = offset + data
         new_end = new_start + size
         print(f"    moving {size} bytes from 0x{old_start:08X} to 0x{new_start:08X}")
-        self[new_start:new_end] = self[old_start:old_end]
+        prov = writelog.provenance(self, old_start, old_end)
+        with writelog.untracked():
+            self[new_start:new_end] = self[old_start:old_end]
 
-        # Erase old copy
-        if delete:
-            if data < 0:
-                if new_end > offset:
-                    self.clear_range(new_end, old_end)
+            # Erase old copy
+            if delete:
+                if data < 0:
+                    if new_end > offset:
+                        self.clear_range(new_end, old_end)
+                    else:
+                        self.clear_range(old_start, old_end)
                 else:
-                    self.clear_range(old_start, old_end)
-            else:
-                if new_start < old_end:
-                    self.clear_range(old_start, new_start)
-                else:
-                    self.clear_range(old_start, old_end)
+                    if new_start < old_end:
+                        self.clear_range(old_start, new_start)
+                    else:
+                        self.clear_range(old_start, old_end)
+        writelog.set_provenance(self, new_start, prov)
 
         self._lookup.add(self.FLASH_BASE + old_start, self.FLASH_BASE + new_start, size)
 
@@ -257,10 +261,7 @@ class FirmwarePatchMixin:
         self.ENC_END -= data
         if self.ENC_END < self.ENC_START:
             self.ENC_END = self.ENC_START
-        if len(self) == data:
-            self[:] = bytearray()
-        else:
-            self[:] = self[:-data]
+        del self[max(0, len(self) - data) :]
 
         return data
 
@@ -274,6 +275,7 @@ class FirmwarePatchMixin:
         self.clear_range(offset, offset + size)
         # Insert the compressed data
         self[offset : offset + len(compressed_data)] = compressed_data
+        self.compressed.append((offset, size))
 
         print(
             f"    compressed {len(data)}->{len(compressed_data)} bytes (saves {len(data)-len(compressed_data)})"

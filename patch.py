@@ -15,7 +15,7 @@ from pathlib import Path
 import colorama
 from colorama import Fore, Style
 
-from patches import Device
+from patches import Device, manifest
 from patches.exception import InvalidPatchError
 from patches.layout import Layout
 
@@ -172,6 +172,12 @@ def main():
 
     # Re-encrypt the external firmware
     Path("build/decrypt_flash_patched.bin").write_bytes(device.external)
+    images = [
+        manifest.DeviceImages(device, device.internal, device.bank2, device.external)
+    ]
+    debug_outputs = write_debug_outputs(
+        args, images, device.internal, device.bank2, device.external
+    )
     if args.encrypt:
         device.external.crypt(device.internal.key, device.internal.nonce)
 
@@ -212,7 +218,23 @@ def main():
         f"{len(device.internal) - internal_remaining_free + len(device.external)} bytes"
     )
     print(f"    Allocation map: {map_output}")
+    print(debug_outputs)
     print(Style.RESET_ALL)
+
+
+def write_debug_outputs(args, images, internal, bank2, external):
+    """The patch manifest and the patched ELF; returns lines naming them."""
+    out = args.int_output.parent
+    manifest_output = out / "manifest.txt"
+    manifest.write_manifest(manifest_output, images)
+    lines = f"    Patch manifest: {manifest_output}"
+    elf_output = out / "patched.elf"
+    elf = images[-1].d.internal.elf
+    if manifest.write_elf(
+        elf_output, images, internal, bank2, external, elf, out / "patched_elf"
+    ):
+        lines += f"\n    Patched ELF: {elf_output}"
+    return lines
 
 
 def main_amalgam(parser, args):
@@ -247,6 +269,11 @@ def main_amalgam(parser, args):
     internal = amalgam.merge_internal(bank1, [zelda, mario])
     external = amalgam.merge_external(zelda, mario)
     amalgam.metadata(internal, external)
+    images = [
+        manifest.DeviceImages(device, internal, None, external)
+        for device in (zelda, mario)
+    ]
+    debug_outputs = write_debug_outputs(args, images, internal, None, external)
 
     args.int_output.write_bytes(internal)
     args.ext_output.write_bytes(external)
@@ -267,6 +294,7 @@ def main_amalgam(parser, args):
     print(f"    External Firmware Used: {len(external)} bytes")
     print(f"        Mario's data starts at 0x{mario.ext_base:06X}")
     print(f"    Allocation map: {map_output}")
+    print(debug_outputs)
     print(Style.RESET_ALL)
 
 

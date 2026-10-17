@@ -3,12 +3,13 @@ import hashlib
 import io
 import struct
 from dataclasses import dataclass
+from pathlib import Path
 
 from colorama import Fore, Style
 from Crypto.Cipher import AES
 from elftools.elf.elffile import ELFFile
 
-from . import syms
+from . import syms, writelog
 from .compression import lz77_decompress, lzma_compress
 from .exception import InvalidStockRomError, MissingSymbolError, NotEnoughSpaceError
 from .layout import ExtRegion, Region
@@ -135,6 +136,10 @@ class Firmware(FirmwarePatchMixin, bytearray):
             super().__init__(self.FLASH_LEN)
 
         self._lookup = Lookup()
+        # Per byte, the writelog.WRITES index of its last write (None: untracked).
+        self.prov = None
+        # (offset, size) of every compress()'d range, for the manifest.
+        self.compressed = []
         self._verify()
 
     def _verify(self):
@@ -182,6 +187,13 @@ class Firmware(FirmwarePatchMixin, bytearray):
                         f"firmware length {len(self)} ({hex(len(self))})"
                     ) from None
 
+        if self.prov is not None:
+            if isinstance(key, slice):
+                start, stop, _ = key.indices(len(self))
+            else:
+                start = key % len(self)
+                stop = start + 1
+            writelog.record(self, start, stop)
         return super().__setitem__(key, new_val)
 
     def __str__(self):
@@ -237,6 +249,10 @@ class RWData:
     MAX_TABLE_ELEMENTS = 5
 
     def __init__(self, firmware, table_start, table_len):
+        with writelog.step("rwdata table, reserved for rwdata_inflate's entries"):
+            self._load(firmware, table_start, table_len)
+
+    def _load(self, firmware, table_start, table_len):
         # We want to be able to extend the table.
 
         self.firmware = firmware
@@ -312,6 +328,10 @@ class RWData:
         return compressed_len
 
     def write_table_and_data(self, end_of_table_reference, data_offset=None):
+        with writelog.step("rwdata table: rwdata_inflate's compressed RAM images"):
+            return self._write_table_and_data(end_of_table_reference, data_offset)
+
+    def _write_table_and_data(self, end_of_table_reference, data_offset=None):
         """
         Parameters
         ----------
@@ -413,6 +433,7 @@ class IntFirmware(Firmware):
 
     def __init__(self, firmware, elf):
         super().__init__(firmware)
+        writelog.track(self)
         self._elf_f = open(elf, "rb")
         self.elf = ELFFile(self._elf_f)
         self.symtab = self.elf.get_section_by_name(".symtab")
@@ -481,6 +502,10 @@ class ExtFirmware(Firmware):
 
         aes = AES.new(key, AES.MODE_ECB)
 
+        with writelog.untracked():
+            self._crypt(aes, iv)
+
+    def _crypt(self, aes, iv):
         for offset in range(self.ENC_START, self.ENC_END, 128 // 8):
             counter_block = iv.copy()
 
@@ -523,7 +548,17 @@ class Device:
         self.internal = self.Int(internal_bin, internal_elf)
         self.internal.syms = syms.load(self.name)
         self.external = self.Ext(external_bin)
+        writelog.track(self.external)
         self.compressed_memory = self.FreeMemory()
+        # The stock images, for the manifest (external: decrypted by crypt()).
+        self.internal_stock = Path(internal_bin).read_bytes()
+        self.external_stock = None
+        # writelog.RamImage of each block stock copies into RAM that the
+        # patcher stores compressed (the rwdata blocks aside).
+        self.ram_images = []
+        # (address, name, code size) of code the patcher writes outside our
+        # ELF (data follows the code), for the patched ELF's symbols.
+        self.patcher_funcs = []
 
         # Link all lookup tables to a single device instance
         self.lookup = Lookup()
@@ -623,6 +658,13 @@ class Device:
                     f"data the scan in patches/xrefs.py found"
                 )
 
+        with writelog.step("Repoint references into moved external data"):
+            counts = self._fix_ext_refs(refs)
+        self.ext_refs_fixed = True
+        printd(f"Fixed references into moved external data: {counts}")
+        return counts
+
+    def _fix_ext_refs(self, refs):
         counts = {}
         for src, r in sorted(refs.items()):
             kind, target = r["kind"], r["target"]
@@ -647,16 +689,17 @@ class Device:
                 )
             buf[off : off + 4] = new.to_bytes(4, "little")
             counts[kind] = counts.get(kind, 0) + 1
-        self.ext_refs_fixed = True
-        printd(f"Fixed references into moved external data: {counts}")
         return counts
 
     def _move_copy(
         self, dst, dst_offset: int, src, src_offset: int, size: int, delete: bool
     ) -> int:
-        dst[dst_offset : dst_offset + size] = src[src_offset : src_offset + size]
-        if delete:
-            src.clear_range(src_offset, src_offset + size)
+        prov = writelog.provenance(src, src_offset, src_offset + size)
+        with writelog.untracked():
+            dst[dst_offset : dst_offset + size] = src[src_offset : src_offset + size]
+            if delete:
+                src.clear_range(src_offset, src_offset + size)
+        writelog.set_provenance(dst, dst_offset, prov)
 
         self.lookup.add(src.FLASH_BASE + src_offset, dst.FLASH_BASE + dst_offset, size)
 
@@ -688,6 +731,8 @@ class Device:
 
     def crypt(self):
         self.external.crypt(self.internal.key, self.internal.nonce)
+        if self.external_stock is None:
+            self.external_stock = bytes(self.external)
 
     def show(self, show=True):
         import matplotlib.pyplot as plt
@@ -930,9 +975,11 @@ class Device:
             is_zelda=is_zelda,
         )
         # hdmi-cec = 0x01B8; not used in the gnw hardware.
-        self.internal.replace(0x01B8, metadata.pack())
+        with writelog.step("Firmware metadata (external flash size, model)"):
+            self.internal.replace(0x01B8, metadata.pack())
         if self.relocation:
-            counts = self.relocation.apply()
+            with writelog.step("Fix references for the relocated stock code"):
+                counts = self.relocation.apply()
             printi(f"Relocated stock code; fixed {counts}")
 
     @property

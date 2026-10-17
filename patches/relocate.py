@@ -23,9 +23,10 @@ import contextlib
 import io
 import struct
 
+import numpy as np
 from elftools.elf.relocation import RelocationSection
 
-from . import xrefs
+from . import writelog, xrefs
 from .layout import BANK2_BASE, BANK2_END
 from .xrefs import Code
 
@@ -127,6 +128,8 @@ class Relocation:
         self.delta = dst - lo
         self.map = device.stock_map
         self.counts = {}
+        # writelog provenance of the moved range at dst, once applied.
+        self.prov = None
 
     def moves(self, addr):
         return self.lo <= addr < self.hi
@@ -151,11 +154,15 @@ class Relocation:
     def _fix_abs(self, buf, off, kind):
         v = struct.unpack_from("<I", buf, off)[0]
         if self.moves(v & ~1):
-            struct.pack_into("<I", buf, off, v + self.delta)
+            _pack("<I", buf, off, v + self.delta)
             self._count(kind)
 
     def fix_ram_images(self):
         """Fix pointers in data that ends up compressed: rwdata blocks, SRAM3."""
+        with writelog.step("Fix references for the relocated stock code"):
+            self._fix_ram_images()
+
+    def _fix_ram_images(self):
         rw = self.device.internal.rwdata
         for r in self.map.refs:
             kind, src = r["kind"], r["src"]
@@ -219,6 +226,7 @@ class Relocation:
         cur = bytes(d.internal)
         lo, hi, delta = self.lo, self.hi, self.delta
         moved = bytearray(cur[lo - base : hi - base])
+        prov = writelog.provenance(d.internal, lo - base, hi - base)
 
         def where(addr):
             if self.moves(addr):
@@ -271,7 +279,7 @@ class Relocation:
                 t = addr + 4 + off
                 if self.moves(t):
                     hw1, hw2 = _encode_branch(hw1, hw2, t + delta - (addr + 4))
-                    struct.pack_into("<HH", d.internal, o, hw1, hw2)
+                    _pack("<HH", d.internal, o, hw1, hw2)
                     self._count("our branch in")
             elif rtype == R_ARM_ABS32:
                 self._fix_abs(d.internal, o, "our pointer")
@@ -316,12 +324,20 @@ class Relocation:
             new_b = b + delta if self.moves(b) else b
             if new_t - new_b != v:
                 buf, o = where(a)
-                struct.pack_into("<i", buf, o, new_t - new_b)
+                _pack("<i", buf, o, new_t - new_b)
                 self._count("self-relative")
+
+        # The bytes changed in the moved copy are this fix-up's, unless a
+        # patch wrote them (e.g. a hook's bl, re-encoded).
+        before = np.frombuffer(cur[lo - base : hi - base], dtype=np.uint8)
+        changed = np.frombuffer(bytes(moved), dtype=np.uint8) != before
+        prov[changed & (prov < 0)] = writelog.new()
 
         vt = xrefs.VECTOR_TABLE_END
         if lo == base and self.keep_vector_table:
-            d.internal[:vt] = moved[:vt]
+            with writelog.untracked():
+                d.internal[:vt] = moved[:vt]
+            writelog.set_provenance(d.internal, 0, prov[:vt])
 
         if dst_in_bank2(self.dst):
             off = self.dst - BANK2_BASE
@@ -335,19 +351,32 @@ class Relocation:
             # out at the new place (Device.free_int) and may hold data now.
             for start, end in d.freed_int:
                 if self.moves(base + start):
-                    moved[start - (lo - base) : end - (lo - base)] = out[
-                        off + start - (lo - base) : off + end - (lo - base)
-                    ]
-        out[off : off + len(moved)] = moved
+                    s, e = start - (lo - base), end - (lo - base)
+                    moved[s:e] = out[off + s : off + e]
+                    prov[s:e] = writelog.provenance(out, off + s, off + e)
+        with writelog.untracked():
+            out[off : off + len(moved)] = moved
+        if out is d.internal:
+            writelog.set_provenance(out, off, prov)
+        self.prov = prov
 
         # Old copy: udf, so anything still pointing here faults. The OTFDEC
         # key/nonce stay; the patcher encrypts external flash with them.
         start = max(lo, base + vt)
         keep = (base + d.internal.NONCE_OFFSET, base + d.internal.KEY_OFFSET + 16)
-        for a in range(start, hi, 2):
-            if not keep[0] <= a < keep[1]:
-                d.internal[a - base : a - base + 2] = b"\xfe\xde"
+        with writelog.untracked():
+            for a in range(start, hi, 2):
+                if not keep[0] <= a < keep[1]:
+                    d.internal[a - base : a - base + 2] = b"\xfe\xde"
         return self.counts
+
+
+def _pack(fmt, buf, off, *values):
+    """``struct.pack_into``, logged for the manifest (it bypasses
+    ``Firmware.__setitem__``)."""
+    struct.pack_into(fmt, buf, off, *values)
+    if getattr(buf, "prov", None) is not None:
+        writelog.record(buf, off, off + struct.calcsize(fmt), fixup=True)
 
 
 def dst_in_bank2(addr):

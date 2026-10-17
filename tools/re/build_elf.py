@@ -23,7 +23,6 @@ Usage:
 
 import argparse
 import struct
-import subprocess
 import sys
 from pathlib import Path
 
@@ -31,20 +30,12 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from patches import Device  # noqa: E402
+from patches.elf_image import link  # noqa: E402
 from patches.syms import parse_syms  # noqa: E402
 from patches.xrefs import EXT_BASE, LAYOUT, extract_rwdata, itcm_image  # noqa: E402
 
 INT_BASE = 0x0800_0000
 VECTOR_TABLE_END = 0x2CC  # STM32H7B0 vector table size; identical on both devices.
-
-# RAM regions with no initialized data get NOLOAD sections so that
-# disassemblers create segments for globals living there.
-RAM_REGIONS = [
-    (0x0000_0000, 0x0001_0000),  # ITCM
-    (0x2000_0000, 0x2002_0000),  # DTCM
-    (0x2400_0000, 0x2410_0000),  # AXI SRAM
-    (0x3000_0000, 0x3002_0000),  # AHB SRAM1/2
-]
 
 
 def i32(data, offset):
@@ -86,10 +77,6 @@ def auto_funcs(internal, external):
             if is_push_prologue(external, (target & ~1) - EXT_BASE):
                 funcs.setdefault(target & ~1, f"sub_{target & ~1:08x}")
     return funcs
-
-
-def run(*cmd):
-    subprocess.run([str(c) for c in cmd], check=True)
 
 
 def main():
@@ -147,117 +134,34 @@ def main():
         regions.append((f".dtcmcopy{n}", dst, data, False))
         print(f"dtcmcopy{n}: 0x{dst:08X} len=0x{size:X} (data copied from 0x{src:08X})")
 
-    # Convert each region into an object file.
-    objs = []
-    for name, _, data, is_code in regions:
-        bin_path = work / f"{name[1:]}.bin"
-        obj_path = work / f"{name[1:]}.o"
-        bin_path.write_bytes(data)
-        flags = "contents,alloc,load," + ("readonly,code" if is_code else "data")
-        # cwd=work keeps the auto-generated _binary_* symbol names short.
-        subprocess.run(
-            [
-                f"{args.prefix}objcopy",
-                "-I",
-                "binary",
-                "-O",
-                "elf32-littlearm",
-                "-B",
-                "arm",
-                f"--rename-section=.data={name},{flags}",
-                bin_path.name,
-                obj_path.name,
-            ],
-            check=True,
-            cwd=work,
-        )
-        objs.append(obj_path)
-
-    # Linker script: loaded regions plus NOLOAD fillers for the remaining RAM.
-    lines = []
-    for name, base, _, _ in regions:
-        lines.append(f"  {name} 0x{base:08x} : {{ {name[1:]}.o({name}) }}")
-    for lo, hi in RAM_REGIONS:
-        cursor = lo
-        for _, base, data, _ in sorted(
-            (r for r in regions if lo <= r[1] < hi), key=lambda r: r[1]
-        ):
-            if base > cursor:
-                lines.append(
-                    f"  .ram_{cursor:08x} 0x{cursor:08x} (NOLOAD) : {{ . = . + 0x{base - cursor:x}; }}"
-                )
-            cursor = max(cursor, base + len(data))
-        if hi > cursor:
-            lines.append(
-                f"  .ram_{cursor:08x} 0x{cursor:08x} (NOLOAD) : {{ . = . + 0x{hi - cursor:x}; }}"
-            )
-    reset = i32(internal, 4)
-    (work / "re.ld").write_text(
-        f"Reset_Handler = 0x{reset:08x};\nENTRY(Reset_Handler)\nSECTIONS {{\n"
-        + "\n".join(lines)
-        + "\n  /DISCARD/ : { *(.ARM.attributes) }\n}\n"
-    )
-    linked = work / "linked.elf"
-    subprocess.run(
-        [
-            f"{args.prefix}ld",
-            "-nostdlib",
-            "--no-warn-rwx-segments",
-            "-T",
-            "re.ld",
-            "-o",
-            linked.name,
-        ]
-        + [o.name for o in objs],
-        check=True,
-        cwd=work,
-    )
-
-    # Symbols.
-    def section_of(addr):
-        for name, base, data, _ in regions:
-            if base <= addr < base + len(data):
-                return name, addr - base
-        for lo, hi in RAM_REGIONS:
-            if lo <= addr < hi:
-                return None, None  # NOLOAD filler; handled below.
-        raise ValueError(f"0x{addr:08X} is not in any mapped region")
-
     funcs = auto_funcs(internal, bytes(external))
     user_funcs, datas = parse_syms(syms_path)
     funcs.update(user_funcs)
 
-    objcopy_args = ["--strip-all"]
     # ARM mapping symbols: vector table is data, internal flash after it is code,
     # external flash is data except at known functions.
     mapping = [
-        ("$d", ".intflash", 0),
-        ("$t", ".intflash", VECTOR_TABLE_END),
-        ("$d", ".extflash", 0),
+        (INT_BASE, "$d"),
+        (INT_BASE + VECTOR_TABLE_END, "$t"),
+        (EXT_BASE, "$d"),
     ]
-    for name, _, _, is_code in regions[2:]:
-        mapping.append(("$t" if is_code else "$d", name, 0))
-    for sym, sec, off in mapping:
-        objcopy_args += ["--add-symbol", f"{sym}={sec}:0x{off:x},local"]
-    for addr, name in sorted(funcs.items()):
-        sec, off = section_of(addr)
-        objcopy_args += ["--add-symbol", f"{name}={sec}:0x{off | 1:x},global,function"]
-        if sec == ".extflash":
-            objcopy_args += ["--add-symbol", f"$t={sec}:0x{off:x},local"]
-    for addr, name in sorted(datas.items()):
-        sec, off = section_of(addr)
-        if sec is None:  # Uninitialized RAM; emit an absolute symbol.
-            objcopy_args += ["--add-symbol", f"{name}=0x{addr:x},global,object"]
-        else:
-            objcopy_args += ["--add-symbol", f"{name}={sec}:0x{off:x},global,object"]
+    for _, base, _, is_code in regions[2:]:
+        mapping.append((base, "$t" if is_code else "$d"))
+    mapping += [
+        (addr, "$t") for addr in funcs if EXT_BASE <= addr < EXT_BASE + len(external)
+    ]
 
     out_elf = out / f"{args.device}.elf"
-    run(f"{args.prefix}objcopy", *objcopy_args, linked, out_elf)
-
-    # e_flags: EABI v5, hard-float ABI. Hopper/Ghidra use this to pick Thumb-2 decoding.
-    elf = bytearray(out_elf.read_bytes())
-    elf[0x24:0x28] = (0x0500_0400).to_bytes(4, "little")
-    out_elf.write_bytes(elf)
+    link(
+        out_elf,
+        regions,
+        funcs.items(),
+        datas.items(),
+        mapping,
+        entry=i32(internal, 4) & ~1,
+        work=work,
+        prefix=args.prefix,
+    )
 
     print(f"Wrote {out_elf} ({len(funcs)} functions, {len(datas)} data symbols)")
 

@@ -6,7 +6,8 @@ boot, clock, SMB1, BALL, pause, clock and SMB2 with button injection at the
 shifted ``read_buttons`` return, waiting on the firmware's own state
 (transition, overlay, ``gnw_mode``) instead of fixed frame counts. Saves a
 screenshot per phase and fails if a phase doesn't reach its mode, stops
-reaching the injection site (a fault or hang), or the CPU is seen in bank 1.
+reaching the injection site (a fault or hang), or the CPU is seen in the stock
+code's old place.
 
 Usage:
     python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu
@@ -151,9 +152,10 @@ def main():
             driver.shot(name)
             mode = driver.read16(menu.GNW_MODE)
             pc = driver.pc()
-            in_bank1 = args.delta and 0x0800_0000 <= pc < 0x0810_0000
+            # The stock code's old place (below the init table at 0x0801807c).
+            in_old = args.delta and 0x0800_0000 <= pc < 0x0801_807C
             ok &= check(
-                mode_ok(mode) and not in_bank1,
+                mode_ok(mode) and not in_old,
                 f"{name}: gnw_mode=0x{mode:X}, pc=0x{pc:08X}",
             )
     finally:

@@ -1,42 +1,50 @@
 {
   "configs": {
+    "amalgam": {
+      "external_flash_patched.bin": "e00dea275ad4248cb770390a94b017609a863cd5",
+      "internal_flash_patched.bin": "3d7db43ad084cbab2573831dddec30b26b98207c"
+    },
     "mario": {
       "external_flash_patched.bin": "de937b3c31c64c147a8ade5ab2b040be640f6b83",
-      "internal_flash_patched.bin": "ce5609a7d8c0aade2ea77353209f5077e204ec9e"
+      "internal_flash_patched.bin": "6dd6e54b25514143d986c12295cef951c8bf391d"
     },
     "mario_clock_only": {
-      "external_flash_patched.bin": "1d9775acad31e7886967f114ec35755fbb93bc8f",
-      "internal_flash_patched.bin": "848e0f1ab3ef5f095dec05dee9a3ac7c67713fb8"
+      "external_flash_patched.bin": "3aec0ddbbc7ef3b7eeeeaed48522252259cf5fba",
+      "internal_flash_patched.bin": "09a06506471a15cb64ee1ddac574b9f0abeb758d"
     },
     "mario_internal_only": {
       "external_flash_patched.bin": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-      "internal_flash_patched.bin": "25bd1158f47888df68a2b1820bc5cb61cac79814"
+      "internal_flash_patched.bin": "a70c78ccd92ed664c6c0cae1d95199716936a708"
     },
     "mario_no_song": {
       "external_flash_patched.bin": "95c332591510b0857f32bd679ad6142d83e832a5",
-      "internal_flash_patched.bin": "4c78fbfa3c5e6bed6e48b1ce1551c09453e8e001"
+      "internal_flash_patched.bin": "7b34a6dcbff8156ef45f6f38b2f6bae357cf805a"
     },
     "mario_options": {
-      "external_flash_patched.bin": "9e4baa9818798ac577b5adf41b0f091860e608d5",
-      "internal_flash_patched.bin": "19e837d05253f1b0f461464845adb5ccc26af73d"
+      "external_flash_patched.bin": "4616c1f30e76822edfd1ec7f0acef55610738b97",
+      "internal_flash_patched.bin": "b9b38c62bb61f16c9524290155d57894be19c6ec"
     },
     "mario_relocate": {
       "external_flash_patched.bin": "63f58c707901db5645c71be52bdd4ad053e63806",
-      "internal_flash_patched.bin": "12170351370b743a29ae5a1d87c1922dddb500b4",
-      "internal_flash_patched_bank2.bin": "0ed167e66162f7307b3a8525cbbfe04cc4946a16"
+      "internal_flash_patched.bin": "34252b97f19e42e53043f0ebb1ddf72814467fd1",
+      "internal_flash_patched_bank2.bin": "e774f167e1d9466ff9bcb6eb431017509c6658ac"
     },
     "zelda": {
-      "external_flash_patched.bin": "964fbf8a6c523b27e6c2d3c51f5323fc3fa22757",
-      "internal_flash_patched.bin": "827dcb2ef4e07bf243d9508de5911003b35c5407"
+      "external_flash_patched.bin": "63925f1ab20fd29fd1dc13416a84e3f49728fe24",
+      "internal_flash_patched.bin": "27af1529aa3a49c086ee33c7d014a5cc4fa877f0"
     },
     "zelda_options": {
-      "external_flash_patched.bin": "205f9d91c0d61c7f84dae66e2d4a964372cdb3ba",
-      "internal_flash_patched.bin": "133234ae30cd4798e5ae82b344a644e164b26d27"
+      "external_flash_patched.bin": "740e2fc7be014332dcc5b1a364a258ccecfb4aec",
+      "internal_flash_patched.bin": "85c3488d0b36139940903c65b09bb879247ae3a7"
     },
     "zelda_relocate": {
-      "external_flash_patched.bin": "4f1cad6a393379b9b8a1243f7e14c14b40a8bf10",
-      "internal_flash_patched.bin": "284ceb44166fb32eaf3ffb67e334568abf4eb33c",
-      "internal_flash_patched_bank2.bin": "a801f193c44aa536de22f85309b86465a4bacf61"
+      "external_flash_patched.bin": "07f3b010b1f39516cad5770bc06a31ab051e6f90",
+      "internal_flash_patched.bin": "870eb127af8033c60494856ffd24300d194589c5",
+      "internal_flash_patched_bank2.bin": "305ecd897900aff73e54c6b6379d2ba37ae2d6f3"
+    },
+    "zelda_relocate_bank1": {
+      "external_flash_patched.bin": "d4ca697a4c1dd71a94b4fc4aff79bf312497ed00",
+      "internal_flash_patched.bin": "f8b50f462ad6c8af2461d1b9582491e9ba294cc2"
     }
   },
   "toolchain": "arm-none-eabi-gcc (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) 15.2.1 20251203"

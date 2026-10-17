@@ -512,6 +512,13 @@ class Device:
         cls.name = name
         cls.registry[name] = cls
 
+    def add_arguments(self, parser):
+        """Add this device's options to ``parser``."""
+
+    def set_args(self, args, parser):
+        """Check the parsed options (``parser.error`` on a bad one) and keep them."""
+        self.args = args
+
     def __init__(self, internal_bin, internal_elf, external_bin):
         self.internal = self.Int(internal_bin, internal_elf)
         self.internal.syms = syms.load(self.name)
@@ -524,19 +531,26 @@ class Device:
         self.external._lookup = self.lookup
         self.compressed_memory._lookup = self.lookup
 
-        # Set up by __call__, once the images have their final lengths.
+        # Set up by a Layout: make_regions() and Layout.add().
         self.int_space = self.sram3_space = self.ext_space = self.bank2_space = None
         # Internal offsets of words the patcher filled with internal addresses
         # (no ELF relocation covers them).
         self.int_pointers = []
-        # patches.relocate.Relocation when stock code is moved; bank2 holds it.
+        # patches.relocate.Relocation when stock code is moved; bank2 (the
+        # Layout's) holds it.
         self.relocation = None
-        self.bank2 = bytearray()
+        self.bank2 = None
         # (internal offset, value, ext lo, ext hi) of every reference a move
         # names; fix_ext_refs() checks them against the scan.
         self.expected_refs = []
         self.ext_refs_fixed = False
         self._stock_map = None
+        # Every range given to free_int(), at stock offsets.
+        self.freed_int = []
+        # Set by patches/amalgam.py: this device shares bank 1 with another,
+        # and its external data starts at ext_base (the other's comes first).
+        self.amalgam = False
+        self.ext_base = 0
 
     @property
     def stock_map(self):
@@ -561,7 +575,7 @@ class Device:
         (None, None) if the patcher removed it."""
         base = self.internal.FLASH_BASE
         if base <= src < base + len(self.internal):
-            if self.int_space.is_freed(src - base):
+            if self.is_freed_int(src - base):
                 return None, None
             return self.internal, src - base
         rw = self.internal.rwdata
@@ -703,23 +717,65 @@ class Device:
 
     compressed_memory_compressed_len.memo = {}
 
-    def _init_regions(self):
-        base = self.internal.FLASH_BASE
-        self.int_space = Region(
-            "internal", base, len(self.internal), pos=self.internal.empty_offset
-        )
-        # The compressed images are written at the cursor last.
-        self.int_space.pending.append(self.compressed_memory_compressed_len)
-        if self.internal.rwdata is not None:
-            self.int_space.pending.append(lambda: self.internal.rwdata.compressed_len)
-        self.int_space.slack = self.COMPRESSED_FIXUP_SLACK
-        self.sram3_space = Region(
-            "sram3", self.compressed_memory.FLASH_BASE, len(self.compressed_memory)
-        )
-        self.ext_space = ExtRegion("external", self.external, self.EXT_SHIFT_ALIGN)
-        from .relocate import BANK2_BASE, BANK2_END
+    def make_regions(self, int_space=None):
+        """This device's internal, SRAM3 and external regions (``Layout``).
 
-        self.bank2_space = Region("bank2", BANK2_BASE, BANK2_END - BANK2_BASE)
+        ``int_space``: an internal region shared with another device (the
+        amalgam), which already notes our code; it's not returned.
+        """
+        base = self.internal.FLASH_BASE
+        name = self.name
+        regions = []
+        if int_space is None:
+            int_space = Region(
+                f"{name} internal",
+                base,
+                len(self.internal),
+                pos=self.internal.empty_offset,
+            )
+            regions.append(int_space)
+        self.int_space = int_space
+        # The compressed images are written at the cursor last.
+        self.pending = [self.compressed_memory_compressed_len]
+        if self.internal.rwdata is not None:
+            self.pending.append(lambda: self.internal.rwdata.compressed_len)
+        int_space.pending += self.pending
+        int_space.slack = self.COMPRESSED_FIXUP_SLACK
+        self.sram3_space = Region(
+            f"{name} sram3",
+            self.compressed_memory.FLASH_BASE,
+            len(self.compressed_memory),
+        )
+        stock_end = self.internal.STOCK_ROM_END
+        if not self.amalgam:
+            int_space.note(0, stock_end, name, "stock code")
+            int_space.note(stock_end, int_space.pos - stock_end, name, "our code")
+        elif self.relocates_in_amalgam:
+            # The rest moves with Relocation (a reserved range).
+            hi = self.STOCK_RELOCATE_END - base
+            int_space.note(hi, stock_end - hi, name, "stock init table")
+        else:
+            int_space.note(0, stock_end, name, "stock code")
+        self.ext_space = ExtRegion(
+            f"{name} external", self.external, self.EXT_SHIFT_ALIGN, name
+        )
+        return regions + [self.sram3_space, self.ext_space]
+
+    def set_ext_base(self, ext_base):
+        """Put this device's external data at ``ext_base`` (the amalgam).
+
+        All of the stock data moves up past the other device's, so keep()
+        records every byte's new place; the buffer holds it until the amalgam
+        takes [ext_base, end).
+        """
+        if ext_base < len(self.external):
+            raise ValueError("ext_base must clear the stock external image")
+        self.ext_base = ext_base
+        self.external.extend(b"\x00" * ext_base)
+        self.ext_space.shift = ext_base
+
+    # Moves its stock code to the top of bank 1 in the amalgam.
+    relocates_in_amalgam = False
 
     def rwdata_erase(self, lower, size):
         """
@@ -744,9 +800,25 @@ class Device:
         ``udf`` so a missed path faults instead of running garbage.
         """
         start, end = round_up_word(start), round_down_word(end)
-        self.internal[start:end] = b"\xfe\xde" * ((end - start) // 2)
-        self.int_space.free(start, end)
+        self.freed_int.append((start, end))
+        # Stock code moved within this image leaves its holes at the new place.
+        shift = self.relocation.int_delta(start) if self.relocation else 0
+        for s in {0, shift}:
+            self.internal[start + s : end + s] = b"\xfe\xde" * ((end - start) // 2)
+        self.int_space.free(start + shift, end + shift)
         printd(f"Freed internal 0x{start:X}-0x{end:X} ({end - start} bytes).")
+
+    def freed_int_ranges(self):
+        """Every freed range where it is in the final image."""
+        out = []
+        for start, end in self.freed_int:
+            shift = self.relocation.int_delta(start) if self.relocation else 0
+            out.append((start + shift, end + shift))
+        return out
+
+    def is_freed_int(self, offset):
+        """Whether stock internal ``offset`` was given to free_int()."""
+        return any(start <= offset < end for start, end in self.freed_int)
 
     @staticmethod
     def _label(ext):
@@ -844,7 +916,6 @@ class Device:
     def __call__(self):
         from . import MarioGnW, ZeldaGnW
 
-        self._init_regions()
         self.patch()
         if self.lookup and not self.ext_refs_fixed:
             raise RuntimeError("patch() moved external data without fix_ext_refs()")
@@ -863,14 +934,17 @@ class Device:
         if self.relocation:
             counts = self.relocation.apply()
             printi(f"Relocated stock code; fixed {counts}")
-        internal_remaining_free = (
-            self.int_space.size - self.int_space.pos + self.int_space.hole_space
-        )
-        compressed_memory_free = self.sram3_space.size - self.sram3_space.pos
-        return internal_remaining_free, compressed_memory_free
+
+    @property
+    def int_remaining_free(self):
+        return self.int_space.limit - self.int_space.pos + self.int_space.hole_space
+
+    @property
+    def sram3_remaining_free(self):
+        return self.sram3_space.size - self.sram3_space.pos
 
     def patch(self):
         """Device specific argument parsing and patching routine.
-        Called from __call__; not to be called otherwise.
+        Called from __call__ (run by ``Layout.patch``); not to be called otherwise.
         """
         raise NotImplementedError

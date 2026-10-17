@@ -1,4 +1,5 @@
 #include "main.h"
+#include "model.h"
 #include "stock_firmware.h"
 #include <inttypes.h>
 #include "cmsis_gcc.h"
@@ -7,7 +8,6 @@
 #include "stm32h7xx_hal.h"
 #include "LzmaDec.h"
 #include <string.h>
-#include "ips.h"
 
 #define MSP_ADDRESS 0x08000000
 
@@ -21,15 +21,19 @@
 // Intended for internal-use only; bypasses other checks
 #define BOOTLOADER_MAGIC_FORCE 0x45435246  // "FRCE"
 
-#if GNW_DEVICE_MARIO
-/**
- * This will most likely be overriden by the patcher.
- */
-const uint8_t * const SMB1_ROM = (const uint8_t *)0x90001e60;
-#endif
-
 #define BOOTLOADER_MAGIC_ADDRESS ((uint32_t *)0x2001FFF8)
 #define BOOTLOADER_JUMP_ADDRESS ((uint32_t **)0x2001FFFC)
+
+#if GNW_AMALGAM
+// The firmware the amalgam boots: Zelda if this RTC backup register holds
+// AMALGAM_BOOT_ZELDA, else Mario. It survives resets and power-off (standby).
+// Stock uses no backup registers; retro-go uses DR0 and DR1.
+#define AMALGAM_BOOT_REG (TAMP->BKP31R)
+#define AMALGAM_BOOT_ZELDA 0x444C455A  // "ZELD"
+
+// Zelda's relocated vector table (STM32H7B0VBTx_FLASH_amalgam.ld).
+extern uint32_t __zelda_vector_table__[];
+#endif
 
 static void  __attribute__((naked)) start_app(void (* const pc)(void), uint32_t sp) {
     __asm("           \n\
@@ -86,6 +90,10 @@ void bootloader(){
         // If GAME is pressed: reset all triggers that might cause us to dual-boot.
         *BOOTLOADER_MAGIC_ADDRESS = 0;
         HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0);
+#if GNW_AMALGAM
+        // And boot Mario, in case Zelda doesn't start.
+        AMALGAM_BOOT_REG = 0;
+#endif
     }
 
     if(*BOOTLOADER_MAGIC_ADDRESS == BOOTLOADER_MAGIC) {
@@ -111,42 +119,20 @@ void bootloader(){
     }
 
 start_ofw:
-    start_app(stock_Reset_Handler, *(uint32_t *) MSP_ADDRESS);
+#if GNW_AMALGAM
+    if(AMALGAM_BOOT_REG == AMALGAM_BOOT_ZELDA){
+        uint32_t *vt = __zelda_vector_table__;
+        if(is_valid(vt[1], vt[0])){
+            // Zelda's SystemInit no longer sets VTOR (patches/zelda.py).
+            SCB->VTOR = (uint32_t)vt;
+            start_app((void (* const)(void)) vt[1], vt[0]);
+        }
+    }
+#endif
+    start_app(MODEL_SELECT(stock_mario_Reset_Handler, stock_zelda_Reset_Handler), *(uint32_t *) MSP_ADDRESS);
     while(1);
 }
 
-
-#if ENABLE_SMB1_GRAPHIC_MODS
-#define SMB1_GRAPHIC_MODS_MAX 8
-const uint8_t * const SMB1_GRAPHIC_MODS[SMB1_GRAPHIC_MODS_MAX] = { 0 };
-static volatile uint8_t smb1_graphics_idx = 0;
-
-uint8_t * prepare_clock_rom(void *mario_rom, size_t len){
-    const uint8_t *patch = NULL;
-
-    if(smb1_graphics_idx > SMB1_GRAPHIC_MODS_MAX){
-        smb1_graphics_idx = 0;
-    }
-    if(smb1_graphics_idx){
-        patch = SMB1_GRAPHIC_MODS[smb1_graphics_idx - 1];
-    }
-
-    memcpy(smb1_clock_working, mario_rom, len);
-
-    if(patch) {
-        // Load custom graphics
-        if(IPS_PATCH_WRONG_HEADER == ips_patch(smb1_clock_working, patch)){
-            // Attempt a direct graphics override
-            memcpy_inflate(smb1_clock_graphics_working, patch, 0x1ec0);
-        }
-    }
-    else{
-        smb1_graphics_idx = 0;
-    }
-
-    return stock_prepare_clock_rom(smb1_clock_working, len);
-}
-#endif
 
 static uint32_t *dual_boot_target(){
 #if SD_BOOTLOADER
@@ -168,18 +154,22 @@ void launch_dual_boot(){
     }
 }
 
-#if ENABLE_SMB1_GRAPHIC_MODS
-bool is_menu_open(){
-    return *ui_draw_status_addr == 5;
+#if GNW_AMALGAM
+bool game_select_target_valid(){
+    return true;
+}
+
+void game_select_launch(){
+    // Reset into the other firmware.
+    PWR->CR1 |= PWR_CR1_DBP;
+    while(!(PWR->CR1 & PWR_CR1_DBP));
+    AMALGAM_BOOT_REG = RUNNING_MARIO() ? AMALGAM_BOOT_ZELDA : 0;
+    NVIC_SystemReset();
 }
 #endif
 
 gamepad_t read_buttons() {
-    static gamepad_t gamepad_last = 0;
-
-    gamepad_t gamepad = 0;
-    gamepad = stock_read_buttons();
-
+    gamepad_t gamepad = MODEL_SELECT(stock_mario_read_buttons, stock_zelda_read_buttons)();
 
 #if TRIPLE_BOOT
     if((gamepad & GAMEPAD_RIGHT) && (gamepad & GAMEPAD_GAME)){
@@ -197,19 +187,10 @@ gamepad_t read_buttons() {
     }
 
 #if ENABLE_SMB1_GRAPHIC_MODS
-    gnw_mode_t mode = get_gnw_mode();
-    if(mode == GNW_MODE_CLOCK && !is_menu_open()){
-        // Actions to only perform on the clock screen
-        if((gamepad & GAMEPAD_DOWN) && !(gamepad_last &GAMEPAD_DOWN)){
-            // TODO: detect if menu is up or not
-            smb1_graphics_idx++;
-            // Force a reload
-            *(uint8_t *)0x2000103d = 1; // Not sure the difference between setting 1 or 2.
-        }
+    if(RUNNING_MARIO()){
+        smb1_graphics_buttons(gamepad);
     }
 #endif
-
-    gamepad_last = gamepad;
 
     return gamepad;
 }
@@ -218,10 +199,6 @@ gamepad_t read_buttons() {
 // lc=0, lp=0, pb=2 ((pb * 5 + lp) * 9 + lc = 0x5a), 16 KB dictionary; must
 // match lzma_compress() in patches/compression.py.
 const uint8_t LZMA_PROP_DATA[5] = {0x5a, 0x00, 0x40, 0x00, 0x00};
-// LzmaDecode only allocates the probability model (the output buffer is the
-// dictionary): (1984 + 0x300 << (lc + lp)) UInt16s.
-#define LZMA_BUF_SIZE            ((1984 + (0x300 << 0)) * 2)
-
 static void *SzAlloc(ISzAllocPtr p, size_t size) {
     void* res = p->Mem;
     return res;
@@ -232,7 +209,6 @@ static void SzFree(ISzAllocPtr p, void *address) {
 
 const ISzAlloc g_Alloc = { SzAlloc, SzFree };
 
-static unsigned char lzma_heap[LZMA_BUF_SIZE];
 /**
  * Dropin replacement for memcpy for loading compressed assets.
  * @param n Compressed data length. Can be larger than necessary.
@@ -241,7 +217,7 @@ void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n){
     ISzAlloc allocs = {
         .Alloc=SzAlloc,
         .Free=SzFree,
-        .Mem=lzma_heap,
+        .Mem=MODEL_SELECT(mario_lzma_heap, zelda_lzma_heap),
     };
 
     ELzmaStatus status;
@@ -274,125 +250,6 @@ uint8_t sleep_image_inflate(const uint8_t *src, uint16_t *dst){
     return 0;
 }
 
-#if GNW_DEVICE_ZELDA
-/**
- * Replaces backdrop_tick's tail call to the stock decode-by-index helper
- * (0x08019f36), which ignores an index past the last backdrop.
- */
-uint8_t backdrop_inflate(uint16_t *dst, int32_t index){
-    if(index >= ZELDA_BACKDROP_COUNT){
-        return 0;
-    }
-    return sleep_image_inflate(stock_backdrop_images[index], dst);
-}
-
-/**
- * LoZ2 EN's CHR ROM, read in place from external flash; the patcher relocates
- * this pointer when the external data moves.
- */
-const uint8_t * const LOZ2_CHR = (const uint8_t *)0x90090000;
-
-/**
- * Replaces loz2_load's "CHR = PRG ROM + 0x20000" (adds r0, r5, r4;
- * str.w r0, [r6, #0xf4c]): the PRG ROM is stored compressed now, so the CHR
- * no longer follows it. r6 is the NES context.
- */
-void __attribute__((naked)) loz2_set_chr(void){
-    __asm("                         \n\
-          ldr r0, =LOZ2_CHR         \n\
-          ldr r0, [r0]              \n\
-          str.w r0, [r6, #0xf4c]    \n\
-          bx lr                     \n\
-          .ltorg                    \n\
-    ");
-}
-
-/*
- * The clock settings overlay gets a 5th row, SECOND BEEP ON/OFF. The setting
- * is bit 2 of nvram word +0x28 (saved with the other settings); the patched
- * clock_tick reads it before queuing the beep.
- */
-#define T(c) (0xa240 + 2 * ((c) - 'A') + ((c) >= 'Q' ? 0x40 - 2 * 16 : 0))
-#define ICON_SPEAKER 0xa05e
-#define SPACE 0x9442
-static const uint16_t SECOND_BEEP_ON[] = {
-    ICON_SPEAKER, SPACE, T('S'), T('E'), T('C'), T('O'), T('N'), T('D'), SPACE,
-    T('B'), T('E'), T('E'), T('P'), SPACE, T('O'), T('N'),
-};
-static const uint16_t SECOND_BEEP_OFF[] = {
-    ICON_SPEAKER, SPACE, T('S'), T('E'), T('C'), T('O'), T('N'), T('D'), SPACE,
-    T('B'), T('E'), T('E'), T('P'), SPACE, T('O'), T('F'), T('F'),
-};
-#undef T
-
-// Bytes between the overlay's rows (24 lines of the 320-byte-wide 8-bit
-// frame); the patcher sets the same spacing in settings_clock_draw.
-#define SETTINGS_ROW_STEP (24 * 320)
-#define SETTINGS_SECOND_BEEP_ROW 4
-
-/**
- * Row 4's input; settings_clock_handle_input returns this (nonzero closes
- * the overlay and saves). A, LEFT and RIGHT toggle the setting; B closes.
- */
-uint32_t second_beep_input(gamepad_t held, gamepad_t pressed){
-    if(pressed & (GAMEPAD_A | GAMEPAD_LEFT | GAMEPAD_RIGHT)){
-        *stock_nvram_flags ^= ZELDA_NVRAM_SECOND_BEEP_OFF;
-        *stock_nvram_dirty = 1;
-    }
-    return (pressed & GAMEPAD_B) != 0;
-}
-
-/**
- * settings_clock_handle_input's path for a row past 3 (0x0000a63e) branches
- * here through an ITCM veneer, inside its push {r4, r5, r6, lr}: r4 holds the
- * pressed buttons, r6 the held ones.
- */
-void __attribute__((naked)) settings_row_input(void){
-    __asm("                         \n\
-          mov r0, r6                \n\
-          mov r1, r4                \n\
-          pop {r4, r5, r6, lr}      \n\
-          b second_beep_input       \n\
-    ");
-}
-
-/**
- * Draws the stock tail call's text (AUTO SLEEP on the main page) and then the
- * 5th row.
- */
-void second_beep_draw(uint8_t *dst, const uint16_t *tiles, uint32_t n){
-    stock_ui_draw_text(dst, tiles, n);
-    // The SET TIME (+0x21) and other edit (+0x26) pages end in the same tail
-    // call with their own layout; the rows are only on the main page.
-    if(stock_ui_state[0x21] || stock_ui_state[0x26]){
-        return;
-    }
-    uint8_t *row = dst - 16 + SETTINGS_ROW_STEP;  // The text starts 16 px in.
-    if(stock_ui_state[0x1f] == SETTINGS_SECOND_BEEP_ROW){
-        stock_ui_draw_cursor(row, (stock_ui_state[0x08] & 0x20) ? 0 : 0x90d8);
-    }
-    if(*stock_nvram_flags & ZELDA_NVRAM_SECOND_BEEP_OFF){
-        stock_ui_draw_text(row + 16, SECOND_BEEP_OFF, sizeof(SECOND_BEEP_OFF) / 2);
-    }
-    else{
-        stock_ui_draw_text(row + 16, SECOND_BEEP_ON, sizeof(SECOND_BEEP_ON) / 2);
-    }
-}
-
-/**
- * settings_clock_draw's last tail call (0x0000afba: add sp, #12, then pop
- * {r4-r11, lr} and b ui_draw_text) branches here through an ITCM veneer
- * instead; r0-r2 are the AUTO SLEEP text's arguments.
- */
-void __attribute__((naked)) settings_draw_tail(void){
-    __asm("                         \n\
-          add sp, #12               \n\
-          pop {r4-r11, lr}          \n\
-          b second_beep_draw        \n\
-    ");
-}
-#endif
-
 /**
  * This gets hooked into the rwdata/bss init table.
  */
@@ -410,32 +267,24 @@ int32_t *rwdata_inflate(int32_t *table){
  */
 int32_t *bss_rwdata_init(int32_t *table){
     /* Copy init values from text to data */
-    uint32_t *init_values_ptr = &_sidata;
-    uint32_t *data_ptr = &_sdata;
+    uint32_t *init_values_ptr = MODEL_RAM(_sidata);
+    uint32_t *data_ptr = MODEL_RAM(_sdata);
+    uint32_t *data_end = MODEL_RAM(_edata);
 
     if (init_values_ptr != data_ptr) {
-        for (; data_ptr < &_edata;) {
+        for (; data_ptr < data_end;) {
             *data_ptr++ = *init_values_ptr++;
         }
     }
 
     /* Clear the zero segment */
-    for (uint32_t *bss_ptr = &_sbss; bss_ptr < &_ebss;) {
+    uint32_t *bss_end = MODEL_RAM(_ebss);
+    for (uint32_t *bss_ptr = MODEL_RAM(_sbss); bss_ptr < bss_end;) {
         *bss_ptr++ = 0;
     }
     return table;
 }
 
-
-#if ENABLE_SMB1_GRAPHIC_MODS
-gnw_mode_t get_gnw_mode(){
-    uint8_t val = *gnw_mode_addr;
-    if(val == 0x20) return GNW_MODE_SMB2;
-    else if(val == 0x10) return GNW_MODE_SMB1;
-    else if(val == 0x08) return GNW_MODE_BALL;
-    else return GNW_MODE_CLOCK;
-}
-#endif
 
 void NMI_Handler(void) {
     __BKPT(0);

@@ -42,6 +42,7 @@ def make_device(refs, monkeypatch, extra=()):
         fw._lookup = device.lookup
     device.int_space = Region("internal", Int.FLASH_BASE, Int.FLASH_LEN)
     device.expected_refs = []
+    device.freed_int = []
     device.ext_refs_fixed = False
     device._stock_map = object()
 
@@ -93,7 +94,7 @@ def test_leaves_unmoved_erased_and_freed_sites(monkeypatch):
     put(device.internal, 0x10, 0x9000_0080)  # data that doesn't move
     put(device.internal, 0x14, 0)  # a patch erased this reference
     put(device.internal, 0x18, 0x9000_0040)
-    device.int_space.free(0x18, 0x1C)  # stock code the patcher removed
+    device.freed_int.append((0x18, 0x1C))  # stock code the patcher removed
     device._move(device.compressed_memory, 0, device.external, 0x40, 4)
 
     assert device.fix_ext_refs() == {}
@@ -161,7 +162,7 @@ def test_lookup_ranges_latest_move_wins():
 
 def test_drop_shifts_the_rest_in_aligned_steps(monkeypatch):
     device = make_device({0x0800_0010: 0x9000_00C4}, monkeypatch)
-    ext = ExtRegion("external", device.external, 0x20, cursor=0x10)
+    ext = ExtRegion("external", device.external, 0x20, "test", cursor=0x10)
     device.external[0x00:0x100] = bytes(range(0x100))
     put(device.internal, 0x10, 0x9000_00C4)
 
@@ -182,7 +183,7 @@ def test_pack_maps_each_block_and_shifts_the_rest(monkeypatch):
     device = make_device(
         {0x0800_0010: 0x9000_0060, 0x0800_0014: 0x9000_00C4}, monkeypatch
     )
-    ext = ExtRegion("external", device.external, 0x20, cursor=0x10)
+    ext = ExtRegion("external", device.external, 0x20, "test", cursor=0x10)
     device.external[0x00:0x100] = bytes(range(0x100))
     put(device.internal, 0x10, 0x9000_0060)
     put(device.internal, 0x14, 0x9000_00C4)
@@ -205,14 +206,14 @@ def test_pack_maps_each_block_and_shifts_the_rest(monkeypatch):
 
 def test_pack_rejects_blocks_larger_than_the_range(monkeypatch):
     device = make_device({}, monkeypatch)
-    ext = ExtRegion("external", device.external, 0x20)
+    ext = ExtRegion("external", device.external, 0x20, "test")
     with pytest.raises(ValueError):
         ext.pack(0x40, 0x48, [(0x40, b"\xaa" * 12)])
 
 
 def test_drop_after_a_partial_drop_counts_from_the_cursor(monkeypatch):
     device = make_device({}, monkeypatch)
-    ext = ExtRegion("external", device.external, 4)
+    ext = ExtRegion("external", device.external, 4, "test")
     ext.drop(0x00, 0x0B)  # a block moved out; its last 3 bytes stay
     ext.drop(0x00, 0x20)  # the rest of its stock range
     assert (ext.cursor, ext.shift) == (0x20, -0x20)

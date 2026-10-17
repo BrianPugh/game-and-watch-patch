@@ -95,10 +95,14 @@ def _encode_branch(hw1, hw2, offset):
 class Relocation:
     """Move internal ``[lo, hi)`` of a patched device to ``dst``."""
 
-    def __init__(self, device, lo, hi, dst):
+    def __init__(self, device, lo, hi, dst, keep_vector_table=True):
         """``dst`` is in bank 2 (a separate image) or in this device's own
         internal image, past its code and data; either range is reserved now so
-        nothing else is placed there."""
+        nothing else is placed there.
+
+        ``keep_vector_table``: the moved vector table also stays at the start
+        of the image (boot and VTOR use 0x08000000). The amalgam sets it false:
+        Mario's vector table is there."""
         if (dst - lo) % 0x1000:
             raise ValueError("relocation offset must be a multiple of 4 KB")
         if dst_in_bank2(dst):
@@ -118,6 +122,7 @@ class Relocation:
                 dst - region.base, hi - lo, device.name, "relocated stock code"
             )
         self.device = device
+        self.keep_vector_table = keep_vector_table
         self.lo, self.hi, self.dst = lo, hi, dst
         self.delta = dst - lo
         self.map = device.stock_map
@@ -127,9 +132,18 @@ class Relocation:
         return self.lo <= addr < self.hi
 
     def freed(self, addr):
-        """In stock code the patcher removed; it may hold data now."""
+        """In stock code the patcher removed."""
         base = self.device.internal.FLASH_BASE
-        return self.device.int_space.is_freed(addr - base)
+        return self.device.is_freed_int(addr - base)
+
+    def int_delta(self, offset):
+        """How far the internal image's stock ``offset`` moves within the
+        image: ``delta`` if it's in the range and the destination is in the
+        same image, else 0."""
+        base = self.device.internal.FLASH_BASE
+        if dst_in_bank2(self.dst) or not self.moves(base + offset):
+            return 0
+        return self.delta
 
     def _count(self, kind):
         self.counts[kind] = self.counts.get(kind, 0) + 1
@@ -176,7 +190,8 @@ class Relocation:
         return None
 
     def _elf_relocs(self):
-        """(address, type) of every relocation in our ELF that lands in flash."""
+        """(address, type, symbol name) of every relocation in our ELF that
+        lands in flash."""
         elf = self.device.internal.elf
         load = [
             (s["p_vaddr"], s["p_paddr"], s["p_memsz"])
@@ -189,11 +204,13 @@ class Relocation:
             target = elf.get_section(sec["sh_info"])
             if not target["sh_flags"] & 2:  # SHF_ALLOC
                 continue
+            symtab = elf.get_section(sec["sh_link"])
             for rel in sec.iter_relocations():
                 vaddr = rel["r_offset"]
+                name = symtab.get_symbol(rel["r_info_sym"]).name
                 for v, p, n in load:  # .data relocations land in its flash copy
                     if v <= vaddr < v + n:
-                        yield p + vaddr - v, rel["r_info_type"]
+                        yield p + vaddr - v, rel["r_info_type"], name
                         break
 
     def apply(self):
@@ -236,10 +253,13 @@ class Relocation:
                     f"PC-relative access at 0x{src:08X} leaves the range"
                 )
 
-        # Our code: branches into and pointers to the range.
+        # Our code: branches into and pointers to the range. The amalgam's
+        # ELF also calls the other firmware's stock code at the same addresses.
         stock_end = base + d.internal.STOCK_ROM_END
-        for addr, rtype in self._elf_relocs():
+        for addr, rtype, name in self._elf_relocs():
             if not stock_end <= addr < base + len(d.internal):
+                continue
+            if name.startswith("stock_") and not name.startswith(f"stock_{d.name}_"):
                 continue
             o = addr - base
             if rtype in (R_ARM_THM_CALL, R_ARM_THM_JUMP24):
@@ -299,9 +319,8 @@ class Relocation:
                 struct.pack_into("<i", buf, o, new_t - new_b)
                 self._count("self-relative")
 
-        # The vector table stays in place too (boot and VTOR use 0x08000000).
         vt = xrefs.VECTOR_TABLE_END
-        if lo == base:
+        if lo == base and self.keep_vector_table:
             d.internal[:vt] = moved[:vt]
 
         if dst_in_bank2(self.dst):
@@ -312,6 +331,13 @@ class Relocation:
         else:
             off = self.dst - base
             out = d.internal
+            # Freed stock code moved with the rest, but its holes were handed
+            # out at the new place (Device.free_int) and may hold data now.
+            for start, end in d.freed_int:
+                if self.moves(base + start):
+                    moved[start - (lo - base) : end - (lo - base)] = out[
+                        off + start - (lo - base) : off + end - (lo - base)
+                    ]
         out[off : off + len(moved)] = moved
 
         # Old copy: udf, so anything still pointing here faults. The OTFDEC

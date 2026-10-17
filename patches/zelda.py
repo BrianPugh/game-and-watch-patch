@@ -103,6 +103,11 @@ ITCM_MENU, ITCM_MENU_SRC, ITCM_MENU_SIZE = 0x9C7C, 0x31_56EC, 0x1B44
 
 
 class ZeldaGnW(Device, name="zelda"):
+    # --relocate-stock moves everything below the init table, vector table
+    # included; the amalgam moves it to the top of bank 1.
+    STOCK_RELOCATE_END = 0x0801_B368
+    relocates_in_amalgam = True
+
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "ac14bcea6e4ff68c88fd2302c021025a2fb47940"
         STOCK_ROM_END = 0x1B3E0  # Used for generating linker script.
@@ -127,7 +132,7 @@ class ZeldaGnW(Device, name="zelda"):
         FLASH_BASE = 0x240F2124
         FLASH_LEN = 0  # 0x24100000 - FLASH_BASE
 
-    def argparse(self, parser):
+    def add_arguments(self, parser):
         group = parser.add_argument_group("Low level flash savings flags")
         group.add_argument(
             "--no-la",
@@ -207,8 +212,6 @@ class ZeldaGnW(Device, name="zelda"):
             "code in bank 1 (e.g. 0x08020000 with --extended). "
             "Tests stock-code relocation; see tools/emu/README.md.",
         )
-        self.args = parser.parse_args()
-        return self.args
 
     def _itcm_menu_offset(self, itcm):
         """External flash offset of ITCM address ``itcm`` in the menu UI copy."""
@@ -687,9 +690,12 @@ class ZeldaGnW(Device, name="zelda"):
             from .relocate import Relocation
 
             printi(f"Relocate the stock firmware to 0x{self.args.relocate_stock:08X}.")
-            # Everything below the init table (0x0801b368), vector table included.
             self.relocation = Relocation(
-                self, 0x0800_0000, 0x0801_B368, self.args.relocate_stock
+                self,
+                0x0800_0000,
+                self.STOCK_RELOCATE_END,
+                self.args.relocate_stock,
+                keep_vector_table=not self.amalgam,
             )
 
         self._dump_roms()

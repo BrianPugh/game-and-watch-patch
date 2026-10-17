@@ -92,8 +92,7 @@ GNW_DEVICE_LOWER := $(shell echo "$(GNW_DEVICE)" | tr 'A-Z' 'a-z')
 MARIO_SOURCES = Core/Src/game_select_mario.c Core/Src/mario.c
 ZELDA_SOURCES = Core/Src/game_select_zelda.c Core/Src/zelda.c
 
-# --device=amalgam: one ELF for both firmwares (C build only; patch.py can't
-# patch it yet).
+# --device=amalgam: one image for both firmwares (patches/amalgam.py).
 ifeq ($(GNW_DEVICE),AMALGAM)
 C_DEFS += -DGNW_DEVICE_MARIO=1 -DGNW_DEVICE_ZELDA=1
 C_SOURCES += $(MARIO_SOURCES) $(ZELDA_SOURCES)
@@ -223,10 +222,7 @@ LDFLAGS += -Wl,--undefined=backdrop_inflate
 endif
 
 # default action: build all
-all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin
-ifneq ($(GNW_DEVICE),AMALGAM)
-all: $(BUILD_DIR)/internal_flash_patched.bin
-endif
+all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/internal_flash_patched.bin
 
 
 include Makefile.sdk

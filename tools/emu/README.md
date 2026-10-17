@@ -157,3 +157,17 @@ build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu 
     --bank1 build/internal_flash_patched.bin --bank2 <an erased bank-2 file> \
     --external build/external_flash_patched.bin
 ```
+
+## Amalgam (Mario + Zelda in one image)
+
+The bootloader starts Mario until boot selection lands, so only Mario runs from
+`--device=amalgam` so far. Its stock code stays in place (no `--delta`), and its
+external data starts after Zelda's:
+
+```bash
+make PATCH_PARAMS="--device=amalgam --game-select-dual-boot"
+build/gwprov-venv/bin/python tools/emu/mario_menu_test.py --gwemu-bin /path/to/gwemu
+build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu --delta 0 \
+    --bank1 build/internal_flash_patched.bin --bank2 <an erased bank-2 file> \
+    --external build/external_flash_patched.bin
+```

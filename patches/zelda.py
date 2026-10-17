@@ -202,8 +202,9 @@ class ZeldaGnW(Device, name="zelda"):
             "--relocate-stock",
             type=lambda s: int(s, 0),
             metavar="ADDR",
-            help="Run the stock firmware relocated to this bank-2 address "
-            "(e.g. 0x08120000), written to a separate bank-2 image. "
+            help="Run the stock firmware relocated to this address: in bank 2 "
+            "(e.g. 0x08120000, written to a separate bank-2 image) or past our "
+            "code in bank 1 (e.g. 0x08020000 with --extended). "
             "Tests stock-code relocation; see tools/emu/README.md.",
         )
         self.args = parser.parse_args()

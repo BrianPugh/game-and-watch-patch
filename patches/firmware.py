@@ -873,7 +873,7 @@ class Device:
 
     @property
     def int_remaining_free(self):
-        return self.int_space.size - self.int_space.pos + self.int_space.hole_space
+        return self.int_space.limit - self.int_space.pos + self.int_space.hole_space
 
     @property
     def sram3_remaining_free(self):

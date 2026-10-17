@@ -77,3 +77,13 @@ def test_layout_shares_bank2_and_maps_every_region():
         "  0x08000010        16         free",
         "  0x08000080         6  mario  ext 0x000010",
     ]
+
+
+def test_the_cursor_stops_at_a_reserved_range():
+    region = Region("internal", 0x0800_0000, 0x400, pos=0x100)
+    region.reserve(0x200, 0x100, "zelda", "relocated stock code")
+    assert region.limit == 0x200 and region.free_space == 0x100
+    with pytest.raises(NotEnoughSpaceError):
+        region.alloc(0x104, "zelda")
+    assert region.alloc(0x100, "zelda") == 0x100
+    assert region.used == 0x300  # up to the cursor (0x200) + the reserved 0x100

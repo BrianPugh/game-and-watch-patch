@@ -96,12 +96,26 @@ class Relocation:
     """Move internal ``[lo, hi)`` of a patched device to ``dst``."""
 
     def __init__(self, device, lo, hi, dst):
+        """``dst`` is in bank 2 (a separate image) or in this device's own
+        internal image, past its code and data; either range is reserved now so
+        nothing else is placed there."""
         if (dst - lo) % 0x1000:
             raise ValueError("relocation offset must be a multiple of 4 KB")
-        if not (dst_in_bank2(dst) and dst + hi - lo <= BANK2_END):
-            raise ValueError(
-                f"0x{dst:08X}-0x{dst + hi - lo:08X} doesn't fit in bank 2 "
-                f"(0x{BANK2_BASE:08X}-0x{BANK2_END:08X})"
+        if dst_in_bank2(dst):
+            if dst + hi - lo > BANK2_END:
+                raise ValueError(
+                    f"0x{dst:08X}-0x{dst + hi - lo:08X} doesn't fit in bank 2 "
+                    f"(0x{BANK2_BASE:08X}-0x{BANK2_END:08X})"
+                )
+            device.bank2_space.reserve(
+                dst - BANK2_BASE, hi - lo, device.name, "stock code"
+            )
+        else:
+            if dst < hi:
+                raise ValueError(f"0x{dst:08X} overlaps the range it moves")
+            region = device.int_space
+            region.reserve(
+                dst - region.base, hi - lo, device.name, "relocated stock code"
             )
         self.device = device
         self.lo, self.hi, self.dst = lo, hi, dst
@@ -290,13 +304,14 @@ class Relocation:
         if lo == base:
             d.internal[:vt] = moved[:vt]
 
-        out = d.bank2 if dst_in_bank2(self.dst) else None
-        if out is None:
-            raise NotImplementedError("only relocation into bank 2 is supported")
-        off = self.dst - BANK2_BASE
-        d.bank2_space.reserve(off, len(moved), d.name, "stock code")
-        if len(out) < off + len(moved):
-            out.extend(b"\xff" * (off + len(moved) - len(out)))
+        if dst_in_bank2(self.dst):
+            off = self.dst - BANK2_BASE
+            out = d.bank2
+            if len(out) < off + len(moved):
+                out.extend(b"\xff" * (off + len(moved) - len(out)))
+        else:
+            off = self.dst - base
+            out = d.internal
         out[off : off + len(moved)] = moved
 
         # Old copy: udf, so anything still pointing here faults. The OTFDEC

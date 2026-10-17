@@ -141,3 +141,19 @@ make PATCH_PARAMS="--device=zelda --relocate-stock=0x08120000"
 build/gwprov-venv/bin/python tools/emu/zelda_menu_test.py --gwemu-bin /path/to/gwemu \
     --bank2-image build/internal_flash_patched_bank2.bin --stock-offset 0x120000
 ```
+
+The destination can also be in bank 1, past our code and data (the layout the
+Mario+Zelda amalgam uses for Zelda): the image is then 256 KB with the stock
+code at `0x08020000`, and bank 2 stays free.
+
+```bash
+make PATCH_PARAMS="--device=zelda --extended --relocate-stock=0x08020000"
+build/gwprov-venv/bin/python tools/emu/zelda_menu_test.py --gwemu-bin /path/to/gwemu \
+    --stock-offset 0x20000
+make PATCH_PARAMS="--device=mario --extended --game-select-dual-boot --relocate-stock=0x08020000"
+build/gwprov-venv/bin/python tools/emu/mario_menu_test.py --gwemu-bin /path/to/gwemu \
+    --stock-offset 0x20000
+build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu --delta 0x20000 \
+    --bank1 build/internal_flash_patched.bin --bank2 <an erased bank-2 file> \
+    --external build/external_flash_patched.bin
+```

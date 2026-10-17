@@ -52,9 +52,17 @@ class Region:
         return f"Region({self.name!r}, 0x{self.base:08X}, 0x{self.size:X})"
 
     @property
+    def limit(self):
+        """Where the cursor stops: the next reserved range, or the end."""
+        ahead = [
+            a.offset for a in self.allocations if a.reserved and a.offset >= self.pos
+        ]
+        return min(ahead, default=self.size)
+
+    @property
     def free_space(self):
         """Bytes left at the cursor (holes not included)."""
-        return self.size - self.pos - sum(p() for p in self.pending) - self.slack
+        return self.limit - self.pos - sum(p() for p in self.pending) - self.slack
 
     @property
     def used(self):

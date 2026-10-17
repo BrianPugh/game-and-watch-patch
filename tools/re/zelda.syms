@@ -74,7 +74,7 @@
 0x0000a22a func ui_close_overlay_save_settings       # writes nvram ids 7 (brightness | ?<<16), 8, 9 and 6 through the nvram_set veneer; runs in ITCM; copied from external flash 0x90315c9a by itcm_overlay_load
 0x0000a34c func settings_clock_set_time_input        # (held, pressed): editing the RTC time (get/set through veneers 0x9031572c/0x90315734); runs in ITCM; copied from external flash 0x90315dbc by itcm_overlay_load
 0x0000a44a func settings_value_edit_input            # (held, pressed): edits ui byte 0x2001a7e3 (nvram id 9) (UNVERIFIED); runs in ITCM; copied from external flash 0x90315eba by itcm_overlay_load
-0x0000a604 func settings_clock_handle_input          # (held, pressed): 4-row cursor; row 0 brightness slider 0..10 (0x2001a7dc); runs in ITCM; copied from external flash 0x90316074 by itcm_overlay_load
+0x0000a604 func settings_clock_handle_input          # (held, pressed): 4-row cursor; row 0 volume slider 0..10 (0x2001a7dc; the overlay draws it next to the speaker icon, nvram id 7 upper half), row 1 brightness (0x2001a7d2); runs in ITCM; copied from external flash 0x90316074 by itcm_overlay_load
 0x0000a67a func settings_toggle_edit_input           # (held, pressed): toggles ui byte 0x2001a7d4 (UNVERIFIED); runs in ITCM; copied from external flash 0x903160ea by itcm_overlay_load
 0x0000a6d0 func settings_game_handle_input           # (held, pressed): 2/3-row cursor (Mario 0x0800c990 analogue); runs in ITCM; copied from external flash 0x90316140 by itcm_overlay_load
 0x0000a740 func settings_game_handle_input_alt       # (held, pressed): 3/4-row variant (UNVERIFIED); runs in ITCM; copied from external flash 0x903161b0 by itcm_overlay_load

@@ -31,7 +31,7 @@
     },
     "zelda_options": {
       "external_flash_patched.bin": "59221a0775f54534f4d2104485c075e1246deac9",
-      "internal_flash_patched.bin": "76d314606beed74c01c4422b83b0183cc1ed89bf"
+      "internal_flash_patched.bin": "9f1e100dabea6a3f23ee93155091c31b61c05626"
     },
     "zelda_relocate": {
       "external_flash_patched.bin": "8cfa702bd28cbf3ad0b16164c3096a4c0fcc4ffa",

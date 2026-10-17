@@ -569,6 +569,15 @@ class ZeldaGnW(Device, name="zelda"):
         printi("Intercept button presses for macros.")
         self.internal.bl(0xFE54, "read_buttons", expect="4:4c010230")
 
+        printi("Mute audio on first boot.")
+        # Fresh nvram is dirty, so the settings aren't loaded from it: the init
+        # at 0x08018178 zeroes the struct (0x2001a7bc), then sets +21, volume
+        # (+32) and brightness (+22) to 7; keep the volume at 0.
+        self.internal.nop(0x1_81A8, 2, expect="4:709be8de")
+        # nvram_init's default for id 7 (brightness | volume << 16), as on Mario,
+        # so a commit before the settings are first saved doesn't bring 7 back.
+        self.internal.asm(0xB6D8, "mov.w r1, #0x00000", expect="4:42e9afc9")
+
         if not self.args.encrypt:
             # Disable OTFDEC
             self.internal.nop(0x16536, 2, expect="4:3c5c53f3")

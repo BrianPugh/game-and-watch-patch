@@ -541,6 +541,7 @@ class ZeldaGnW(Device, name="zelda"):
             0xFFFFFFFE & self.internal.address("memcpy_inflate")
         )
         self.ext_space.cursor = 0x2_0000
+        self.ext_space.note(0, 0x2_0000, self.name, "NVRAM banks, save slots (fixed)")
 
         # Stock memcpy's these into RAM before use, so they're stored LZMA
         # compressed (in place; internal flash is kept for smaller data).
@@ -620,6 +621,9 @@ class ZeldaGnW(Device, name="zelda"):
             self.external[data_end : data_end + len(blob)] = blob
             self.internal.replace(literal, self.external.FLASH_BASE + data_end, size=4)
             printd(f"    0x{offset:06X}: {size} -> {len(blob)} bytes")
+            self.ext_space.note(
+                data_end, len(blob), self.name, f"overlay 0x{offset:06X} (LZMA)"
+            )
             data_end += round_up_word(len(blob))
         # The first 4 copies are bl memcpy, the last a tail call.
         self.internal.bl(0xF7A2, "memcpy_inflate", expect="4:d2879707")
@@ -645,6 +649,7 @@ class ZeldaGnW(Device, name="zelda"):
             end = la_base + 0x2_0000
             la_blocks = [la_base + i * 0x8000 for i in range(4)]
             self.external.set_range(la_base, end, b"\xFF")
+            self.ext_space.note(la_base, end - la_base, self.name, "LA save states")
             printi(f"Moving the LA save states to 0x{la_base:06X}")
             # la_save_state_write and la_save_state_read: 0x3e0000 + lang << 15
             self.internal.asm(

@@ -911,3 +911,5 @@ class MarioGnW(Device, name="mario"):
         printi("Updating end of OTFDEC pointer")
         self.internal.add(0x1_06EC, ext_shift, expect="4:0e03246b")
         self.external.shorten(ext_shift)
+        if not self.args.no_save:
+            self.ext_space.note(0xFE000 + ext_shift, 0x2000, self.name, "NVRAM banks")

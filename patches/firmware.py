@@ -524,14 +524,15 @@ class Device:
         self.external._lookup = self.lookup
         self.compressed_memory._lookup = self.lookup
 
-        # Set up by __call__, once the images have their final lengths.
+        # Set up by a Layout: make_regions() and Layout.add().
         self.int_space = self.sram3_space = self.ext_space = self.bank2_space = None
         # Internal offsets of words the patcher filled with internal addresses
         # (no ELF relocation covers them).
         self.int_pointers = []
-        # patches.relocate.Relocation when stock code is moved; bank2 holds it.
+        # patches.relocate.Relocation when stock code is moved; bank2 (the
+        # Layout's) holds it.
         self.relocation = None
-        self.bank2 = bytearray()
+        self.bank2 = None
         # (internal offset, value, ext lo, ext hi) of every reference a move
         # names; fix_ext_refs() checks them against the scan.
         self.expected_refs = []
@@ -703,10 +704,12 @@ class Device:
 
     compressed_memory_compressed_len.memo = {}
 
-    def _init_regions(self):
+    def make_regions(self):
+        """This device's internal, SRAM3 and external regions (``Layout.patch``)."""
         base = self.internal.FLASH_BASE
+        name = self.name
         self.int_space = Region(
-            "internal", base, len(self.internal), pos=self.internal.empty_offset
+            f"{name} internal", base, len(self.internal), pos=self.internal.empty_offset
         )
         # The compressed images are written at the cursor last.
         self.int_space.pending.append(self.compressed_memory_compressed_len)
@@ -714,12 +717,17 @@ class Device:
             self.int_space.pending.append(lambda: self.internal.rwdata.compressed_len)
         self.int_space.slack = self.COMPRESSED_FIXUP_SLACK
         self.sram3_space = Region(
-            "sram3", self.compressed_memory.FLASH_BASE, len(self.compressed_memory)
+            f"{name} sram3",
+            self.compressed_memory.FLASH_BASE,
+            len(self.compressed_memory),
         )
-        self.ext_space = ExtRegion("external", self.external, self.EXT_SHIFT_ALIGN)
-        from .relocate import BANK2_BASE, BANK2_END
-
-        self.bank2_space = Region("bank2", BANK2_BASE, BANK2_END - BANK2_BASE)
+        stock_end = self.internal.STOCK_ROM_END
+        self.int_space.note(0, stock_end, name, "stock code")
+        self.int_space.note(stock_end, self.int_space.pos - stock_end, name, "our code")
+        self.ext_space = ExtRegion(
+            f"{name} external", self.external, self.EXT_SHIFT_ALIGN, name
+        )
+        return [self.int_space, self.sram3_space, self.ext_space]
 
     def rwdata_erase(self, lower, size):
         """
@@ -844,7 +852,6 @@ class Device:
     def __call__(self):
         from . import MarioGnW, ZeldaGnW
 
-        self._init_regions()
         self.patch()
         if self.lookup and not self.ext_refs_fixed:
             raise RuntimeError("patch() moved external data without fix_ext_refs()")
@@ -863,14 +870,17 @@ class Device:
         if self.relocation:
             counts = self.relocation.apply()
             printi(f"Relocated stock code; fixed {counts}")
-        internal_remaining_free = (
-            self.int_space.size - self.int_space.pos + self.int_space.hole_space
-        )
-        compressed_memory_free = self.sram3_space.size - self.sram3_space.pos
-        return internal_remaining_free, compressed_memory_free
+
+    @property
+    def int_remaining_free(self):
+        return self.int_space.size - self.int_space.pos + self.int_space.hole_space
+
+    @property
+    def sram3_remaining_free(self):
+        return self.sram3_space.size - self.sram3_space.pos
 
     def patch(self):
         """Device specific argument parsing and patching routine.
-        Called from __call__; not to be called otherwise.
+        Called from __call__ (run by ``Layout.patch``); not to be called otherwise.
         """
         raise NotImplementedError

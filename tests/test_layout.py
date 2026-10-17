@@ -2,7 +2,7 @@ import pytest
 
 from patches.exception import NotEnoughSpaceError
 from patches.firmware import Device
-from patches.layout import Region
+from patches.layout import Layout, Region
 
 
 def test_free_int_fills_udf_and_word_aligns():
@@ -50,3 +50,30 @@ def test_append_and_reserve():
         region.reserve(0x50, 0x20, "zelda")
     with pytest.raises(NotEnoughSpaceError):
         region.reserve(0xF0, 0x20, "zelda")
+
+
+def test_layout_shares_bank2_and_maps_every_region():
+    class Fake:
+        name = "mario"
+
+        def make_regions(self):
+            self.int_space = Region("mario internal", 0x0800_0000, 0x100, pos=0x80)
+            return [self.int_space, Region("mario sram3", 0x240F_2124, 0)]
+
+        def __call__(self):
+            self.int_space.alloc(6, self.name, "ext 0x000010")
+            self.int_space.free(0x10, 0x20)
+            self.bank2_space.reserve(0x20000, 0x40, self.name, "stock code")
+
+    layout = Layout()
+    device = Fake()
+    layout.add(device)
+    assert device.bank2 is layout.bank2
+    layout.patch()
+    assert layout.map_lines() == [
+        "bank2 0x08100000-0x08200000: 64 bytes used, 0 in holes",
+        "  0x08120000        64  mario  stock code (reserved)",
+        "mario internal 0x08000000-0x08000100: 120 bytes used, 16 in holes",
+        "  0x08000010        16         free",
+        "  0x08000080         6  mario  ext 0x000010",
+    ]

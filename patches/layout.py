@@ -6,12 +6,16 @@ image in address order instead: every stock byte from its cursor on is either
 kept (shifted down) or dropped.
 
 Offsets are from the region's ``base``, like the image buffers they describe.
+A ``Layout`` holds every region of a build and the devices placed in them.
 """
 
 from dataclasses import dataclass
 
 from .exception import NotEnoughSpaceError
 from .utils import round_up_word
+
+BANK2_BASE = 0x0810_0000
+BANK2_END = BANK2_BASE + 0x10_0000
 
 
 @dataclass
@@ -20,6 +24,7 @@ class Allocation:
     size: int
     owner: str
     label: str
+    reserved: bool = False
 
 
 class Region:
@@ -50,6 +55,12 @@ class Region:
     def free_space(self):
         """Bytes left at the cursor (holes not included)."""
         return self.size - self.pos - sum(p() for p in self.pending) - self.slack
+
+    @property
+    def used(self):
+        """Bytes taken: up to the cursor less the holes, plus reserved ranges."""
+        reserved = sum(a.size for a in self.allocations if a.reserved)
+        return self.pos - self.hole_space + reserved
 
     @property
     def hole_space(self):
@@ -97,8 +108,12 @@ class Region:
                 raise ValueError(
                     f"{label or owner} overlaps {a.label or a.owner} in {self.name}"
                 )
-        self.allocations.append(Allocation(offset, size, owner, label))
+        self.allocations.append(Allocation(offset, size, owner, label, True))
         return offset
+
+    def note(self, offset, size, owner, label):
+        """Record data that was already there, for the map only."""
+        self.allocations.append(Allocation(offset, size, owner, label))
 
     def free(self, start, end):
         """Make [start, end) reusable."""
@@ -107,6 +122,18 @@ class Region:
 
     def is_freed(self, offset):
         return any(start <= offset < end for start, end in self.freed)
+
+    def map_lines(self):
+        """The allocations and remaining holes, in address order."""
+        rows = [
+            (a.offset, a.size, a.owner, a.label + (" (reserved)" if a.reserved else ""))
+            for a in self.allocations
+        ]
+        rows += [(s, e - s, "", "free") for s, e in self.holes if e > s]
+        return [
+            f"  0x{self.base + o:08X}  {n:8d}  {owner:6s} {label}".rstrip()
+            for o, n, owner, label in sorted(rows)
+        ]
 
 
 class ExtRegion(Region):
@@ -118,18 +145,27 @@ class ExtRegion(Region):
     one block, so offsets inside it stay intact.
     """
 
-    def __init__(self, name, buf, align, cursor=0):
+    def __init__(self, name, buf, align, owner, cursor=0):
         super().__init__(name, buf.FLASH_BASE, len(buf))
         self.buf = buf
+        self.owner = owner
         self.align = align
         self.cursor = cursor
         self.shift = 0
 
+    @property
+    def used(self):
+        return len(self.buf)
+
     def keep(self, end):
         """Shift the stock data [cursor, end) down by the current shift."""
         start = self.cursor
-        if end > start and self.shift:
-            self.buf.move(start, self.shift, size=end - start)
+        if end > start:
+            if self.shift:
+                self.buf.move(start, self.shift, size=end - start)
+            self.note(
+                start + self.shift, end - start, self.owner, f"stock 0x{start:06X}"
+            )
         self.cursor = max(start, end)
 
     def drop(self, start, end):
@@ -171,5 +207,44 @@ class ExtRegion(Region):
         self.buf[dst : dst + len(packed)] = packed
         for offset, pos, size in new:
             self.buf._lookup.add(self.base + offset, self.base + dst + pos, size)
+            self.note(dst + pos, size, self.owner, f"packed stock 0x{offset:06X}")
         self.cursor = end
         self.shift -= n
+
+
+class Layout:
+    """Every region a build fills, and the devices placed in them.
+
+    Bank 2 belongs to the build, so devices share it; each device brings its
+    own internal, SRAM3 and external images.
+    """
+
+    def __init__(self):
+        self.devices = []
+        self.bank2 = bytearray()
+        self.bank2_space = Region("bank2", BANK2_BASE, BANK2_END - BANK2_BASE)
+        self.regions = [self.bank2_space]
+
+    def add(self, device):
+        device.bank2 = self.bank2
+        device.bank2_space = self.bank2_space
+        self.devices.append(device)
+
+    def patch(self):
+        """Patch every device, each once its images have their final lengths."""
+        for device in self.devices:
+            self.regions += device.make_regions()
+            device()
+
+    def map_lines(self):
+        """A line per region, then its contents; empty regions are left out."""
+        out = []
+        for r in self.regions:
+            if not r.size and not r.allocations:
+                continue
+            out.append(
+                f"{r.name} 0x{r.base:08X}-0x{r.base + r.size:08X}: "
+                f"{r.used} bytes used, {r.hole_space} in holes"
+            )
+            out += r.map_lines()
+        return out

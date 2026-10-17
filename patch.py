@@ -17,6 +17,7 @@ from colorama import Fore, Style
 
 from patches import Device
 from patches.exception import InvalidPatchError
+from patches.layout import Layout
 
 colorama.init()
 
@@ -154,10 +155,11 @@ def main():
     print("# BEGINING BINARY PATCH #")
     print("#########################" + Style.RESET_ALL)
 
-    (
-        internal_remaining_free,
-        compressed_memory_remaining_free,
-    ) = device()  # Apply patches
+    layout = Layout()
+    layout.add(device)
+    layout.patch()  # Apply patches
+    internal_remaining_free = device.int_remaining_free
+    compressed_memory_remaining_free = device.sram3_remaining_free
 
     if args.show:
         # Debug visualization
@@ -177,6 +179,8 @@ def main():
         print(f"Wrote relocated stock firmware to {bank2_output}")
     elif bank2_output.exists():
         bank2_output.unlink()
+    map_output = args.int_output.with_name("layout.txt")
+    map_output.write_text("\n".join(layout.map_lines()) + "\n")
 
     print(Fore.GREEN)
     print("Binary Patching Complete!")
@@ -202,6 +206,7 @@ def main():
         f"    Total Footprint (internal + external): "
         f"{len(device.internal) - internal_remaining_free + len(device.external)} bytes"
     )
+    print(f"    Allocation map: {map_output}")
     print(Style.RESET_ALL)
 
 

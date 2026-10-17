@@ -89,7 +89,7 @@ Each device class adds its own CLI arguments via `argparse()` method.
 - `bl()`, `b()`, `nop()` - ARM branch/nop helpers
 - `compress()` - LZMA compression for data relocation
 
-Data relocation priority: compressed memory (SRAM3) > internal flash > external flash. Each target is a `Region` (`patches/layout.py`) on the Device: `int_space` (cursor from `__flash_end__`, holes from `free_int`, room held back for the compressed rwdata/SRAM3 images), `sram3_space`, `ext_space` (`ExtRegion`, in-order compaction) and `bank2_space`. Every allocation records its owner and label.
+Data relocation priority: compressed memory (SRAM3) > internal flash > external flash. Each target is a `Region` (`patches/layout.py`) on the Device: `int_space` (cursor from `__flash_end__`, holes from `free_int`, room held back for the compressed rwdata/SRAM3 images), `sram3_space`, `ext_space` (`ExtRegion`, in-order compaction) and `bank2_space`. Every allocation records its owner and label. `patch.py` runs the Device through a `Layout` (which owns bank 2, shared between devices) and writes every region's contents to `build/layout.txt` (stock/our code, moved blocks, holes, kept external ranges, NVRAM/save areas).
 
 Other key modules: `compression.py` (LZMA/LZ77), `ips.py` (IPS patch format), `tileset.py` (NES graphics), `utils.py` (helpers).
 

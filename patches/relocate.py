@@ -26,6 +26,7 @@ import struct
 from elftools.elf.relocation import RelocationSection
 
 from . import xrefs
+from .layout import BANK2_BASE, BANK2_END
 from .xrefs import Code
 
 R_ARM_ABS32 = 2
@@ -306,10 +307,6 @@ class Relocation:
             if not keep[0] <= a < keep[1]:
                 d.internal[a - base : a - base + 2] = b"\xfe\xde"
         return self.counts
-
-
-BANK2_BASE = 0x0810_0000
-BANK2_END = BANK2_BASE + 0x10_0000
 
 
 def dst_in_bank2(addr):

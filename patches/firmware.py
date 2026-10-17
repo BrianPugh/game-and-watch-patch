@@ -11,6 +11,7 @@ from elftools.elf.elffile import ELFFile
 from . import syms
 from .compression import lz77_decompress, lzma_compress
 from .exception import InvalidStockRomError, MissingSymbolError, NotEnoughSpaceError
+from .layout import ExtRegion, Region
 from .patch import FirmwarePatchMixin
 from .utils import printd, printi, round_down_word, round_up_page, round_up_word
 
@@ -502,14 +503,21 @@ class Device:
     # packed, which can grow them a few bytes (7 B for Mario at lc=0).
     COMPRESSED_FIXUP_SLACK = 64
 
-    # ext_drop() shifts the data after a dropped range by a multiple of this,
-    # which keeps any stock alignment up to a flash sector.
+    # ExtRegion.drop() shifts the data after a dropped range by a multiple of
+    # this, which keeps any stock alignment up to a flash sector.
     EXT_SHIFT_ALIGN = 0x1000
 
     def __init_subclass__(cls, name, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.name = name
         cls.registry[name] = cls
+
+    def add_arguments(self, parser):
+        """Add this device's options to ``parser``."""
+
+    def set_args(self, args, parser):
+        """Check the parsed options (``parser.error`` on a bad one) and keep them."""
+        self.args = args
 
     def __init__(self, internal_bin, internal_elf, external_bin):
         self.internal = self.Int(internal_bin, internal_elf)
@@ -523,26 +531,26 @@ class Device:
         self.external._lookup = self.lookup
         self.compressed_memory._lookup = self.lookup
 
-        self.ext_offset = 0
-        # Stock external offset up to which ext_keep()/ext_drop() have placed data.
-        self.ext_cursor = 0
-        self.int_pos = 0
-        self.compressed_memory_pos = 0
-        # [start, end) internal offsets of removed stock code, reusable for data.
-        self.int_holes = []
-        # The same ranges as freed (int_holes shrinks as data fills them).
-        self.int_freed = []
+        # Set up by a Layout: make_regions() and Layout.add().
+        self.int_space = self.sram3_space = self.ext_space = self.bank2_space = None
         # Internal offsets of words the patcher filled with internal addresses
         # (no ELF relocation covers them).
         self.int_pointers = []
-        # patches.relocate.Relocation when stock code is moved; bank2 holds it.
+        # patches.relocate.Relocation when stock code is moved; bank2 (the
+        # Layout's) holds it.
         self.relocation = None
-        self.bank2 = bytearray()
+        self.bank2 = None
         # (internal offset, value, ext lo, ext hi) of every reference a move
         # names; fix_ext_refs() checks them against the scan.
         self.expected_refs = []
         self.ext_refs_fixed = False
         self._stock_map = None
+        # Every range given to free_int(), at stock offsets.
+        self.freed_int = []
+        # Set by patches/amalgam.py: this device shares bank 1 with another,
+        # and its external data starts at ext_base (the other's comes first).
+        self.amalgam = False
+        self.ext_base = 0
 
     @property
     def stock_map(self):
@@ -567,7 +575,7 @@ class Device:
         (None, None) if the patcher removed it."""
         base = self.internal.FLASH_BASE
         if base <= src < base + len(self.internal):
-            if any(base + s <= src < base + e for s, e in self.int_freed):
+            if self.is_freed_int(src - base):
                 return None, None
             return self.internal, src - base
         rw = self.internal.rwdata
@@ -695,7 +703,7 @@ class Device:
             plt.show()
 
     def compressed_memory_compressed_len(self, add_index=0):
-        index = self.compressed_memory_pos + add_index
+        index = self.sram3_space.pos + add_index
         if not index:
             return 0
 
@@ -709,18 +717,65 @@ class Device:
 
     compressed_memory_compressed_len.memo = {}
 
-    @property
-    def compressed_memory_free_space(self):
-        return len(self.compressed_memory) - self.compressed_memory_pos
+    def make_regions(self, int_space=None):
+        """This device's internal, SRAM3 and external regions (``Layout``).
 
-    @property
-    def int_free_space(self):
-        out = (
-            len(self.internal) - self.int_pos - self.compressed_memory_compressed_len()
-        )
+        ``int_space``: an internal region shared with another device (the
+        amalgam), which already notes our code; it's not returned.
+        """
+        base = self.internal.FLASH_BASE
+        name = self.name
+        regions = []
+        if int_space is None:
+            int_space = Region(
+                f"{name} internal",
+                base,
+                len(self.internal),
+                pos=self.internal.empty_offset,
+            )
+            regions.append(int_space)
+        self.int_space = int_space
+        # The compressed images are written at the cursor last.
+        self.pending = [self.compressed_memory_compressed_len]
         if self.internal.rwdata is not None:
-            out -= self.internal.rwdata.compressed_len
-        return out - self.COMPRESSED_FIXUP_SLACK
+            self.pending.append(lambda: self.internal.rwdata.compressed_len)
+        int_space.pending += self.pending
+        int_space.slack = self.COMPRESSED_FIXUP_SLACK
+        self.sram3_space = Region(
+            f"{name} sram3",
+            self.compressed_memory.FLASH_BASE,
+            len(self.compressed_memory),
+        )
+        stock_end = self.internal.STOCK_ROM_END
+        if not self.amalgam:
+            int_space.note(0, stock_end, name, "stock code")
+            int_space.note(stock_end, int_space.pos - stock_end, name, "our code")
+        elif self.relocates_in_amalgam:
+            # The rest moves with Relocation (a reserved range).
+            hi = self.STOCK_RELOCATE_END - base
+            int_space.note(hi, stock_end - hi, name, "stock init table")
+        else:
+            int_space.note(0, stock_end, name, "stock code")
+        self.ext_space = ExtRegion(
+            f"{name} external", self.external, self.EXT_SHIFT_ALIGN, name
+        )
+        return regions + [self.sram3_space, self.ext_space]
+
+    def set_ext_base(self, ext_base):
+        """Put this device's external data at ``ext_base`` (the amalgam).
+
+        All of the stock data moves up past the other device's, so keep()
+        records every byte's new place; the buffer holds it until the amalgam
+        takes [ext_base, end).
+        """
+        if ext_base < len(self.external):
+            raise ValueError("ext_base must clear the stock external image")
+        self.ext_base = ext_base
+        self.external.extend(b"\x00" * ext_base)
+        self.ext_space.shift = ext_base
+
+    # Moves its stock code to the top of bank 1 in the amalgam.
+    relocates_in_amalgam = False
 
     def rwdata_erase(self, lower, size):
         """
@@ -745,33 +800,32 @@ class Device:
         ``udf`` so a missed path faults instead of running garbage.
         """
         start, end = round_up_word(start), round_down_word(end)
-        self.internal[start:end] = b"\xfe\xde" * ((end - start) // 2)
-        self.int_holes.append([start, end])
-        self.int_freed.append((start, end))
+        self.freed_int.append((start, end))
+        # Stock code moved within this image leaves its holes at the new place.
+        shift = self.relocation.int_delta(start) if self.relocation else 0
+        for s in {0, shift}:
+            self.internal[start + s : end + s] = b"\xfe\xde" * ((end - start) // 2)
+        self.int_space.free(start + shift, end + shift)
         printd(f"Freed internal 0x{start:X}-0x{end:X} ({end - start} bytes).")
 
-    def _take_int_hole(self, size: int):
-        """Offset of the smallest hole that fits ``size``, or None."""
-        size = round_up_word(size)
-        fits = [h for h in self.int_holes if h[1] - h[0] >= size]
-        if not fits:
-            return None
-        hole = min(fits, key=lambda h: h[1] - h[0])
-        offset = hole[0]
-        hole[0] += size
-        return offset
+    def freed_int_ranges(self):
+        """Every freed range where it is in the final image."""
+        out = []
+        for start, end in self.freed_int:
+            shift = self.relocation.int_delta(start) if self.relocation else 0
+            out.append((start + shift, end + shift))
+        return out
 
-    @property
-    def int_hole_space(self):
-        return sum(end - start for start, end in self.int_holes)
+    def is_freed_int(self, offset):
+        """Whether stock internal ``offset`` was given to free_int()."""
+        return any(start <= offset < end for start, end in self.freed_int)
+
+    @staticmethod
+    def _label(ext):
+        return f"ext 0x{ext:06X}" if isinstance(ext, int) else "data"
 
     def move_to_int(self, ext, size, reference):
-        new_loc = self._take_int_hole(size)
-        if new_loc is None:
-            if self.int_free_space < size:
-                raise NotEnoughSpaceError
-            new_loc = self.int_pos
-            self.int_pos += round_up_word(size)
+        new_loc = self.int_space.alloc(size, self.name, self._label(ext))
 
         if isinstance(ext, (bytes, bytearray)):
             self.internal[new_loc : new_loc + size] = ext
@@ -784,70 +838,10 @@ class Device:
         return new_loc
 
     def move_ext_external(self, ext, size, reference):
-        """Explicitly just moves ext->ext data"""
-        if isinstance(ext, (bytes, bytearray)):
-            self.external[self.ext_offset : self.ext_offset + size] = ext
-        else:
-            self.external.move(ext, self.ext_offset, size=size)
-
+        """Keep the stock external data at ``ext`` in external flash."""
+        self.ext_space.keep(ext + size)
         self._expect_refs(reference, ext, size)
-
-        new_loc = ext + self.ext_offset
-
-        return new_loc
-
-    def ext_keep(self, end: int):
-        """Shift the stock external data [ext_cursor, end) down by ext_offset.
-
-        With ``ext_drop`` this compacts the external image in address order:
-        every stock byte from the cursor on is either kept (shifted) or dropped.
-        """
-        start = self.ext_cursor
-        if end > start and self.ext_offset:
-            self.external.move(start, self.ext_offset, size=end - start)
-        self.ext_cursor = max(start, end)
-
-    def ext_drop(self, start: int, end: int):
-        """Leave the stock external data [start, end) out of the image.
-
-        Data from the cursor to ``start`` is kept. The shift only grows in
-        ``EXT_SHIFT_ALIGN`` steps; the rest of the range stays as zero padding.
-        """
-        self.ext_keep(start)
-        n = (end - start) // self.EXT_SHIFT_ALIGN * self.EXT_SHIFT_ALIGN
-        self.external.clear_range(start, end)
-        self.ext_cursor = start + n
-        self.ext_offset -= n
-
-    def ext_pack(self, start: int, end: int, blocks):
-        """Replace the stock external data [start, end) with smaller blocks.
-
-        ``blocks`` is ``(stock offset, data)`` pairs inside the range; they're
-        packed back to back (word aligned) where ``start`` lands, and each
-        block's stock offset maps to its new place. The data after the range
-        shifts down in ``EXT_SHIFT_ALIGN`` steps, like ``ext_drop``.
-        """
-        self.ext_keep(start)
-        packed = bytearray()
-        new = []
-        for offset, data in blocks:
-            if not start <= offset < end:
-                raise ValueError(f"0x{offset:X} is outside 0x{start:X}-0x{end:X}")
-            new.append((offset, len(packed), len(data)))
-            packed += bytes(data).ljust(round_up_word(len(data)), b"\x00")
-        n = (end - start - len(packed)) // self.EXT_SHIFT_ALIGN * self.EXT_SHIFT_ALIGN
-        if n < 0:
-            raise ValueError("The packed blocks are larger than the range.")
-        # Nothing keeps (and so re-maps) [start, end) after this: the cursor
-        # moves to the end, and the next kept data lands after the padding.
-        dst = start + self.ext_offset
-        self.external.clear_range(dst, end)
-        self.external[dst : dst + len(packed)] = packed
-        base = self.external.FLASH_BASE
-        for offset, pos, size in new:
-            self.lookup.add(base + offset, base + dst + pos, size)
-        self.ext_cursor = end
-        self.ext_offset -= n
+        return ext + self.ext_space.shift
 
     def move_ext(self, ext, size, reference):
         """Attempt to relocate in priority order:
@@ -860,7 +854,7 @@ class Device:
         try:
             new_loc = self.move_to_int(ext, size, reference)
             if isinstance(ext, int):
-                self.ext_offset -= round_down_word(size)
+                self.ext_space.drop(ext, ext + size)
             return new_loc
         except NotEnoughSpaceError:
             print(
@@ -877,11 +871,10 @@ class Device:
         This is the primary moving method for any compressible data.
         """
         current_len = self.compressed_memory_compressed_len()
+        pos = self.sram3_space.pos
 
         try:
-            self.compressed_memory[
-                self.compressed_memory_pos : self.compressed_memory_pos + size
-            ] = self.external[ext : ext + size]
+            self.compressed_memory[pos : pos + size] = self.external[ext : ext + size]
         except NotEnoughSpaceError:
             print(
                 f"        {Fore.RED}compressed_memory full. Attempting to put in internal{Style.RESET_ALL}"
@@ -896,42 +889,34 @@ class Device:
             f"    {Fore.YELLOW}compression_ratio: {compression_ratio}{Style.RESET_ALL}"
         )
 
-        if diff > self.int_free_space:
+        if diff > self.int_space.free_space:
             print(
                 f"        {Fore.RED}not putting into free memory due not enough free "
                 f"internal storage for compressed data.{Style.RESET_ALL}"
             )
-            self.compressed_memory.clear_range(
-                self.compressed_memory_pos, self.compressed_memory_pos + size
-            )
+            self.compressed_memory.clear_range(pos, pos + size)
             return self.move_ext_external(ext, size, reference)
         elif compression_ratio < self.args.compression_ratio:
             # Revert putting this data into compressed_memory due to poor space_savings
             print(
                 f"        {Fore.RED}not putting in free memory due to poor compression.{Style.RESET_ALL}"
             )
-            self.compressed_memory.clear_range(
-                self.compressed_memory_pos, self.compressed_memory_pos + size
-            )
+            self.compressed_memory.clear_range(pos, pos + size)
             return self.move_ext(ext, size, reference)
         # Even though the data is already moved, this builds the reference lookup
-        self._move_to_compressed_memory(ext, self.compressed_memory_pos, size=size)
+        self._move_to_compressed_memory(ext, pos, size=size)
 
-        print(
-            f"    move_to_compressed_memory {hex(ext)} -> {hex(self.compressed_memory_pos)}"
-        )
+        print(f"    move_to_compressed_memory {hex(ext)} -> {hex(pos)}")
         self._expect_refs(reference, ext, size)
-        new_loc = self.compressed_memory_pos
-        self.compressed_memory_pos += round_up_word(size)
-        self.ext_offset -= round_down_word(size)
+        self.sram3_space.alloc(size, self.name, self._label(ext))
+        self.ext_space.drop(ext, ext + size)
 
-        return new_loc
+        return pos
 
     def __call__(self):
         from . import MarioGnW, ZeldaGnW
 
-        self.int_pos = self.internal.empty_offset
-        out = self.patch()
+        self.patch()
         if self.lookup and not self.ext_refs_fixed:
             raise RuntimeError("patch() moved external data without fix_ext_refs()")
         is_mario, is_zelda = False, False
@@ -949,10 +934,17 @@ class Device:
         if self.relocation:
             counts = self.relocation.apply()
             printi(f"Relocated stock code; fixed {counts}")
-        return out
+
+    @property
+    def int_remaining_free(self):
+        return self.int_space.limit - self.int_space.pos + self.int_space.hole_space
+
+    @property
+    def sram3_remaining_free(self):
+        return self.sram3_space.size - self.sram3_space.pos
 
     def patch(self):
         """Device specific argument parsing and patching routine.
-        Called from __call__; not to be called otherwise.
+        Called from __call__ (run by ``Layout.patch``); not to be called otherwise.
         """
         raise NotImplementedError

@@ -13,7 +13,8 @@ BUILD_DIR = build
 # source
 ######################################
 
-# C sources
+# C sources shared by both models. Model-only sources are added below; their
+# names end in the model (the amalgam linker script places their RAM by name).
 C_SOURCES =  \
 Core/Src/game_select.c \
 Core/Src/ips.c \
@@ -88,7 +89,21 @@ PATCH_PARAMS ?=
 GNW_DEVICE := $(shell $(PYTHON) -m scripts.device_from_patch_params $(PATCH_PARAMS))
 GNW_DEVICE_LOWER := $(shell echo "$(GNW_DEVICE)" | tr 'A-Z' 'a-z')
 
+MARIO_SOURCES = Core/Src/game_select_mario.c Core/Src/mario.c
+ZELDA_SOURCES = Core/Src/game_select_zelda.c Core/Src/zelda.c
+
+# --device=amalgam: one image for both firmwares (patches/amalgam.py).
+ifeq ($(GNW_DEVICE),AMALGAM)
+C_DEFS += -DGNW_DEVICE_MARIO=1 -DGNW_DEVICE_ZELDA=1
+# Its game-select DUAL BOOT entry is how you switch firmware; always on.
+C_DEFS += -DGAME_SELECT_DUAL_BOOT
+C_SOURCES += $(MARIO_SOURCES) $(ZELDA_SOURCES)
+LDSCRIPT = STM32H7B0VBTx_FLASH_amalgam.ld
+else
 C_DEFS += -DGNW_DEVICE_$(GNW_DEVICE)=1
+C_SOURCES += $($(GNW_DEVICE)_SOURCES)
+LDSCRIPT = STM32H7B0VBTx_FLASH.ld
+endif
 
 # Smaller (~1.8KB), slower LZMA decoder; internal flash matters more than speed.
 C_DEFS += -D_LZMA_SIZE_OPT
@@ -173,9 +188,6 @@ CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
 #######################################
 # LDFLAGS
 #######################################
-# link script
-LDSCRIPT = STM32H7B0VBTx_FLASH.ld
-
 # libraries
 LIBS = -lc -lm -lnosys
 LIBDIR =
@@ -189,12 +201,15 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=bss_rwdata_init \
 		  -Wl,--undefined=settings_row_input \
 		  -Wl,--undefined=settings_draw_tail \
-		  -Wl,--undefined=GAME_SELECT_DUAL_BOOT_ICON \
-		  -Wl,--undefined=game_select_draw \
-		  -Wl,--undefined=game_select_handle_input \
-		  -Wl,--undefined=game_select_next \
-		  -Wl,--undefined=game_select_prev \
-		  -Wl,--undefined=game_select_row_step \
+		  -Wl,--undefined=MARIO_GAME_SELECT_DUAL_BOOT_ICON \
+		  -Wl,--undefined=mario_game_select_draw \
+		  -Wl,--undefined=mario_game_select_handle_input \
+		  -Wl,--undefined=mario_game_select_next \
+		  -Wl,--undefined=mario_game_select_prev \
+		  -Wl,--undefined=ZELDA_GAME_SELECT_DUAL_BOOT_ICON \
+		  -Wl,--undefined=zelda_game_select_draw \
+		  -Wl,--undefined=zelda_game_select_handle_input \
+		  -Wl,--undefined=zelda_game_select_row_step \
 		  -Wl,--undefined=loz2_set_chr \
 		  -Wl,--undefined=LOZ2_CHR \
 		  -Wl,--undefined=memcpy_inflate \
@@ -236,7 +251,7 @@ $(BUILD_DIR)/%.o: %.s Makefile $(BUILD_DIR)/env | $(BUILD_DIR)
 $(BUILD_DIR)/stock_symbols.o: $(BUILD_DIR)/stock_symbols.s Makefile | $(BUILD_DIR)
 	$(AS) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile $(LDSCRIPT) $(BUILD_DIR)/device.ld
+$(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile $(LDSCRIPT) STM32H7B0VBTx_FLASH_text.ld $(BUILD_DIR)/device.ld
 	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
 	$(SZ) $@
 

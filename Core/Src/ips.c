@@ -6,8 +6,8 @@
 #include <string.h>
 #include "ips.h"
 
-static char IPS_HEADER[] = {'P', 'A', 'T', 'C', 'H'};
-static char IPS_TRAILER[] = {'E', 'O', 'F'};
+static const char IPS_HEADER[] = {'P', 'A', 'T', 'C', 'H'};
+static const char IPS_TRAILER[] = {'E', 'O', 'F'};
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 

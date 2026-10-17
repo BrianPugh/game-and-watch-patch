@@ -98,6 +98,9 @@
 0x00002cc0 data itcm_unused                           # to 0x00008000 (21312 B)
 #   AHB 0x3001e0c0-0x3001f800 (5952 B) also unused
 #   AHB 0x3001fbf0-0x30020000 (1040 B) also unused
+#   Stock-only probe (ram_probe.py --stock, 2026-10-17) agrees and adds DTCM 0x20010f30-0x20011150 (544 B) and AXI 0x240f2130-0x24100000
+#       (57040 B; our SRAM3 image in patched builds). Stock writes Zelda's free AXI 0x240d3560-0x240d6000, so the 2 firmwares share no
+#       free RAM beyond 0x240ff0c0-0x24100000.
 #   AHB 0x300145b0-0x3001e000 (39504 B): tail of our linker RAM region (__RAM_ORIGIN__/__RAM_LENGTH__) beyond our .data/.bss/stack; stock never writes it
 #   AHB 0x30000000-0x30010000 and AXI 0x2408efe0-0x24098fe0: written in some runs only (look like audio buffers); treat as used. Re-run: tools/emu/ram_probe.py
 # --- startup / frame pacing

@@ -7,6 +7,7 @@ import patches
 from .compression import lzma_compress
 from .exception import BadImageError, InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
+from .thumb_asm import ThumbAssemblyError, encode_modified_immediate
 from .tileset import (
     bytes_to_tilemap,
     decode_backdrop,
@@ -19,7 +20,6 @@ from .utils import (
     printd,
     printe,
     printi,
-    round_down_word,
     round_up_page,
     round_up_word,
     seconds_to_frames,
@@ -28,7 +28,22 @@ from .utils import (
 build_dir = Path("build")  # TODO: expose this properly or put in better location
 
 
+def _is_immediate(value):
+    """Whether ``mov.w`` can load ``value`` (a Thumb modified immediate)."""
+    try:
+        encode_modified_immediate(value)
+    except ThumbAssemblyError:
+        return False
+    return True
+
+
 class MarioGnW(Device, name="mario"):
+    # Mario's external data is packed word by word.
+    EXT_SHIFT_ALIGN = 4
+    # --relocate-stock moves everything below the init table, vector table
+    # included.
+    STOCK_RELOCATE_END = 0x0801_807C
+
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
 
@@ -60,7 +75,7 @@ class MarioGnW(Device, name="mario"):
         FLASH_BASE = 0x240F2124
         FLASH_LEN = 0x24100000 - FLASH_BASE
 
-    def argparse(self, parser):
+    def add_arguments(self, parser):
         group = parser.add_argument_group("Timeout patches")
 
         mgroup = group.add_mutually_exclusive_group()
@@ -186,8 +201,9 @@ class MarioGnW(Device, name="mario"):
             "--relocate-stock",
             type=lambda s: int(s, 0),
             metavar="ADDR",
-            help="Run the stock firmware relocated to this bank-2 address "
-            "(e.g. 0x08120000), written to a separate bank-2 image. "
+            help="Run the stock firmware relocated to this address: in bank 2 "
+            "(e.g. 0x08120000, written to a separate bank-2 image) or past our "
+            "code in bank 1 (e.g. 0x08020000 with --extended). "
             "Tests stock-code relocation; see tools/emu/README.md.",
         )
 
@@ -208,7 +224,8 @@ class MarioGnW(Device, name="mario"):
             help="Configuration so no external flash is used.",
         )
 
-        self.args = parser.parse_args()
+    def set_args(self, args, parser):
+        self.args = args
 
         ############
         # Validate #
@@ -246,16 +263,13 @@ class MarioGnW(Device, name="mario"):
             self.args.no_sleep_images = True
             self.args.no_factory_test = True
 
-        return self.args
-
     def patch(self):
         if self.args.relocate_stock:
             from .relocate import Relocation
 
             printi(f"Relocate the stock firmware to 0x{self.args.relocate_stock:08X}.")
-            # Everything below the init table (0x0801807c), vector table included.
             self.relocation = Relocation(
-                self, 0x0800_0000, 0x0801_807C, self.args.relocate_stock
+                self, 0x0800_0000, self.STOCK_RELOCATE_END, self.args.relocate_stock
             )
 
         printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
@@ -263,6 +277,15 @@ class MarioGnW(Device, name="mario"):
 
         printi("Intercept button presses for macros.")
         self.internal.bl(0x6B52, "read_buttons", expect="4:8d256c72")
+
+        # After a reset (anything but a power-button wake from standby), main
+        # powers down and waits for the power button. Boot like that wake
+        # does: power_on_init, then the main loop.
+        printi("Boot after a reset instead of waiting for the power button.")
+        self.internal.bl(
+            0x7312, self.internal.sym("power_on_init"), expect="4:743ff5f2"
+        )
+        self.internal.b(0x7316, 0x72C4, expect="2:3de528a1")
 
         if self.args.no_factory_test:
             printi("Remove the factory CHARGE AND KEY TEST (g_gnw_mode 0x01).")
@@ -331,16 +354,20 @@ class MarioGnW(Device, name="mario"):
         if self.args.game_select_dual_boot:
             printi("Add dual-boot entry to the game-select menu.")
             # Each hooked function has exactly one call site.
-            self.internal.bl(0xC894, "game_select_prev", expect="4:f87db677")
-            self.internal.bl(0xC89C, "game_select_next", expect="4:f2501abf")
-            self.internal.bl(0xCB18, "game_select_handle_input", expect="4:fa0dc437")
-            self.internal.bl(0xD236, "game_select_draw", expect="4:37ecc1ee")
+            self.internal.bl(0xC894, "mario_game_select_prev", expect="4:f87db677")
+            self.internal.bl(0xC89C, "mario_game_select_next", expect="4:f2501abf")
+            self.internal.bl(
+                0xCB18, "mario_game_select_handle_input", expect="4:fa0dc437"
+            )
+            self.internal.bl(0xD236, "mario_game_select_draw", expect="4:37ecc1ee")
             if self.args.game_select_dual_boot_label:
                 icon = render_label_icon(self.args.game_select_dual_boot_label)
             else:
                 icon = png_to_icon_4bpp(self.args.game_select_dual_boot_icon)
             self.internal.replace(
-                self.internal.address("GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
+                self.internal.address(
+                    "MARIO_GAME_SELECT_DUAL_BOOT_ICON", sub_base=True
+                ),
                 icon,
             )
 
@@ -505,7 +532,7 @@ class MarioGnW(Device, name="mario"):
         self.internal.bl(0x665C, "memcpy_inflate", expect="4:919d5894")
         self.move_ext(0x0, compressed_len, 0x7204)
         # Note: the 4 bytes between 7772 and 7776 is padding.
-        self.ext_offset -= 7776 - round_down_word(compressed_len)
+        self.ext_space.drop(0x0, 7776)
 
         # SMB1 ROM (plus loading custom ROM)
         printd("Compressing and moving SMB1 ROM to compressed_memory.")
@@ -611,7 +638,7 @@ class MarioGnW(Device, name="mario"):
             printe("Erasing Mario Song")
             self.external.replace(0x1_2D44, b"\x00" * mario_song_len)
             self.rwdata_erase(0x1_2D44, mario_song_len)
-            self.ext_offset -= mario_song_len
+            self.ext_space.drop(0x1_2D44, 0x1_2D44 + mario_song_len)
 
             self.internal.asm(0x6FC8, "b 0x1c", expect="2:fc6d56af")
         else:
@@ -637,7 +664,7 @@ class MarioGnW(Device, name="mario"):
 
         printe("Moving clock graphics")
         self.move_ext(0x9_8B84, compressed_len, 0x7350)
-        self.ext_offset -= 0x1_0000 - round_down_word(compressed_len)
+        self.ext_space.drop(0x9_8B84, 0xA_8B84)
 
         # Note: the clock uses a different palette; this palette only applies
         # to ingame Super Mario Bros 1 & 2
@@ -677,7 +704,7 @@ class MarioGnW(Device, name="mario"):
                 smb2_addr,
                 b"\x00" * smb2_size,
             )
-            self.ext_offset -= smb2_size
+            self.ext_space.drop(smb2_addr, smb2_end)
 
             # Replace conditional-branch with unconditional
             # TODO: this prevents hardlocking when selecting SMB2 from the menu,
@@ -688,9 +715,7 @@ class MarioGnW(Device, name="mario"):
             compressed_len = self.external.compress(smb2_addr, smb2_size)
             self.internal.bl(0x6A12, "memcpy_inflate", expect="4:9760e95f")
             self.move_to_compressed_memory(smb2_addr, compressed_len, 0x7374)
-            self.ext_offset -= smb2_size - round_down_word(
-                compressed_len
-            )  # Move by the space savings.
+            self.ext_space.drop(smb2_addr, smb2_end)  # Move by the space savings.
 
             # Round to nearest page so that the length can be used as an imm
             compressed_len = round_up_page(compressed_len)
@@ -808,7 +833,7 @@ class MarioGnW(Device, name="mario"):
             self.external.replace(0xC58F8, b"\x00" * total_image_length)
             for reference in references:
                 self.internal.replace(reference, b"\x00" * 4)  # Erase image references
-            self.ext_offset -= total_image_length
+            self.ext_space.drop(0xC58F8, 0xC58F8 + total_image_length)
         else:
             printe("Recompressing sleeping images.")
             # Replace the stock GIF decoder (tail-called at 0x10938) with ours.
@@ -842,7 +867,7 @@ class MarioGnW(Device, name="mario"):
                 self.external.clear_range(start, end)
                 self.external[start : start + len(blob)] = blob
                 self.move_ext(start, len(blob), literals[start])
-                self.ext_offset -= end - start - len(blob)
+                self.ext_space.drop(start, end)
 
         # The TIME graphic of the first-boot PRESS TIME BUTTON screen.
         self.move_to_compressed_memory(0xF4D18, 2880, 0x10960)
@@ -850,27 +875,29 @@ class MarioGnW(Device, name="mario"):
         # An ITCM overlay that game_reload copies with length 0 (literal at
         # 0x08007210), so it's never used.
         self.external.replace(0xF5858, b"\x00" * 34728)
-        self.ext_offset -= 34728
+        self.ext_space.drop(0xF5858, 0xF5858 + 34728)
 
         self.fix_ext_refs()
         if self.relocation:
             self.relocation.fix_ram_images()
 
-        if self.compressed_memory_pos:
+        if self.sram3_space.pos:
             # Compress and copy over compressed_memory
             self.internal.rwdata.append(
-                self.compressed_memory[: self.compressed_memory_pos].copy(),
+                self.compressed_memory[: self.sram3_space.pos].copy(),
                 self.compressed_memory.FLASH_BASE,
             )
 
         # Compress, insert, and reference the modified rwdata
-        self.int_pos += self.internal.rwdata.write_table_and_data(
-            0x17DB4, data_offset=self.int_pos
+        rwdata_len = self.internal.rwdata.write_table_and_data(
+            0x17DB4, data_offset=self.int_space.pos
         )
+        self.int_space.append(rwdata_len, self.name, "rwdata (LZMA)")
 
-        # Shorten the external firmware
-        # This rounds the negative self.ext_offset towards zero.
-        self.ext_offset = round_up_page(self.ext_offset)
+        # Shorten the external firmware. The NVRAM banks go at the end, after
+        # the compacted data; rounding the negative shift towards zero leaves
+        # them page aligned.
+        ext_shift = round_up_page(self.ext_space.shift)
 
         if self.args.no_save:
             # Disable nvram loading
@@ -886,35 +913,43 @@ class MarioGnW(Device, name="mario"):
             # This just skips the body of the nvram_write_bank function
             self.internal.b(0x48BE, 0x4912, expect="2:f02c2fc0")
 
-            self.ext_offset -= 8192
+            ext_shift -= 8192
         else:
+            # The 2 banks' flash offsets are immediates. Past 1 MB (the amalgam
+            # puts Mario's data after Zelda's) they can't both be: bank 0 goes
+            # at the next 4 KB step that encodes, bank 1 is 4 KB on.
+            nvram = 0xFE000 + ext_shift
+            if _is_immediate(nvram) and _is_immediate(nvram + 0x1000):
+                code = (
+                    f"ite ne; movne.w r4, #{hex(nvram + 0x1000)}; "
+                    f"moveq.w r4, #{hex(nvram)}"
+                )
+            else:
+                while not _is_immediate(nvram):
+                    nvram += 0x1000
+                code = f"mov.w r4, #{hex(nvram)}; it ne; addne.w r4, r4, #0x1000"
+            ext_shift = nvram - 0xFE000
             printi("Update NVRAM read addresses")
-            self.internal.asm(
-                0x4856,
-                "ite ne; "
-                f"movne.w r4, #{hex(0xff000 + self.ext_offset)}; "
-                f"moveq.w r4, #{hex(0xfe000 + self.ext_offset)}",
-                expect="10:08ae9d3d",
-            )
+            self.internal.asm(0x4856, code, expect="10:08ae9d3d")
             printi("Update NVRAM write addresses")
-            self.internal.asm(
-                0x48C0,
-                "ite ne; "
-                f"movne.w r4, #{hex(0xff000 + self.ext_offset)}; "
-                f"moveq.w r4, #{hex(0xfe000 + self.ext_offset)}",
-                expect="10:08ae9d3d",
-            )
+            self.internal.asm(0x48C0, code, expect="10:08ae9d3d")
 
-        # Finally, shorten the firmware
+        # Finally, set the firmware's length
         printi("Updating end of OTFDEC pointer")
-        self.internal.add(0x1_06EC, self.ext_offset, expect="4:0e03246b")
-        self.external.shorten(self.ext_offset)
+        self.internal.add(0x1_06EC, ext_shift, expect="4:0e03246b")
+        end = 0x10_0000 + ext_shift
+        if end > len(self.external):
+            self.external.extend(b"\x00" * (end - len(self.external)))
+        self.external.shorten(len(self.external) - end)
 
-        internal_remaining_free = (
-            len(self.internal) - self.int_pos + self.int_hole_space
-        )
-        compressed_memory_free = (
-            len(self.compressed_memory) - self.compressed_memory_pos
-        )
-
-        return internal_remaining_free, compressed_memory_free
+        # MX_OCTOSPI1_Init sets DeviceSize to 2^20 (stock's 1 MB chip), and the
+        # OSPI rejects addresses past it (GWemu doesn't). Past 1 MB (the
+        # amalgam) widen it.
+        device_size = max(20, (len(self.external) - 1).bit_length())
+        if device_size > 20:
+            printi(f"Setting OSPI DeviceSize to 2^{device_size}")
+            self.internal.asm(
+                0xA41E, f"movs r0, #{device_size}", size=2, expect="2:5419e562"
+            )
+        if not self.args.no_save:
+            self.ext_space.note(0xFE000 + ext_shift, 0x2000, self.name, "NVRAM banks")

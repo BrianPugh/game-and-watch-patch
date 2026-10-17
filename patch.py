@@ -17,6 +17,7 @@ from colorama import Fore, Style
 
 from patches import Device
 from patches.exception import InvalidPatchError
+from patches.layout import Layout
 
 colorama.init()
 
@@ -33,9 +34,10 @@ def main():
         choices=[
             "mario",
             "zelda",
+            "amalgam",
         ],
         default="mario",
-        help="Game and Watch device model",
+        help="Game and Watch device model; amalgam puts both in one 256KB image.",
     )
     parser.add_argument(
         "--patch",
@@ -104,13 +106,17 @@ def main():
     )
 
     args, _ = parser.parse_known_args()
+    if args.device == "amalgam":
+        return main_amalgam(parser, args)
     args.int_firmware = Path(f"internal_flash_backup_{args.device}.bin")
     args.ext_firmware = Path(f"flash_backup_{args.device}.bin")
 
     device = Device.registry[args.device](
         args.int_firmware, args.elf, args.ext_firmware
     )
-    args = device.argparse(parser)
+    device.add_arguments(parser)
+    args = parser.parse_args()
+    device.set_args(args, parser)
     device.crypt()  # Decrypt the external firmware
 
     # Save the decrypted external firmware for debugging/development purposes.
@@ -154,10 +160,11 @@ def main():
     print("# BEGINING BINARY PATCH #")
     print("#########################" + Style.RESET_ALL)
 
-    (
-        internal_remaining_free,
-        compressed_memory_remaining_free,
-    ) = device()  # Apply patches
+    layout = Layout()
+    layout.add(device)
+    layout.patch()  # Apply patches
+    internal_remaining_free = device.int_remaining_free
+    compressed_memory_remaining_free = device.sram3_remaining_free
 
     if args.show:
         # Debug visualization
@@ -177,6 +184,8 @@ def main():
         print(f"Wrote relocated stock firmware to {bank2_output}")
     elif bank2_output.exists():
         bank2_output.unlink()
+    map_output = args.int_output.with_name("layout.txt")
+    map_output.write_text("\n".join(layout.map_lines()) + "\n")
 
     print(Fore.GREEN)
     print("Binary Patching Complete!")
@@ -184,12 +193,12 @@ def main():
         f"    Internal Firmware Used:  {len(device.internal) - internal_remaining_free} bytes"
     )
     print(f"        Free: {internal_remaining_free} bytes")
-    if device.int_holes:
+    if device.int_space.holes:
         holes = ", ".join(
-            f"{end - start}" for start, end in device.int_holes if end > start
+            f"{end - start}" for start, end in device.int_space.holes if end > start
         )
         print(
-            f"          of which in freed stock-code holes: {device.int_hole_space} bytes ({holes})"
+            f"          of which in freed stock-code holes: {device.int_space.hole_space} bytes ({holes})"
         )
     print(
         f"    Compressed Memory Used: {len(device.compressed_memory) - compressed_memory_remaining_free} bytes"
@@ -202,6 +211,62 @@ def main():
         f"    Total Footprint (internal + external): "
         f"{len(device.internal) - internal_remaining_free + len(device.external)} bytes"
     )
+    print(f"    Allocation map: {map_output}")
+    print(Style.RESET_ALL)
+
+
+def main_amalgam(parser, args):
+    """Mario and Zelda in one image; see patches/amalgam.py."""
+    from patches import amalgam
+
+    zelda, mario = (
+        Device.registry[name](
+            Path(f"internal_flash_backup_{name}.bin"),
+            args.elf,
+            Path(f"flash_backup_{name}.bin"),
+        )
+        for name in ("zelda", "mario")
+    )
+    args = amalgam.configure(zelda, mario, parser)
+    for device in (zelda, mario):
+        device.crypt()  # Decrypt the external firmware
+    amalgam.load((zelda, mario), args.patch.read_bytes())
+
+    print(Fore.BLUE)
+    print("#########################")
+    print("# BEGINING BINARY PATCH #")
+    print("#########################" + Style.RESET_ALL)
+
+    layout = Layout()
+    bank1 = amalgam.bank1_region(zelda, mario)
+    layout.regions.append(bank1)
+    for device in (zelda, mario):
+        layout.add(device, bank1)
+    amalgam.patch(layout, zelda, mario)
+
+    internal = amalgam.merge_internal(bank1, [zelda, mario])
+    external = amalgam.merge_external(zelda, mario)
+    amalgam.metadata(internal, external)
+
+    args.int_output.write_bytes(internal)
+    args.ext_output.write_bytes(external)
+    bank2_output = args.int_output.with_name(args.int_output.stem + "_bank2.bin")
+    if bank2_output.exists():
+        bank2_output.unlink()
+    map_output = args.int_output.with_name("layout.txt")
+    map_output.write_text("\n".join(layout.map_lines()) + "\n")
+
+    free = bank1.limit - bank1.pos + bank1.hole_space
+    print(Fore.GREEN)
+    print("Binary Patching Complete!")
+    print(f"    Internal Firmware Used:  {len(internal) - free} bytes")
+    print(f"        Free: {free} bytes")
+    for device in (zelda, mario):
+        used = device.sram3_space.pos
+        print(f"    {device.name} Compressed Memory Used: {used} bytes")
+    print(f"    External Firmware Used: {len(external)} bytes")
+    print(f"        Mario's data starts at 0x{mario.ext_base:06X}")
+    print(f"    Allocation map: {map_output}")
     print(Style.RESET_ALL)
 
 

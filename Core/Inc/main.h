@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file           : main.h
-  * @brief          : Header for main.c file.
+  * @brief          : Header for our C code (main.c is shared by both models).
   *                   This file contains the common defines of the application.
   ******************************************************************************
   * @attention
@@ -99,6 +99,20 @@ typedef uint8_t gnw_mode_t;
 gnw_mode_t get_gnw_mode();
 
 void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n);
+
+// LzmaDecode only allocates the probability model (the output buffer is the
+// dictionary): (1984 + 0x300 << (lc + lp)) UInt16s. Each firmware has its own
+// (mario.c, zelda.c), in its RAM.
+#define LZMA_BUF_SIZE            ((1984 + (0x300 << 0)) * 2)
+extern uint8_t mario_lzma_heap[LZMA_BUF_SIZE];
+extern uint8_t zelda_lzma_heap[LZMA_BUF_SIZE];
+
+uint8_t sleep_image_inflate(const uint8_t *src, uint16_t *dst);
+
+/**
+ * --smb1-graphics: DOWN on the clock screen cycles the SMB1 graphics (mario.c).
+ */
+void smb1_graphics_buttons(gamepad_t gamepad);
 
 /**
  * Returns `true` if the dual-boot target (bank 2, or the SD bootloader) has a

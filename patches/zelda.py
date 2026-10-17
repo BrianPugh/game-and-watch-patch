@@ -231,7 +231,7 @@ class ZeldaGnW(Device, name="zelda"):
         """SECOND BEEP ON/OFF: a 5th row in the clock's PAUSE/SET overlay.
 
         The setting is bit 2 of nvram word +0x28 (nvram_ram 0x240ff000). See
-        second_beep_draw/second_beep_input in main.c.
+        second_beep_draw/second_beep_input in zelda.c.
         """
         printi("Add a SECOND BEEP ON/OFF row to the clock settings overlay.")
         # clock_tick queues the hour tune (0x60) or the second beep (0x40) into
@@ -267,7 +267,7 @@ class ZeldaGnW(Device, name="zelda"):
         self._itcm_menu_patch(0xA620, "movs r1, #5", expect="2:69dcc7a5")
         veneer = self._itcm_veneer("settings_row_input")
         self._itcm_menu_patch(0xA63E, f"b.w #{veneer:#x}", expect="4:59165ff1")
-        # settings_clock_draw: rows 24 lines apart instead of 32 (main.c's
+        # settings_clock_draw: rows 24 lines apart instead of 32 (zelda.c's
         # SETTINGS_ROW_STEP), and second_beep_draw after the AUTO SLEEP text.
         self._itcm_menu_patch(0xAF3E, "mov.w r4, #0x1e00", expect="4:a97cfd34")
         veneer = self._itcm_veneer("settings_draw_tail")
@@ -276,18 +276,18 @@ class ZeldaGnW(Device, name="zelda"):
     def _game_select_dual_boot(self):
         """DUAL BOOT as a 6th game-select row, scrolled into a 5-row window.
 
-        See the Zelda section of game_select.c. Runs after fix_ext_refs(), so
+        See game_select_zelda.c. Runs after fix_ext_refs(), so
         the menu_rows literals hold their final address.
         """
         printi("Add dual-boot entry to the game-select menu.")
         # game_select_handle_input's UP/DOWN step over the 5 rows.
-        veneer = self._itcm_veneer("game_select_row_step")
+        veneer = self._itcm_veneer("zelda_game_select_row_step")
         self._itcm_menu_patch(0xA576, f"bl #{veneer:#x}", expect="4:9be285a5")
         # ui_handle_input's call to game_select_handle_input.
-        veneer = self._itcm_veneer("game_select_handle_input")
+        veneer = self._itcm_veneer("zelda_game_select_handle_input")
         self._itcm_menu_patch(0xA886, f"bl #{veneer:#x}", expect="4:3066bdda")
         # ui_render_overlay's call to game_select_draw.
-        veneer = self._itcm_veneer("game_select_draw")
+        veneer = self._itcm_veneer("zelda_game_select_draw")
         self._itcm_menu_patch(0xB532, f"bl #{veneer:#x}", expect="4:937c01f9")
         # game_select_draw's 2 loads of menu_rows (0x0000acfa, 0x0000ad76) use
         # the literal at 0x0000b788, which nothing else reads: point it at the
@@ -297,7 +297,7 @@ class ZeldaGnW(Device, name="zelda"):
         if self.external.int(literal) != menu_rows:
             raise ValueError("game_select_draw's menu_rows literal moved")
         self.external.replace(
-            literal, self.internal.address("game_select_view_rows"), size=4
+            literal, self.internal.address("zelda_game_select_view_rows"), size=4
         )
 
         if self.args.game_select_dual_boot_label:
@@ -309,7 +309,7 @@ class ZeldaGnW(Device, name="zelda"):
                 self.args.game_select_dual_boot_icon, 96, 32, ZELDA_GAME_SELECT_PALETTE
             )
         self.internal.replace(
-            self.internal.address("GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
+            self.internal.address("ZELDA_GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
             icon,
         )
 
@@ -498,7 +498,7 @@ class ZeldaGnW(Device, name="zelda"):
         """Store the 11 backdrops as Mario's sleep images: palette + LZMA indices.
 
         backdrop_tick's tail call to the stock decode-by-index helper goes to
-        backdrop_inflate (main.c) instead. The blobs are packed back to back (603424 -> ~491 KB), and the DTCM
+        backdrop_inflate (zelda.c) instead. The blobs are packed back to back (603424 -> ~491 KB), and the DTCM
         backdrop_images pointers follow them through fix_ext_refs().
         """
         printi("Recompressing the backdrop images.")

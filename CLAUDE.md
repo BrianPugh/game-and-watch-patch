@@ -66,8 +66,11 @@ Configuration: `.flake8` (max-line-length=120, extend-ignore=E203/W503), `.pre-c
 
 The Makefile auto-detects the device from `PATCH_PARAMS` and generates `build/device.ld` with device-specific linker variables (via `scripts/device_from_patch_params.py`). The main linker script `STM32H7B0VBTx_FLASH.ld` includes this generated file.
 
+### Amalgam Build (Mario + Zelda in One Bank, In Progress)
+`--device=amalgam` builds one ELF for both firmwares (C only: the Makefile skips `patch.py`, which can't patch it yet). It compiles both models' sources with `-DGNW_DEVICE_MARIO=1 -DGNW_DEVICE_ZELDA=1` and links with `STM32H7B0VBTx_FLASH_amalgam.ld`. Each firmware owns all RAM while it runs, so `*mario.o` keep their RAM in Mario's window and `*zelda.o` in Zelda's. Code both run (`main.o`, `game_select.o`, `ips.o`, `LzmaDec.o`) can't have RAM (a linker `ASSERT`); bootloader-only HAL/CMSIS RAM sits in Mario's window. Shared code picks the running firmware's symbol with `MODEL_SELECT(mario, zelda)` (`Core/Inc/model.h`: `SCB->VTOR` in the amalgam, compile-time otherwise), and each firmware's `bss_rwdata_init` initializes only its own RAM. Hooks both models define carry a model prefix (`mario_game_select_draw`). Zelda's `stock_zelda_*` symbols are still at stock addresses. `tests/test_amalgam.py` checks the placement (toolchain only, no backups).
+
 ### Key Directories
-- `Core/Src/` - Custom firmware C code (main.c, ips.c, system_stm32h7xx.c)
+- `Core/Src/` - Custom firmware C code: `main.c` (bootloader, LZMA, hooks both models share), `mario.c`/`zelda.c` (model-only code), `game_select*.c` (the dual-boot menu entry: shared drawing in `game_select.c`, one file per model), ips.c, system_stm32h7xx.c. The Makefile compiles a model's sources (names ending in the model) only for that model
 - `Core/Inc/` - Headers; `stock_firmware.h` dispatches to device-specific headers (`stock_firmware_mario.h`, `stock_firmware_zelda.h`) via preprocessor
 - `Core/lzma/` - LZMA decoder (7zip SDK) for on-device asset decompression
 - `patches/` - Python patching utilities and device-specific logic
@@ -98,7 +101,7 @@ Other key modules: `compression.py` (LZMA/LZ77), `ips.py` (IPS patch format), `t
 - External flash: device-dependent (4MB Zelda stock, upgradeable)
 - Our RAM (`.data`/`.bss`, from `build/device.ld`): Mario `0x30010000`, Zelda `0x240d3560`-`0x240d6000`. Most Zelda AXI RAM that looks free is stock's per-app state (`app_state_*` in `zelda.syms`): zeroed at boot after our init and saved on every app switch, so anything we keep there must be boot-only. Find free RAM with `ram_probe.py --stock` (the patched-build probe skips our own region).
 - Zelda external flash (`ZeldaGnW._compact_ext`/`_finish_ext`): 0-0x20000 (NVRAM banks, save slots, factory scratch) stays put; the data from 0x20000 is compacted with `ExtRegion.keep`/`drop`/`pack` (`patches/layout.py`, `self.ext_space`; shifts in 4 KB steps, `EXT_SHIFT_ALIGN`, word steps for Mario). Blocks stock memcpy's into RAM (NES ROMs, clock graphics, the ITCM/DTCM overlay) are LZMA'd and loaded with `memcpy_inflate`; the overlay holds pointers, so it's compressed after `fix_ext_refs()` and appended at the end. Then the LA save states (4 x 32 KB, 32 KB aligned for `factory_reset_erase_saves`' block erases) follow it. Stock reads saves by flash offset only below 0x20000 and at the LA save states.
-- LZMA uses lc=0: the props in `patches/compression.py` and `LZMA_PROP_DATA`/`LZMA_BUF_SIZE` in `main.c` must match. The heap is only the probability model (the output buffer is the dictionary), so lc sets its size.
+- LZMA uses lc=0: the props in `patches/compression.py` and `LZMA_PROP_DATA` (`main.c`)/`LZMA_BUF_SIZE` (`main.h`) must match. The heap is only the probability model (the output buffer is the dictionary), so lc sets its size.
 - The SRAM3 packer fills internal flash to within bytes, and the pointer fixups after packing can grow the compressed blobs; `Device.COMPRESSED_FIXUP_SLACK` covers that. A `NotEnoughSpaceError` a few bytes past 0x20000 at `write_table_and_data` means it was too small.
 - Firmware metadata at internal vector table offset `0x01B8`: 4-byte structure encoding external flash size and device type (magic value `0x4` distinguishes from executable code)
 
@@ -127,8 +130,8 @@ Other key modules: `compression.py` (LZMA/LZ77), `ips.py` (IPS patch format), `t
 
 ### Adding Custom Functionality
 1. Find hook point in stock ROM (function calls)
-2. Stock functions: name it in `tools/re/<device>.syms` and add a plain prototype for `stock_<name>` (no double prefix for names already starting `stock_`) to the device header in `Core/Inc/`. The build generates `build/stock_symbols.s` (an absolute `FUNC` symbol per `.syms` function, via `patches/syms.py`) and links with `--emit-relocs`, so every call is a relocation `patches/relocate.py` can fix. Stock RAM addresses stay `static` constants in the header. Symbols the patcher looks up by name (e.g. `SMB1_ROM`) must be defined in a `.c` file. Patch code gets a stock symbol's image offset with `self.internal.sym(name)`; give every code patch an `expect="<len>:<crc32>"` of the stock bytes (a hash, so no stock bytes are committed; pass `"4:0"` and copy the value from the error), and re-record `tests/golden.json` (`UPDATE_GOLDEN=1`) when output is meant to change
-3. Implement custom function in `Core/Src/main.c`
+2. Stock functions: name it in `tools/re/<device>.syms` and add a plain prototype for `stock_<device>_<name>` (a `.syms` name starting `stock_` drops it: `stock_mario_Reset_Handler`) to the device header in `Core/Inc/`. The build generates `build/stock_symbols.s` (an absolute `FUNC` symbol per `.syms` function, via `patches/syms.py`) and links with `--emit-relocs`, so every call is a relocation `patches/relocate.py` can fix. Stock RAM addresses stay `static` constants in the header. Symbols the patcher looks up by name (e.g. `SMB1_ROM`) must be defined in a `.c` file. Patch code gets a stock symbol's image offset with `self.internal.sym(name)`; give every code patch an `expect="<len>:<crc32>"` of the stock bytes (a hash, so no stock bytes are committed; pass `"4:0"` and copy the value from the error), and re-record `tests/golden.json` (`UPDATE_GOLDEN=1`) when output is meant to change
+3. Implement custom function in `Core/Src/<device>.c` (`main.c` if both models share it)
 4. Add `-Wl,--undefined=my_function` to LDFLAGS in Makefile if needed
 5. Add patch definition in the device's Python class
 

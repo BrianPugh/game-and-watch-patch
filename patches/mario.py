@@ -334,16 +334,20 @@ class MarioGnW(Device, name="mario"):
         if self.args.game_select_dual_boot:
             printi("Add dual-boot entry to the game-select menu.")
             # Each hooked function has exactly one call site.
-            self.internal.bl(0xC894, "game_select_prev", expect="4:f87db677")
-            self.internal.bl(0xC89C, "game_select_next", expect="4:f2501abf")
-            self.internal.bl(0xCB18, "game_select_handle_input", expect="4:fa0dc437")
-            self.internal.bl(0xD236, "game_select_draw", expect="4:37ecc1ee")
+            self.internal.bl(0xC894, "mario_game_select_prev", expect="4:f87db677")
+            self.internal.bl(0xC89C, "mario_game_select_next", expect="4:f2501abf")
+            self.internal.bl(
+                0xCB18, "mario_game_select_handle_input", expect="4:fa0dc437"
+            )
+            self.internal.bl(0xD236, "mario_game_select_draw", expect="4:37ecc1ee")
             if self.args.game_select_dual_boot_label:
                 icon = render_label_icon(self.args.game_select_dual_boot_label)
             else:
                 icon = png_to_icon_4bpp(self.args.game_select_dual_boot_icon)
             self.internal.replace(
-                self.internal.address("GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
+                self.internal.address(
+                    "MARIO_GAME_SELECT_DUAL_BOOT_ICON", sub_base=True
+                ),
                 icon,
             )
 

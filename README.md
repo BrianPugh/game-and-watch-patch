@@ -117,8 +117,8 @@ If you run into permission issues, [ensure that your user is in the docker group
 # Development
 Main stages to developing a feature:
 1. Find a place to take control in the stock rom (usually function calls).
-2. Name the stock function in `tools/re/<device>.syms` (if it isn't already) and add a prototype for `stock_<name>` to `Core/Inc/stock_firmware_<device>.h`. The build turns every `.syms` function into a linker symbol, so the patcher can follow every call when it relocates stock code. Patch code can look up any `.syms` name with `self.internal.sym(name)`.
-3. Implement your own function, possibly in `Core/Src/main.c`. There's a good chance your custom function will call the function in (2). You will also probably have to add `-Wl,--undefined=my_custom_function` to `LDFLAGS` in the Makefile so that it doesn't get optimized out as unreachable code.
+2. Name the stock function in `tools/re/<device>.syms` (if it isn't already) and add a prototype for `stock_<device>_<name>` to `Core/Inc/stock_firmware_<device>.h`. The build turns every `.syms` function into a linker symbol, so the patcher can follow every call when it relocates stock code. Patch code can look up any `.syms` name with `self.internal.sym(name)`.
+3. Implement your own function, in `Core/Src/<device>.c` (or `Core/Src/main.c` if both models use it). There's a good chance your custom function will call the function in (2). You will also probably have to add `-Wl,--undefined=my_custom_function` to `LDFLAGS` in the Makefile so that it doesn't get optimized out as unreachable code.
 4. Add a patch definition to `patches/patches.py`.
 
 ### Protocols

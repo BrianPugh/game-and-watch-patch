@@ -569,7 +569,6 @@
 0x0800ab24 func nes_cpu_run_veneer
 0x0800ab2c func nes_ppu_render_a_veneer
 0x0800ab34 func nes_ppu_render_b_veneer
-0x080180ca func aeabi_uldivmod_veneer
 0x900c0210 func aeabi_memclr_veneer
 0x900c0218 func rand_lcg_veneer
 0x900c0248 func aeabi_llsr_veneer

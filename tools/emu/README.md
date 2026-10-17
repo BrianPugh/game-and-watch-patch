@@ -160,14 +160,22 @@ build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu 
 
 ## Amalgam (Mario + Zelda in one image)
 
-The bootloader starts Mario until boot selection lands, so only Mario runs from
-`--device=amalgam` so far. Its stock code stays in place (no `--delta`), and its
-external data starts after Zelda's:
+`--device=amalgam` boots Mario until a game-select DUAL BOOT entry (always on in
+the amalgam, labeled ZELDA/MARIO) switches firmware with a reset. Mario's stock
+code stays in place (no `--delta`), and its external data starts after Zelda's:
 
 ```bash
-make PATCH_PARAMS="--device=amalgam --game-select-dual-boot"
-build/gwprov-venv/bin/python tools/emu/mario_menu_test.py --gwemu-bin /path/to/gwemu
+make PATCH_PARAMS="--device=amalgam"
+build/gwprov-venv/bin/python tools/emu/zelda_menu_test.py --gwemu-bin /path/to/gwemu --amalgam
 build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu --delta 0 \
     --bank1 build/internal_flash_patched.bin --bank2 <an erased bank-2 file> \
     --external build/external_flash_patched.bin
 ```
+
+`zelda_menu_test.py --amalgam` boots Mario, picks its ZELDA entry, runs the
+Zelda checks on the firmware it resets into (Zelda's code at `+0x24000`), and
+ends with Zelda's MARIO row resetting back into Mario. The selection lives in
+TAMP backup register 31, which GWemu clears on reset; the harness checks the
+value written before the reset and writes it back when the bootloader starts.
+Persistence across power-off needs hardware. Mario comes back at its PRESS
+TIME screen in GWemu (check on hardware whether it keeps the time). `shift_test.py` covers Mario only.

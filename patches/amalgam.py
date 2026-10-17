@@ -6,7 +6,7 @@ single-model build, from the same ELF. Our code starts past both stock images
 allocate internal space from one bank-1 ``Region``:
 
     0x08000000  Mario's stock code (it doesn't move)
-    0x08018100  free (Mario's code ends here, Zelda's init table starts at 0x0801B368)
+    0x08018100  Mario's data (Mario's code ends here, Zelda's init table starts at 0x0801B368)
     0x0801B368  Zelda's init table (stays, like --relocate-stock)
     0x0801B3E0  our code, then data and compressed images from the cursor
     0x08024000  Zelda's stock code, relocated to the top of the bank
@@ -18,6 +18,10 @@ flash offsets below 0x20000), and Mario's goes after it (``set_ext_base``).
 buffer, and everything else (our code, free space) from whichever device
 changed it. A device writing where another one owns, or both changing the same
 byte differently, is an error.
+
+Mario's vector table boots the image into our bootloader, which starts Zelda
+through its own vector table when a backup register selects it (main.c). Each
+game-select DUAL BOOT entry selects the other firmware and resets.
 """
 
 import copy
@@ -32,6 +36,8 @@ from .utils import round_down_page, round_up_page
 SIZE = 0x4_0000
 # Shared by our code and data, no device owns these bytes.
 SHARED = "both"
+# Default label of each device's game-select entry: the firmware it boots.
+OTHER_LABEL = {"mario": "ZELDA", "zelda": "MARIO"}
 
 
 class AmalgamError(Exception):
@@ -62,6 +68,15 @@ def configure(zelda, mario, parser):
         if getattr(args, "internal_only", False):
             parser.error("--internal-only isn't supported with --device=amalgam")
         args.extended = True
+        # The game-select DUAL BOOT entry switches to the other firmware
+        # (main.c), and it's the only way to; label it with that firmware.
+        args.game_select_dual_boot = True
+        if (
+            args.game_select_dual_boot_label is None
+            and args.game_select_dual_boot_icon
+            == p.get_default("game_select_dual_boot_icon")
+        ):
+            args.game_select_dual_boot_label = OTHER_LABEL[device.name]
         device.amalgam = True
         device.set_args(args, p)
     if unknown:
@@ -77,6 +92,13 @@ def load(devices, patch):
     """Copy our code into each device's (extended) internal image."""
     if len(patch) != SIZE:
         raise AmalgamError(f"Expected a {SIZE} byte patch, got {len(patch)}")
+    zelda = next(d for d in devices if d.relocates_in_amalgam)
+    vt = zelda.internal.address("__zelda_vector_table__")
+    if vt != zelda.args.relocate_stock:
+        raise AmalgamError(
+            f"__zelda_vector_table__ (0x{vt:08X}) isn't where Zelda's stock "
+            f"code goes (0x{zelda.args.relocate_stock:08X})"
+        )
     for d in devices:
         d.internal.extend(b"\x00" * (SIZE - len(d.internal)))
         d.internal[d.internal.STOCK_ROM_END :] = patch[d.internal.STOCK_ROM_END :]
@@ -89,12 +111,16 @@ def bank1_region(zelda, mario):
     our_start = max(zelda.internal.STOCK_ROM_END, mario.internal.STOCK_ROM_END)
     region = Region("bank1", base, SIZE, pos=mario.internal.empty_offset)
     region.note(our_start, region.pos - our_start, SHARED, "our code")
-    region.free(mario.internal.STOCK_ROM_END, zelda.STOCK_RELOCATE_END - base)
     return region
 
 
 def patch(layout, zelda, mario):
     layout.patch_device(zelda)
+    # Past Mario's code, below Zelda's init table: free in the image, but
+    # Zelda's stock code in Zelda's buffer, which its relocation copies out
+    # after the data is placed. So only Mario's data goes there.
+    base = mario.internal.FLASH_BASE
+    zelda.int_space.free(mario.internal.STOCK_ROM_END, zelda.STOCK_RELOCATE_END - base)
     # Mario's stock data moves up in its own buffer, so it has to start past
     # its stock image (only matters when Zelda's data shrinks below 1 MB).
     base = max(len(zelda.external), len(mario.external))
@@ -137,6 +163,15 @@ def merge_internal(region, devices):
     out = origs[ref].copy()
     written = np.zeros(region.size, dtype=bool)
     for i, d in enumerate(devices):
+        if d.relocates_in_amalgam:
+            # Its relocation copied this range out after any data put there.
+            end = d.STOCK_RELOCATE_END - base
+            mine = (owner[:end] == i) & ~shared[:end]
+            if mine.any():
+                raise AmalgamError(
+                    f"{d.name} placed data over its own relocated stock code: "
+                    + _addresses(mine, base)
+                )
         # A relocated device's buffer holds its stock image below our code;
         # what it patched there is in its relocated copy.
         exempt = np.zeros(region.size, dtype=bool)

@@ -720,8 +720,16 @@ class ZeldaGnW(Device, name="zelda"):
 
         self._disable_save_encryption()
 
-        printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
-        self.internal.replace(0x4, "bootloader", expect="4:0138bfeb")
+        if self.amalgam:
+            # Mario's vector table boots the amalgam; our bootloader boots
+            # Zelda through its own (relocated) table, so it keeps its stock
+            # Reset_Handler. SystemInit's VTOR (0x08000000, an immediate with
+            # no room for Zelda's address) is set by the bootloader instead.
+            printi("Leave VTOR to the bootloader.")
+            self.internal.nop(0x1_AE88, 1, expect="2:bc46897c")
+        else:
+            printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
+            self.internal.replace(0x4, "bootloader", expect="4:0138bfeb")
 
         printi("Intercept button presses for macros.")
         self.internal.bl(0xFE54, "read_buttons", expect="4:4c010230")

@@ -1,8 +1,8 @@
 {
   "configs": {
     "amalgam": {
-      "external_flash_patched.bin": "ce1bd56eed6da47a8cb0d2c8f5f9e24514f3eafe",
-      "internal_flash_patched.bin": "f57b8a39fee7fb9f21ece65ac890b029fbc0f235"
+      "external_flash_patched.bin": "e00dea275ad4248cb770390a94b017609a863cd5",
+      "internal_flash_patched.bin": "9e73cf72e039e721123eff9b419c8c97f7d2e66b"
     },
     "mario": {
       "external_flash_patched.bin": "de937b3c31c64c147a8ade5ab2b040be640f6b83",

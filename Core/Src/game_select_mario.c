@@ -63,7 +63,7 @@ static const game_select_entry_t entries[] = {
 
 static uint8_t n_visible_entries(){
     // Only offer the dual-boot entry if there's something to boot.
-    return dual_boot_target_valid() ? N_ENTRIES : N_STOCK_ENTRIES;
+    return game_select_target_valid() ? N_ENTRIES : N_STOCK_ENTRIES;
 }
 
 /**
@@ -89,7 +89,7 @@ uint16_t mario_game_select_prev(uint16_t choice){
 
 void mario_game_select_handle_input(gamepad_t held, gamepad_t pressed){
     if(pressed == GAMEPAD_A && held == pressed && *ui_game_select_choice == GAME_SELECT_ID_DUAL_BOOT){
-        launch_dual_boot();
+        game_select_launch();
         // Target invalid; fall back to the current mode so the stock A
         // handler just closes the menu instead of switching to a bogus mode.
         *ui_game_select_choice = *ui_mode_on_open;

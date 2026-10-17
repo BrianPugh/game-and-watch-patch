@@ -95,6 +95,8 @@ ZELDA_SOURCES = Core/Src/game_select_zelda.c Core/Src/zelda.c
 # --device=amalgam: one image for both firmwares (patches/amalgam.py).
 ifeq ($(GNW_DEVICE),AMALGAM)
 C_DEFS += -DGNW_DEVICE_MARIO=1 -DGNW_DEVICE_ZELDA=1
+# Its game-select DUAL BOOT entry is how you switch firmware; always on.
+C_DEFS += -DGAME_SELECT_DUAL_BOOT
 C_SOURCES += $(MARIO_SOURCES) $(ZELDA_SOURCES)
 LDSCRIPT = STM32H7B0VBTx_FLASH_amalgam.ld
 else

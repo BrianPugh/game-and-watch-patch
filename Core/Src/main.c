@@ -24,6 +24,17 @@
 #define BOOTLOADER_MAGIC_ADDRESS ((uint32_t *)0x2001FFF8)
 #define BOOTLOADER_JUMP_ADDRESS ((uint32_t **)0x2001FFFC)
 
+#if GNW_AMALGAM
+// The firmware the amalgam boots: Zelda if this RTC backup register holds
+// AMALGAM_BOOT_ZELDA, else Mario. It survives resets and power-off (standby).
+// Stock uses no backup registers; retro-go uses DR0 and DR1.
+#define AMALGAM_BOOT_REG (TAMP->BKP31R)
+#define AMALGAM_BOOT_ZELDA 0x444C455A  // "ZELD"
+
+// Zelda's relocated vector table (STM32H7B0VBTx_FLASH_amalgam.ld).
+extern uint32_t __zelda_vector_table__[];
+#endif
+
 static void  __attribute__((naked)) start_app(void (* const pc)(void), uint32_t sp) {
     __asm("           \n\
           msr msp, r1 /* load r1 into MSP */\n\
@@ -79,6 +90,10 @@ void bootloader(){
         // If GAME is pressed: reset all triggers that might cause us to dual-boot.
         *BOOTLOADER_MAGIC_ADDRESS = 0;
         HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0);
+#if GNW_AMALGAM
+        // And boot Mario, in case Zelda doesn't start.
+        AMALGAM_BOOT_REG = 0;
+#endif
     }
 
     if(*BOOTLOADER_MAGIC_ADDRESS == BOOTLOADER_MAGIC) {
@@ -104,7 +119,16 @@ void bootloader(){
     }
 
 start_ofw:
-    // The amalgam boots from Mario's vector table, so this starts Mario.
+#if GNW_AMALGAM
+    if(AMALGAM_BOOT_REG == AMALGAM_BOOT_ZELDA){
+        uint32_t *vt = __zelda_vector_table__;
+        if(is_valid(vt[1], vt[0])){
+            // Zelda's SystemInit no longer sets VTOR (patches/zelda.py).
+            SCB->VTOR = (uint32_t)vt;
+            start_app((void (* const)(void)) vt[1], vt[0]);
+        }
+    }
+#endif
     start_app(MODEL_SELECT(stock_mario_Reset_Handler, stock_zelda_Reset_Handler), *(uint32_t *) MSP_ADDRESS);
     while(1);
 }
@@ -129,6 +153,20 @@ void launch_dual_boot(){
         NVIC_SystemReset();
     }
 }
+
+#if GNW_AMALGAM
+bool game_select_target_valid(){
+    return true;
+}
+
+void game_select_launch(){
+    // Reset into the other firmware.
+    PWR->CR1 |= PWR_CR1_DBP;
+    while(!(PWR->CR1 & PWR_CR1_DBP));
+    AMALGAM_BOOT_REG = RUNNING_MARIO() ? AMALGAM_BOOT_ZELDA : 0;
+    NVIC_SystemReset();
+}
+#endif
 
 gamepad_t read_buttons() {
     gamepad_t gamepad = MODEL_SELECT(stock_mario_read_buttons, stock_zelda_read_buttons)();

@@ -11,9 +11,9 @@ import sys
 
 import pytest
 from elftools.elf.elffile import ELFFile
+from test_golden import _copy_tree, _toolchain
 
 from scripts.device_from_patch_params import RAM
-from test_golden import _copy_tree, _toolchain
 
 FLAGS = "--device=amalgam --game-select-dual-boot --smb1-graphics --triple-boot"
 
@@ -25,7 +25,13 @@ def elf(tmp_path_factory):
     tree = tmp_path_factory.mktemp("amalgam") / "tree"
     _copy_tree(tree)
     proc = subprocess.run(
-        ["make", "-j8", f"PYTHON={sys.executable}", f"PATCH_PARAMS={FLAGS}"],
+        [
+            "make",
+            "-j8",
+            f"PYTHON={sys.executable}",
+            f"PATCH_PARAMS={FLAGS}",
+            "build/gw_patch.elf",
+        ],
         cwd=tree,
         capture_output=True,
         text=True,

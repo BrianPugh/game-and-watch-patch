@@ -103,6 +103,11 @@ ITCM_MENU, ITCM_MENU_SRC, ITCM_MENU_SIZE = 0x9C7C, 0x31_56EC, 0x1B44
 
 
 class ZeldaGnW(Device, name="zelda"):
+    # --relocate-stock moves everything below the init table, vector table
+    # included; the amalgam moves it to the top of bank 1.
+    STOCK_RELOCATE_END = 0x0801_B368
+    relocates_in_amalgam = True
+
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "ac14bcea6e4ff68c88fd2302c021025a2fb47940"
         STOCK_ROM_END = 0x1B3E0  # Used for generating linker script.
@@ -127,7 +132,7 @@ class ZeldaGnW(Device, name="zelda"):
         FLASH_BASE = 0x240F2124
         FLASH_LEN = 0  # 0x24100000 - FLASH_BASE
 
-    def argparse(self, parser):
+    def add_arguments(self, parser):
         group = parser.add_argument_group("Low level flash savings flags")
         group.add_argument(
             "--no-la",
@@ -207,8 +212,6 @@ class ZeldaGnW(Device, name="zelda"):
             "code in bank 1 (e.g. 0x08020000 with --extended). "
             "Tests stock-code relocation; see tools/emu/README.md.",
         )
-        self.args = parser.parse_args()
-        return self.args
 
     def _itcm_menu_offset(self, itcm):
         """External flash offset of ITCM address ``itcm`` in the menu UI copy."""
@@ -676,6 +679,15 @@ class ZeldaGnW(Device, name="zelda"):
         )
         del self.external[end:]
 
+        # MX_OCTOSPI1_Init sets DeviceSize to 2^22 (stock's 4 MB chip), and the
+        # OSPI rejects addresses past it (GWemu doesn't). Past 4 MB widen it.
+        device_size = max(22, (len(self.external) - 1).bit_length())
+        if device_size > 22:
+            printi(f"Setting OSPI DeviceSize to 2^{device_size}")
+            self.internal.asm(
+                0x1328E, f"movs r0, #{device_size}", size=2, expect="2:662f87e0"
+            )
+
     def _erase_savedata(self):
         self.external.set_range(0x0000, 0x12000, b"\xFF")
 
@@ -687,9 +699,12 @@ class ZeldaGnW(Device, name="zelda"):
             from .relocate import Relocation
 
             printi(f"Relocate the stock firmware to 0x{self.args.relocate_stock:08X}.")
-            # Everything below the init table (0x0801b368), vector table included.
             self.relocation = Relocation(
-                self, 0x0800_0000, 0x0801_B368, self.args.relocate_stock
+                self,
+                0x0800_0000,
+                self.STOCK_RELOCATE_END,
+                self.args.relocate_stock,
+                keep_vector_table=not self.amalgam,
             )
 
         self._dump_roms()
@@ -714,11 +729,28 @@ class ZeldaGnW(Device, name="zelda"):
 
         self._disable_save_encryption()
 
-        printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
-        self.internal.replace(0x4, "bootloader", expect="4:0138bfeb")
+        if self.amalgam:
+            # Mario's vector table boots the amalgam; our bootloader boots
+            # Zelda through its own (relocated) table, so it keeps its stock
+            # Reset_Handler. SystemInit's VTOR (0x08000000, an immediate with
+            # no room for Zelda's address) is set by the bootloader instead.
+            printi("Leave VTOR to the bootloader.")
+            self.internal.nop(0x1_AE88, 1, expect="2:bc46897c")
+        else:
+            printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
+            self.internal.replace(0x4, "bootloader", expect="4:0138bfeb")
 
         printi("Intercept button presses for macros.")
         self.internal.bl(0xFE54, "read_buttons", expect="4:4c010230")
+
+        # After a reset (anything but a power-button wake from standby), main
+        # powers down and waits for the power button. Boot like that wake
+        # does: power_on_init, then the main loop.
+        printi("Boot after a reset instead of waiting for the power button.")
+        self.internal.bl(
+            0x1063C, self.internal.sym("power_on_init"), expect="4:094801b7"
+        )
+        self.internal.b(0x10640, 0x105EE, expect="2:3de528a1")
 
         printi("Mute audio on first boot.")
         # Fresh nvram is dirty, so the settings aren't loaded from it: the init

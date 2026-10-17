@@ -201,6 +201,9 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=bss_rwdata_init \
 		  -Wl,--undefined=settings_row_input \
 		  -Wl,--undefined=settings_draw_tail \
+		  -Wl,--undefined=mario_settings_row_input \
+		  -Wl,--undefined=tick_draw \
+		  -Wl,--undefined=tick_sound \
 		  -Wl,--undefined=MARIO_GAME_SELECT_DUAL_BOOT_ICON \
 		  -Wl,--undefined=mario_game_select_draw \
 		  -Wl,--undefined=mario_game_select_handle_input \

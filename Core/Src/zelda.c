@@ -40,20 +40,18 @@ void __attribute__((naked)) loz2_set_chr(void){
 }
 
 /*
- * The clock settings overlay gets a 5th row, SECOND BEEP ON/OFF. The setting
- * is bit 2 of nvram word +0x28 (saved with the other settings); the patched
- * clock_tick reads it before queuing the beep.
+ * The clock settings overlay gets a 5th row, TICK ON/OFF, for the second beep.
+ * The setting is bit 2 of nvram word +0x28 (saved with the other settings);
+ * the patched clock_tick reads it before queuing the beep.
  */
 #define T(c) (0xa240 + 2 * ((c) - 'A') + ((c) >= 'Q' ? 0x40 - 2 * 16 : 0))
 #define ICON_SPEAKER 0xa05e
 #define SPACE 0x9442
-static const uint16_t SECOND_BEEP_ON[] = {
-    ICON_SPEAKER, SPACE, T('S'), T('E'), T('C'), T('O'), T('N'), T('D'), SPACE,
-    T('B'), T('E'), T('E'), T('P'), SPACE, T('O'), T('N'),
+static const uint16_t TICK_ON[] = {
+    ICON_SPEAKER, SPACE, T('T'), T('I'), T('C'), T('K'), SPACE, T('O'), T('N'),
 };
-static const uint16_t SECOND_BEEP_OFF[] = {
-    ICON_SPEAKER, SPACE, T('S'), T('E'), T('C'), T('O'), T('N'), T('D'), SPACE,
-    T('B'), T('E'), T('E'), T('P'), SPACE, T('O'), T('F'), T('F'),
+static const uint16_t TICK_OFF[] = {
+    ICON_SPEAKER, SPACE, T('T'), T('I'), T('C'), T('K'), SPACE, T('O'), T('F'), T('F'),
 };
 #undef T
 
@@ -104,10 +102,10 @@ void second_beep_draw(uint8_t *dst, const uint16_t *tiles, uint32_t n){
         stock_zelda_ui_draw_cursor(row, (stock_ui_state[0x08] & 0x20) ? 0 : 0x90d8);
     }
     if(*stock_nvram_flags & ZELDA_NVRAM_SECOND_BEEP_OFF){
-        stock_zelda_ui_draw_text(row + 16, SECOND_BEEP_OFF, sizeof(SECOND_BEEP_OFF) / 2);
+        stock_zelda_ui_draw_text(row + 16, TICK_OFF, sizeof(TICK_OFF) / 2);
     }
     else{
-        stock_zelda_ui_draw_text(row + 16, SECOND_BEEP_ON, sizeof(SECOND_BEEP_ON) / 2);
+        stock_zelda_ui_draw_text(row + 16, TICK_ON, sizeof(TICK_ON) / 2);
     }
 }
 

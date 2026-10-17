@@ -25,10 +25,11 @@ This repo contains custom code as well as a patching utility to add additional f
     * Cycle through via the down button on the clock screen.
     * Add all your ips files to `ips/` and have the patcher automatically discover them via the flag `--smb1-graphics-glob`
 * Dumps SMB1 and SMB2 ROMs that are playable by other emulators.
+* TICK ON/OFF row in the clock's PAUSE/SET menu to silence the clock's once-a-second tick.
 * See [the mario document for more information](docs/mario.md).
 
 ### Zelda (`PATCH_PARAMS="--device=zelda"`)
-* Ability to remove the second beep in TIME/CLOCK via `--no-beep`
+* TICK ON/OFF row in the clock's PAUSE/SET menu to silence the clock's once-a-second beep (`--no-hour-tune` removes the hour tune).
 * External flash savings to come in the future.
 * See [the zelda document for more information](docs/zelda.md).
 

@@ -166,6 +166,21 @@ class Driver:
         self._release(mask(buttons))
         self.dbg.resume()
 
+    def run_to(self, pc: int):
+        """Resume a halted target and stop at ``pc`` (off the poll; e.g. in
+        code that resets)."""
+        self.dbg.bp(pc)
+        self.dbg.resume()
+        result = self.dbg.wait_stopped(10)
+        self.dbg.clear_bp(pc)
+        if not (result.get("stopped") and result["registers"]["pc"] == pc):
+            raise RuntimeError(f"0x{pc:08X} not reached: {result}")
+
+    def release_to(self, buttons: str, pc: int):
+        """Inject one frame and stop at ``pc``."""
+        self._release(mask(buttons))
+        self.run_to(pc)
+
     def tap(self, buttons: str, settle: int = 8):
         self.frames(buttons, 2)
         self.frames("", settle)

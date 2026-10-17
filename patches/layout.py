@@ -42,8 +42,6 @@ class Region:
         self.pos = pos
         # [start, end) of freed ranges not yet reused; they shrink as data fills them.
         self.holes = []
-        # Every range given to free(), as freed.
-        self.freed = []
         self.allocations = []
         self.pending = []
         self.slack = 0
@@ -126,10 +124,6 @@ class Region:
     def free(self, start, end):
         """Make [start, end) reusable."""
         self.holes.append([start, end])
-        self.freed.append((start, end))
-
-    def is_freed(self, offset):
-        return any(start <= offset < end for start, end in self.freed)
 
     def map_lines(self):
         """The allocations and remaining holes, in address order."""
@@ -233,16 +227,28 @@ class Layout:
         self.bank2_space = Region("bank2", BANK2_BASE, BANK2_END - BANK2_BASE)
         self.regions = [self.bank2_space]
 
-    def add(self, device):
+    def add(self, device, int_space=None):
+        """Place ``device``, once its images have their final lengths.
+
+        ``int_space`` is an internal region shared with another device (the
+        amalgam); its space for each device's compressed images is held back
+        from the start.
+        """
         device.bank2 = self.bank2
         device.bank2_space = self.bank2_space
+        self.regions += device.make_regions(int_space)
         self.devices.append(device)
 
     def patch(self):
-        """Patch every device, each once its images have their final lengths."""
+        """Patch every device."""
         for device in self.devices:
-            self.regions += device.make_regions()
-            device()
+            self.patch_device(device)
+
+    def patch_device(self, device):
+        device()
+        # Its compressed images are written now.
+        for p in device.pending:
+            device.int_space.pending.remove(p)
 
     def map_lines(self):
         """A line per region, then its contents; empty regions are left out."""

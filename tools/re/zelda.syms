@@ -511,7 +511,7 @@
 0x0801addc func DMA2D_IRQHandler                     # vector 106
 0x0801ae04 func DMA2_Stream6_IRQHandler              # vector 85
 0x0801ae12 func CRYP_IRQHandler                      # vector 95: bl 0x0800e540 (get handle) then HAL_CRYP_IRQHandler
-0x0801ae20 func SystemInit                           # same code as Mario 0x08017b20
+0x0801ae20 func SystemInit                           # same code as Mario 0x08017b20; SCB->VTOR = 0x08000000 (`mov.w r2` @0x0801ae76, `str r2, [r3]` @0x0801ae88)
 0x0801aeb0 func aeabi_l2d_UNVERIFIED                 # same code as Mario 0x08017bb0
 0x0801aef8 func aeabi_uldivmod                       # same code as Mario 0x08017bf8
 0x0801af86 func HAL_HSEM_Take                        # HAL (matched against a gcc build of Drivers/)

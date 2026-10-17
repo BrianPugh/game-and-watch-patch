@@ -103,6 +103,11 @@ ITCM_MENU, ITCM_MENU_SRC, ITCM_MENU_SIZE = 0x9C7C, 0x31_56EC, 0x1B44
 
 
 class ZeldaGnW(Device, name="zelda"):
+    # --relocate-stock moves everything below the init table, vector table
+    # included; the amalgam moves it to the top of bank 1.
+    STOCK_RELOCATE_END = 0x0801_B368
+    relocates_in_amalgam = True
+
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "ac14bcea6e4ff68c88fd2302c021025a2fb47940"
         STOCK_ROM_END = 0x1B3E0  # Used for generating linker script.
@@ -127,7 +132,7 @@ class ZeldaGnW(Device, name="zelda"):
         FLASH_BASE = 0x240F2124
         FLASH_LEN = 0  # 0x24100000 - FLASH_BASE
 
-    def argparse(self, parser):
+    def add_arguments(self, parser):
         group = parser.add_argument_group("Low level flash savings flags")
         group.add_argument(
             "--no-la",
@@ -207,8 +212,6 @@ class ZeldaGnW(Device, name="zelda"):
             "code in bank 1 (e.g. 0x08020000 with --extended). "
             "Tests stock-code relocation; see tools/emu/README.md.",
         )
-        self.args = parser.parse_args()
-        return self.args
 
     def _itcm_menu_offset(self, itcm):
         """External flash offset of ITCM address ``itcm`` in the menu UI copy."""
@@ -231,7 +234,7 @@ class ZeldaGnW(Device, name="zelda"):
         """SECOND BEEP ON/OFF: a 5th row in the clock's PAUSE/SET overlay.
 
         The setting is bit 2 of nvram word +0x28 (nvram_ram 0x240ff000). See
-        second_beep_draw/second_beep_input in main.c.
+        second_beep_draw/second_beep_input in zelda.c.
         """
         printi("Add a SECOND BEEP ON/OFF row to the clock settings overlay.")
         # clock_tick queues the hour tune (0x60) or the second beep (0x40) into
@@ -267,7 +270,7 @@ class ZeldaGnW(Device, name="zelda"):
         self._itcm_menu_patch(0xA620, "movs r1, #5", expect="2:69dcc7a5")
         veneer = self._itcm_veneer("settings_row_input")
         self._itcm_menu_patch(0xA63E, f"b.w #{veneer:#x}", expect="4:59165ff1")
-        # settings_clock_draw: rows 24 lines apart instead of 32 (main.c's
+        # settings_clock_draw: rows 24 lines apart instead of 32 (zelda.c's
         # SETTINGS_ROW_STEP), and second_beep_draw after the AUTO SLEEP text.
         self._itcm_menu_patch(0xAF3E, "mov.w r4, #0x1e00", expect="4:a97cfd34")
         veneer = self._itcm_veneer("settings_draw_tail")
@@ -276,18 +279,18 @@ class ZeldaGnW(Device, name="zelda"):
     def _game_select_dual_boot(self):
         """DUAL BOOT as a 6th game-select row, scrolled into a 5-row window.
 
-        See the Zelda section of game_select.c. Runs after fix_ext_refs(), so
+        See game_select_zelda.c. Runs after fix_ext_refs(), so
         the menu_rows literals hold their final address.
         """
         printi("Add dual-boot entry to the game-select menu.")
         # game_select_handle_input's UP/DOWN step over the 5 rows.
-        veneer = self._itcm_veneer("game_select_row_step")
+        veneer = self._itcm_veneer("zelda_game_select_row_step")
         self._itcm_menu_patch(0xA576, f"bl #{veneer:#x}", expect="4:9be285a5")
         # ui_handle_input's call to game_select_handle_input.
-        veneer = self._itcm_veneer("game_select_handle_input")
+        veneer = self._itcm_veneer("zelda_game_select_handle_input")
         self._itcm_menu_patch(0xA886, f"bl #{veneer:#x}", expect="4:3066bdda")
         # ui_render_overlay's call to game_select_draw.
-        veneer = self._itcm_veneer("game_select_draw")
+        veneer = self._itcm_veneer("zelda_game_select_draw")
         self._itcm_menu_patch(0xB532, f"bl #{veneer:#x}", expect="4:937c01f9")
         # game_select_draw's 2 loads of menu_rows (0x0000acfa, 0x0000ad76) use
         # the literal at 0x0000b788, which nothing else reads: point it at the
@@ -297,7 +300,7 @@ class ZeldaGnW(Device, name="zelda"):
         if self.external.int(literal) != menu_rows:
             raise ValueError("game_select_draw's menu_rows literal moved")
         self.external.replace(
-            literal, self.internal.address("game_select_view_rows"), size=4
+            literal, self.internal.address("zelda_game_select_view_rows"), size=4
         )
 
         if self.args.game_select_dual_boot_label:
@@ -309,7 +312,7 @@ class ZeldaGnW(Device, name="zelda"):
                 self.args.game_select_dual_boot_icon, 96, 32, ZELDA_GAME_SELECT_PALETTE
             )
         self.internal.replace(
-            self.internal.address("GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
+            self.internal.address("ZELDA_GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
             icon,
         )
 
@@ -498,7 +501,7 @@ class ZeldaGnW(Device, name="zelda"):
         """Store the 11 backdrops as Mario's sleep images: palette + LZMA indices.
 
         backdrop_tick's tail call to the stock decode-by-index helper goes to
-        backdrop_inflate (main.c) instead. The blobs are packed back to back (603424 -> ~491 KB), and the DTCM
+        backdrop_inflate (zelda.c) instead. The blobs are packed back to back (603424 -> ~491 KB), and the DTCM
         backdrop_images pointers follow them through fix_ext_refs().
         """
         printi("Recompressing the backdrop images.")
@@ -676,6 +679,15 @@ class ZeldaGnW(Device, name="zelda"):
         )
         del self.external[end:]
 
+        # MX_OCTOSPI1_Init sets DeviceSize to 2^22 (stock's 4 MB chip), and the
+        # OSPI rejects addresses past it (GWemu doesn't). Past 4 MB widen it.
+        device_size = max(22, (len(self.external) - 1).bit_length())
+        if device_size > 22:
+            printi(f"Setting OSPI DeviceSize to 2^{device_size}")
+            self.internal.asm(
+                0x1328E, f"movs r0, #{device_size}", size=2, expect="2:662f87e0"
+            )
+
     def _erase_savedata(self):
         self.external.set_range(0x0000, 0x12000, b"\xFF")
 
@@ -687,9 +699,12 @@ class ZeldaGnW(Device, name="zelda"):
             from .relocate import Relocation
 
             printi(f"Relocate the stock firmware to 0x{self.args.relocate_stock:08X}.")
-            # Everything below the init table (0x0801b368), vector table included.
             self.relocation = Relocation(
-                self, 0x0800_0000, 0x0801_B368, self.args.relocate_stock
+                self,
+                0x0800_0000,
+                self.STOCK_RELOCATE_END,
+                self.args.relocate_stock,
+                keep_vector_table=not self.amalgam,
             )
 
         self._dump_roms()
@@ -714,11 +729,28 @@ class ZeldaGnW(Device, name="zelda"):
 
         self._disable_save_encryption()
 
-        printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
-        self.internal.replace(0x4, "bootloader", expect="4:0138bfeb")
+        if self.amalgam:
+            # Mario's vector table boots the amalgam; our bootloader boots
+            # Zelda through its own (relocated) table, so it keeps its stock
+            # Reset_Handler. SystemInit's VTOR (0x08000000, an immediate with
+            # no room for Zelda's address) is set by the bootloader instead.
+            printi("Leave VTOR to the bootloader.")
+            self.internal.nop(0x1_AE88, 1, expect="2:bc46897c")
+        else:
+            printi("Invoke custom bootloader prior to calling stock Reset_Handler.")
+            self.internal.replace(0x4, "bootloader", expect="4:0138bfeb")
 
         printi("Intercept button presses for macros.")
         self.internal.bl(0xFE54, "read_buttons", expect="4:4c010230")
+
+        # After a reset (anything but a power-button wake from standby), main
+        # powers down and waits for the power button. Boot like that wake
+        # does: power_on_init, then the main loop.
+        printi("Boot after a reset instead of waiting for the power button.")
+        self.internal.bl(
+            0x1063C, self.internal.sym("power_on_init"), expect="4:094801b7"
+        )
+        self.internal.b(0x10640, 0x105EE, expect="2:3de528a1")
 
         printi("Mute audio on first boot.")
         # Fresh nvram is dirty, so the settings aren't loaded from it: the init

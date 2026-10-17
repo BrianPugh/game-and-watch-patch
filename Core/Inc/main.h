@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file           : main.h
-  * @brief          : Header for main.c file.
+  * @brief          : Header for our C code (main.c is shared by both models).
   *                   This file contains the common defines of the application.
   ******************************************************************************
   * @attention
@@ -29,6 +29,7 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stock_firmware.h"
+#include "model.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -100,6 +101,20 @@ gnw_mode_t get_gnw_mode();
 
 void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n);
 
+// LzmaDecode only allocates the probability model (the output buffer is the
+// dictionary): (1984 + 0x300 << (lc + lp)) UInt16s. Each firmware has its own
+// (mario.c, zelda.c), in its RAM.
+#define LZMA_BUF_SIZE            ((1984 + (0x300 << 0)) * 2)
+extern uint8_t mario_lzma_heap[LZMA_BUF_SIZE];
+extern uint8_t zelda_lzma_heap[LZMA_BUF_SIZE];
+
+uint8_t sleep_image_inflate(const uint8_t *src, uint16_t *dst);
+
+/**
+ * --smb1-graphics: DOWN on the clock screen cycles the SMB1 graphics (mario.c).
+ */
+void smb1_graphics_buttons(gamepad_t gamepad);
+
 /**
  * Returns `true` if the dual-boot target (bank 2, or the SD bootloader) has a
  * plausible vector table.
@@ -110,6 +125,19 @@ bool dual_boot_target_valid();
  * Reset into the dual-boot target. Returns only if the target is invalid.
  */
 void launch_dual_boot();
+
+/**
+ * The game-select menu's DUAL BOOT entry: the other firmware in the amalgam
+ * (always there), else the dual-boot target. game_select_launch() returns
+ * only if the target is invalid.
+ */
+#if GNW_AMALGAM
+bool game_select_target_valid();
+void game_select_launch();
+#else
+#define game_select_target_valid dual_boot_target_valid
+#define game_select_launch launch_dual_boot
+#endif
 
 #ifdef __cplusplus
 }

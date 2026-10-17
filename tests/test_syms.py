@@ -5,17 +5,17 @@ from patches.firmware import IntFirmware
 
 
 def test_c_name():
-    assert syms.c_name("read_buttons") == "stock_read_buttons"
-    assert syms.c_name("stock_Reset_Handler") == "stock_Reset_Handler"
+    assert syms.c_name("mario", "read_buttons") == "stock_mario_read_buttons"
+    assert syms.c_name("zelda", "stock_Reset_Handler") == "stock_zelda_Reset_Handler"
 
 
 @pytest.mark.parametrize(
     "device, name, addr",
     [
-        ("mario", "stock_Reset_Handler", 0x0801_7A45),
-        ("mario", "stock_read_buttons", 0x0801_0D49),
-        ("mario", "stock_ui_tile_ptr", 0x0800_C361),
-        ("zelda", "stock_read_buttons", 0x0801_6809),
+        ("mario", "stock_mario_Reset_Handler", 0x0801_7A45),
+        ("mario", "stock_mario_read_buttons", 0x0801_0D49),
+        ("mario", "stock_mario_ui_tile_ptr", 0x0800_C361),
+        ("zelda", "stock_zelda_read_buttons", 0x0801_6809),
     ],
 )
 def test_stock_functions(device, name, addr):

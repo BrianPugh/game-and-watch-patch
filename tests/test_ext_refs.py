@@ -42,6 +42,7 @@ def make_device(refs, monkeypatch, extra=()):
         fw._lookup = device.lookup
     device.int_space = Region("internal", Int.FLASH_BASE, Int.FLASH_LEN)
     device.expected_refs = []
+    device.freed_int = []
     device.ext_refs_fixed = False
     device._stock_map = object()
 
@@ -93,7 +94,7 @@ def test_leaves_unmoved_erased_and_freed_sites(monkeypatch):
     put(device.internal, 0x10, 0x9000_0080)  # data that doesn't move
     put(device.internal, 0x14, 0)  # a patch erased this reference
     put(device.internal, 0x18, 0x9000_0040)
-    device.int_space.free(0x18, 0x1C)  # stock code the patcher removed
+    device.freed_int.append((0x18, 0x1C))  # stock code the patcher removed
     device._move(device.compressed_memory, 0, device.external, 0x40, 4)
 
     assert device.fix_ext_refs() == {}

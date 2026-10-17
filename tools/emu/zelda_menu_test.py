@@ -22,13 +22,23 @@ valid image in bank 2 (``b .`` at 0x08100008) and checks the DUAL BOOT row
 after the games: 6 rows that wrap, LEFT/RIGHT inert on it, a carousel slide
 while the window is scrolled, and A ending with the CPU spinning in bank 2.
 ``--dual-boot erased`` checks that the row is hidden (5 rows).
+
+``--amalgam`` runs a ``--device=amalgam`` build: it boots Mario, picks Mario's
+DUAL BOOT (ZELDA) entry, and runs the checks on the Zelda it resets into; the
+DUAL BOOT row must then reset back into Mario. Each switch checks the
+selection main.c writes to the TAMP backup register. GWemu clears that
+register on reset (hardware keeps it), so the harness writes it back when the
+bootloader starts.
 """
 
 import argparse
+import struct
 import sys
 import time
 from pathlib import Path
 
+import mario_menu_test as mario
+from elftools.elf.elffile import ELFFile
 from emu_driver import REPO, Driver, check, make_bank2, make_profile
 from gwprov.gwemu_manager import instances, start_instance, stop_instance
 from PIL import Image
@@ -45,6 +55,13 @@ UI_SLIDE = UI_STATE + 0x2C  # s8 carousel slide direction, 0 when idle
 UI_VARIANT = UI_STATE + 0x2D  # u8 chosen variant of each row, stride 2
 DUAL_BOOT_ROW = 5
 BANK2_SPIN_PC = 0x0810_0008
+
+# --amalgam: Zelda's stock code sits 0x24000 up (patches/amalgam.py), and
+# main.c keeps the selection in AMALGAM_BOOT_REG.
+AMALGAM_STOCK_OFFSET = 0x24000
+TAMP_BKP31R = 0x5800_457C
+BOOT_MARIO, BOOT_ZELDA = 0, 0x444C_455A  # "ZELD"
+SCB_VTOR = 0xE000_ED08
 
 # (name, menu row, variant id, g_app_id); rows are menu_rows in zelda.syms.
 GAMES = [
@@ -140,11 +157,60 @@ def dual_boot(d: Driver, bank2: str) -> bool:
 
     while d.read8(UI_ROW) != DUAL_BOOT_ROW:
         step(d, "DOWN")
+    if bank2 == "amalgam":
+        ok &= amalgam_switch(d, BOOT_MARIO, mario.READ_BUTTONS_RETURN, 0x0800_0000)
+        d.frames("", 30)
+        d.shot("92_mario_again")
+        return ok
     d.last_frame("A")  # The firmware resets during this frame.
     time.sleep(1)
     pc = d.pc()
     ok &= check(pc & ~1 == BANK2_SPIN_PC, f"A on DUAL BOOT runs bank 2 (pc=0x{pc:08X})")
     return ok
+
+
+def elf_symbol(name: str) -> int:
+    with open(REPO / "build/gw_patch.elf", "rb") as f:
+        sym = ELFFile(f).get_section_by_name(".symtab").get_symbol_by_name(name)
+    return sym[0]["st_value"] & ~1
+
+
+def read32(d: Driver, addr: int) -> int:
+    return struct.unpack("<I", d.dbg.backend.read_memory(addr, 4))[0]
+
+
+def amalgam_switch(d: Driver, boot: int, poll_pc: int, vtor: int) -> bool:
+    """Press A on the DUAL BOOT entry, check the selection written before the
+    reset, and stop at the other firmware's first poll."""
+    d.release_to("A", elf_symbol("__NVIC_SystemReset"))
+    got = read32(d, TAMP_BKP31R)
+    ok = check(got == boot, f"A selects 0x{boot:08X} (TAMP BKP31R=0x{got:08X})")
+    d.run_to(elf_symbol("bootloader"))
+    d.dbg.backend.write_memory(TAMP_BKP31R, struct.pack("<I", boot))
+    d.poll_pc = poll_pc
+    d.run_to_poll()
+    got = read32(d, SCB_VTOR)
+    return ok & check(got == vtor, f"booted with VTOR=0x{got:08X}")
+
+
+def amalgam_to_zelda(d: Driver) -> bool:
+    """Boot Mario and switch to Zelda from its game-select menu."""
+    d.frames("", 30)
+    d.tap("TIME", settle=30)  # Mario's first-boot PRESS TIME screen.
+    d.wait_until(
+        lambda: d.read8(mario.STATE_TRANSITION) == 0 and d.read8(mario.UI_STATE) == 0,
+        "Mario's clock",
+    )
+    d.press_until("GAME", lambda: d.read8(mario.UI_STATE) != 0, "Mario's overlay")
+    d.wait_until(lambda: d.read8(mario.UI_STATE) == 5, "Mario's game-select menu")
+    choice = mario.UI_GAME_SELECT_CHOICE
+    while d.read16(choice) != mario.CHOICE_DUAL_BOOT:
+        before = d.read16(choice)
+        d.press_until("DOWN", lambda: d.read16(choice) != before, "the cursor to move")
+    d.shot("00_mario_menu_zelda")
+    return amalgam_switch(
+        d, BOOT_ZELDA, READ_BUTTONS_RETURN + AMALGAM_STOCK_OFFSET, 0x0802_4000
+    )
 
 
 def run(d: Driver, games, run_frames: int, bank2: str = None) -> bool:
@@ -200,6 +266,11 @@ def main():
         choices=("spin", "erased"),
         help="Check a --game-select-dual-boot build with this bank 2 (see above).",
     )
+    parser.add_argument(
+        "--amalgam",
+        action="store_true",
+        help="Check a --device=amalgam build, booting Zelda from Mario (see above).",
+    )
     parser.add_argument("--work-dir", type=Path, default=REPO / "build/emu")
     parser.add_argument(
         "--internal", type=Path, default=REPO / "build/internal_flash_patched.bin"
@@ -246,8 +317,15 @@ def main():
     pid = next(r["pid"] for r in instances() if r["profile"] == str(profile))
     try:
         time.sleep(3)
-        poll_pc = READ_BUTTONS_RETURN + args.stock_offset
-        ok = run(Driver(pid, out_dir, poll_pc), games, args.run_frames, args.dual_boot)
+        if args.amalgam:
+            d = Driver(pid, out_dir, mario.READ_BUTTONS_RETURN)
+            ok = amalgam_to_zelda(d)
+            if ok:
+                ok &= run(d, games, args.run_frames, "amalgam")
+        else:
+            poll_pc = READ_BUTTONS_RETURN + args.stock_offset
+            d = Driver(pid, out_dir, poll_pc)
+            ok = run(d, games, args.run_frames, args.dual_boot)
     finally:
         stop_instance(pid=pid)
     print(f"Screenshots: {out_dir}")

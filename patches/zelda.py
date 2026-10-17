@@ -679,6 +679,15 @@ class ZeldaGnW(Device, name="zelda"):
         )
         del self.external[end:]
 
+        # MX_OCTOSPI1_Init sets DeviceSize to 2^22 (stock's 4 MB chip), and the
+        # OSPI rejects addresses past it (GWemu doesn't). Past 4 MB widen it.
+        device_size = max(22, (len(self.external) - 1).bit_length())
+        if device_size > 22:
+            printi(f"Setting OSPI DeviceSize to 2^{device_size}")
+            self.internal.asm(
+                0x1328E, f"movs r0, #{device_size}", size=2, expect="2:662f87e0"
+            )
+
     def _erase_savedata(self):
         self.external.set_range(0x0000, 0x12000, b"\xFF")
 
@@ -733,6 +742,15 @@ class ZeldaGnW(Device, name="zelda"):
 
         printi("Intercept button presses for macros.")
         self.internal.bl(0xFE54, "read_buttons", expect="4:4c010230")
+
+        # After a reset (anything but a power-button wake from standby), main
+        # powers down and waits for the power button. Boot like that wake
+        # does: power_on_init, then the main loop.
+        printi("Boot after a reset instead of waiting for the power button.")
+        self.internal.bl(
+            0x1063C, self.internal.sym("power_on_init"), expect="4:094801b7"
+        )
+        self.internal.b(0x10640, 0x105EE, expect="2:3de528a1")
 
         printi("Mute audio on first boot.")
         # Fresh nvram is dirty, so the settings aren't loaded from it: the init

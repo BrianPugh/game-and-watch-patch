@@ -144,6 +144,9 @@ class FirmwarePatchMixin:
             # Max +-4MB jump
             raise ValueError(f"Too large of a jump {jump} specified.")
 
+        # Where H=1 (from the signed high part, so backward jumps work)
+        offset_stage_2 = (jump - ((jump >> 12) << 12)) >> 1
+
         # Where H=0
         offset_stage_1 = jump >> 12
         offset_stage_1 = twos_compliment(offset_stage_1, 11)
@@ -151,8 +154,6 @@ class FirmwarePatchMixin:
         stage_1_byte_0 = 0b1111_0000 | ((offset_stage_1 >> 8) & 0x7)
         stage_1_byte_1 = offset_stage_1 & 0xFF
 
-        # Where H=1
-        offset_stage_2 = (jump - (offset_stage_1 << 12)) >> 1
         if offset_stage_2 >> 11:
             raise ValueError(f"bl jump 0x{jump:08X} too large!")
 

@@ -159,6 +159,12 @@ class ZeldaGnW(Device, name="zelda"):
             help="Remove the hour tune in TIME/CLOCK.",
         )
 
+        group.add_argument(
+            "--no-factory-test",
+            action="store_true",
+            help="Remove the factory CHARGE AND KEY TEST screens (~9KB of internal code).",
+        )
+
         group = parser.add_argument_group("Experimental")
         group.add_argument(
             "--relocate-stock",
@@ -592,6 +598,39 @@ class ZeldaGnW(Device, name="zelda"):
             # the frame instead of decoding backdrop_images[index].
             self.internal.b(0x1_6426, 0x1_6430, expect="2:eb4a57f1")
             self.rwdata_erase(BACKDROP_STARTS[0], BACKDROP_END - BACKDROP_STARTS[0])
+
+        if self.args.no_factory_test:
+            printi("Remove the factory CHARGE AND KEY TEST (g_app_id 1).")
+            # game_reload: never enter test mode (app 1) on boot_arg 0xffff00ff.
+            self.internal.b(0xFC1E, 0xFC26, expect="2:823b923f")
+            # Its static constructor -> is_usb_connected's `bx lr`.
+            ctor_entry, bx_lr = 0x1_B0C8, 0x1_68B0
+            self.internal.replace(
+                ctor_entry,
+                ((bx_lr | 1) - ctor_entry) & 0xFFFF_FFFF,
+                size=4,
+                expect="4:bc8a52b1",
+            )
+            # main_loop_tick's calls into it, each guarded by g_app_id == 1.
+            calls = {
+                0x1_0140: "4:426237a7",  # input
+                0x1_0264: "4:cc4fd1a1",  # tick and draw
+                0x1_0456: "4:daa7a0a5",  # backlight
+                0x1_0496: "4:a954d95a",  # speaker-test audio (`bleq` in an IT block)
+            }
+            for call, expect in calls.items():
+                self.internal.nop(call, 2, expect=expect)
+            # Thunks, constructor, test pages, its audio and literal pools.
+            self.free_int(0x1_68D8, 0x1_8154)
+            # Helpers only the test used: text drawing, printf, RTC alarm.
+            self.free_int(0x0_831E, 0x0_835E)
+            self.free_int(0x0_837C, 0x0_8484)
+            self.free_int(0x0_84A2, 0x0_8754)
+            self.free_int(0x0_8764, 0x0_8790)
+            self.free_int(0x0_A5C8, 0x0_A604)
+            self.free_int(0x0_DD80, 0x0_E284)
+            self.free_int(0x1_0CE4, 0x1_0DCC)
+            self.free_int(0x1_290C, 0x1_2972)
 
         # The GIF decoder (decode-by-index helper at 0x08019f36 and gif_decode)
         # is only reached from backdrop_tick's tail call at 0x0801642c, which

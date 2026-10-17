@@ -718,6 +718,22 @@
 0x903200ce func clock_draw                           # per-frame clock/demo rendering; main_loop_tick through the 0x0800e6bc veneer (UNVERIFIED)
 0x903206d6 func nes_update_palette_lut               # (nes, ...): rebuilds the 32-entry RGB565 palette from NES palette RAM (nes+0x834) via nes_rgb565_lut
 # --- generated: ldr.w pc, [pc] veneers to named functions
+0x00001e70 func aeabi_uldivmod_veneer
+0x00001e78 func aeabi_l2d_UNVERIFIED_veneer
+0x00001e80 func aeabi_memset_veneer
+0x00001e90 func audio_queue_free_count_veneer
+0x00001ea0 func audio_get_free_buffer_veneer
+0x00001ea8 func audio_submit_buffer_veneer
+0x00001eb0 func memcpy_veneer
+0x00002d58 func audio_stream_put_sample_veneer
+0x00006608 func aeabi_memclr4_veneer
+0x00009c7c func memcpy_bytes_veneer
+0x00009c84 func nvram_init_veneer
+0x00009c8c func nvram_is_dirty_veneer
+0x00009c94 func nvram_get_veneer
+0x00009cac func mode_request_veneer
+0x00009cb4 func nvram_set_veneer
+0x00009cdc func is_usb_connected_veneer
 0x08008790 func nes_apu_run_frame_veneer
 0x0800bc50 func nes_cpu_run_veneer
 0x0800bc58 func nes_ppu_render_a_veneer
@@ -737,22 +753,6 @@
 0x0800e6d4 func nes_audio_output_veneer
 0x0800e6dc func ui_render_overlay_veneer
 0x08016270 func ui_draw_tile_string_veneer
-0x9030b4a0 func aeabi_uldivmod_veneer
-0x9030b4a8 func aeabi_l2d_UNVERIFIED_veneer
-0x9030b4b0 func aeabi_memset_veneer
-0x9030b4c0 func audio_queue_free_count_veneer
-0x9030b4d0 func audio_get_free_buffer_veneer
-0x9030b4d8 func audio_submit_buffer_veneer
-0x9030b4e0 func memcpy_veneer
-0x9030e7c8 func audio_stream_put_sample_veneer
-0x90312078 func aeabi_memclr4_veneer
-0x903156ec func memcpy_bytes_veneer
-0x903156f4 func nvram_init_veneer
-0x903156fc func nvram_is_dirty_veneer
-0x90315704 func nvram_get_veneer
-0x9031571c func mode_request_veneer
-0x90315724 func nvram_set_veneer
-0x9031574c func is_usb_connected_veneer
 0x90317238 func memcpy_veneer2
 0x90317240 func aeabi_memclr4_veneer2
 0x90317248 func memcpy_bytes_veneer2

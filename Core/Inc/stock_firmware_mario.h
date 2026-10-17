@@ -102,3 +102,35 @@ void stock_mario_ui_set_dirty_rect(ui_rect_t *rect, uint16_t x, uint16_t y, uint
  * Filled rectangle: interior is `color`, 1px border is `color | 1`.
  */
 void stock_mario_ui_draw_panel(uint8_t *dst, uint32_t w, uint32_t h, uint8_t color);
+
+/**
+ * Draws `n` UI tiles (byte indices, see stock_mario_ui_tile_ptr) left to right.
+ */
+void stock_mario_ui_draw_tile_string(uint8_t *dst, const uint8_t *tiles, uint32_t n);
+
+/**
+ * Closes the overlay and saves brightness and volume to nvram.
+ */
+void stock_mario_ui_close_overlay_save_settings(void);
+
+/**
+ * Clock settings overlay: the row cursor (0 volume, 1 brightness, 2 SET TIME)
+ * and nonzero while editing the time.
+ */
+static volatile uint8_t * const ui_settings_cursor = 0x200106b0;
+static volatile uint8_t * const ui_settings_editing_time = 0x200106b2;
+
+/**
+ * nvram_set only marks the record dirty if the value changed; it's saved later.
+ * Id 5 is never read or written by stock (its default is 0) and holds our
+ * TICK setting in bit 0.
+ */
+uint32_t stock_mario_nvram_get(uint32_t id);
+void stock_mario_nvram_set(uint32_t id, uint32_t value);
+#define MARIO_NVRAM_TICK 5
+
+/**
+ * (nes_ram): once a second on the clock, queues SMB1's noise sfx 4 ($FD) and 3
+ * more 5 frames apart.
+ */
+void stock_mario_clock_tick_sound(uint8_t *nes_ram);

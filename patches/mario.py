@@ -263,6 +263,34 @@ class MarioGnW(Device, name="mario"):
             self.args.no_sleep_images = True
             self.args.no_factory_test = True
 
+    def _tick_setting(self):
+        """TICK ON/OFF: a 4th row in the clock's PAUSE/SET overlay.
+
+        The setting is bit 0 of nvram id 5, which stock never uses. See
+        tick_sound/tick_input/tick_draw in mario.c.
+        """
+        printi("Add a TICK ON/OFF row to the clock settings overlay.")
+
+        def b_w(symbol):
+            return "b.w #" + hex(0xFFFFFFFE & self.internal.address(symbol))
+
+        # clock_tick_sound queues SMB1's noise sfx into $FD once a second; its
+        # only call goes through tick_sound.
+        self.internal.bl(0xED3A, "tick_sound", expect="4:16ec3ee5")
+        # settings_clock_handle_input: 4 rows; row 3 goes to tick_input (rows
+        # past 2 used to reset the cursor to 0 and fall into the volume row).
+        self.internal.asm(0xC8E8, "movs r1, #4", expect="2:269d5162")
+        self.internal.asm(0xC904, b_w("mario_settings_row_input"), expect="4:10f710e6")
+        # settings_clock_draw: the panel grows from 0x70 to 0x90 lines and
+        # starts 16 lines higher (y 0x30 instead of 0x40), so the rows, which
+        # are placed relative to it, keep 16-line margins.
+        self.internal.asm(0xCD82, "movs r1, #0x90", expect="2:228f7b57")  # dirty rect h
+        self.internal.asm(0xCD8C, "movs r2, #0x30", expect="2:64c01c1e")  # dirty rect y
+        self.internal.asm(0xCD94, "movw r0, #0x3c28", expect="4:66937e07")  # (40, 48)
+        self.internal.asm(0xCD9C, "movs r2, #0x90", expect="2:bb862aed")  # panel h
+        # Its last tail call (after the pop) draws the SET TIME text.
+        self.internal.asm(0xCEA2, b_w("tick_draw"), expect="4:3b91bb65")
+
     def patch(self):
         if self.args.relocate_stock:
             from .relocate import Relocation
@@ -373,6 +401,8 @@ class MarioGnW(Device, name="mario"):
 
         printi("Mute clock audio on first boot.")
         self.internal.asm(0x49E0, "mov.w r1, #0x00000", expect="4:42e9afc9")
+
+        self._tick_setting()
 
         if self.args.debug:
             # Override fault handlers for easier debugging via gdb.

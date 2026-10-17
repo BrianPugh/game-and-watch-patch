@@ -164,11 +164,6 @@ class ZeldaGnW(Device, name="zelda"):
         )
 
         group.add_argument(
-            "--no-second-beep",
-            action="store_true",
-            help="Default the clock's SECOND BEEP setting (PAUSE/SET menu) to OFF.",
-        )
-        group.add_argument(
             "--no-hour-tune",
             action="store_true",
             help="Remove the hour tune in TIME/CLOCK.",
@@ -231,12 +226,12 @@ class ZeldaGnW(Device, name="zelda"):
         return itcm
 
     def _second_beep_setting(self):
-        """SECOND BEEP ON/OFF: a 5th row in the clock's PAUSE/SET overlay.
+        """TICK ON/OFF: a 5th row in the clock's PAUSE/SET overlay.
 
         The setting is bit 2 of nvram word +0x28 (nvram_ram 0x240ff000). See
         second_beep_draw/second_beep_input in zelda.c.
         """
-        printi("Add a SECOND BEEP ON/OFF row to the clock settings overlay.")
+        printi("Add a TICK ON/OFF row to the clock settings overlay.")
         # clock_tick queues the hour tune (0x60) or the second beep (0x40) into
         # LoZ1's sound register (nes RAM 0x603) when the second changes. The
         # 4 hour-tune bytes are [r8, #24..27] (r1 = byte 27); r2/r3 are dead
@@ -759,11 +754,8 @@ class ZeldaGnW(Device, name="zelda"):
         self.internal.nop(0x1_81A8, 2, expect="4:709be8de")
         # nvram_init's default for id 7 (brightness | volume << 16), as on Mario,
         # so a commit before the settings are first saved doesn't bring 7 back.
-        # Bit 2 is the SECOND BEEP setting (set: off).
-        second_beep_off = 4 if self.args.no_second_beep else 0
-        self.internal.asm(
-            0xB6D8, f"mov.w r1, #{second_beep_off:#x}", expect="4:42e9afc9"
-        )
+        # Bit 2 is the TICK setting (set: off), so it starts on.
+        self.internal.asm(0xB6D8, "mov.w r1, #0", expect="4:42e9afc9")
 
         self._second_beep_setting()
 

@@ -9,6 +9,7 @@ from patches.layout import Region
 
 SIZE = 0x100
 STOCK_END = 0x40  # Both stock images end here; our code follows.
+RELOCATE_END = 0x38  # The relocated device's stock code ends here.
 
 
 class Buf(bytearray):
@@ -24,6 +25,7 @@ def device(name, stock, relocates, holes=()):
         internal=internal,
         internal_orig=bytes(internal),
         relocates_in_amalgam=relocates,
+        STOCK_RELOCATE_END=0x0800_0000 + RELOCATE_END,
         freed_int_ranges=lambda: list(holes),
     )
 
@@ -81,3 +83,15 @@ def test_both_changing_a_shared_byte_differently_fails(setup):
         merge_internal(region, [zelda, mario])
     zelda.internal[STOCK_END + 1] = 1  # The same change is fine.
     assert merge_internal(region, [zelda, mario])[STOCK_END + 1] == 1
+
+
+def test_data_over_own_relocated_code_fails(setup):
+    region, mario, zelda = setup
+    # Free in the image, but still the relocating device's stock code in its
+    # buffer, which its relocation copied out.
+    region.free(0x20, 0x28)
+    off = region.alloc(8, "zelda", "data")
+    assert off == 0x20
+    zelda.internal[off : off + 8] = b"D" * 8
+    with pytest.raises(AmalgamError, match="over its own relocated stock code"):
+        merge_internal(region, [zelda, mario])

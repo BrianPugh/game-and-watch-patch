@@ -46,7 +46,7 @@ uint8_t zelda_game_select_view_rows[VISIBLE_ROWS * MENU_ROW_SIZE];
 
 static uint8_t n_rows(){
     // Only offer the dual-boot entry if there's something to boot.
-    return dual_boot_target_valid() ? N_STOCK_ROWS + 1 : N_STOCK_ROWS;
+    return game_select_target_valid() ? N_STOCK_ROWS + 1 : N_STOCK_ROWS;
 }
 
 /**
@@ -65,7 +65,7 @@ uint32_t zelda_game_select_row_step(volatile uint8_t *row, uint32_t n, gamepad_t
 uint32_t zelda_game_select_handle_input(gamepad_t held, gamepad_t pressed){
     if(stock_ui_state[UI_ROW] == DUAL_BOOT_ROW){
         if(pressed == GAMEPAD_A && held == pressed){
-            launch_dual_boot();
+            game_select_launch();
         }
         held &= ~(GAMEPAD_A | GAMEPAD_LEFT | GAMEPAD_RIGHT);
         pressed &= ~(GAMEPAD_A | GAMEPAD_LEFT | GAMEPAD_RIGHT);

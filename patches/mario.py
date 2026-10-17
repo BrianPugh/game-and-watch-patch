@@ -278,6 +278,15 @@ class MarioGnW(Device, name="mario"):
         printi("Intercept button presses for macros.")
         self.internal.bl(0x6B52, "read_buttons", expect="4:8d256c72")
 
+        # After a reset (anything but a power-button wake from standby), main
+        # powers down and waits for the power button. Boot like that wake
+        # does: power_on_init, then the main loop.
+        printi("Boot after a reset instead of waiting for the power button.")
+        self.internal.bl(
+            0x7312, self.internal.sym("power_on_init"), expect="4:743ff5f2"
+        )
+        self.internal.b(0x7316, 0x72C4, expect="2:3de528a1")
+
         if self.args.no_factory_test:
             printi("Remove the factory CHARGE AND KEY TEST (g_gnw_mode 0x01).")
             # game_reload: never enter test mode on the magic boot value.
@@ -932,5 +941,15 @@ class MarioGnW(Device, name="mario"):
         if end > len(self.external):
             self.external.extend(b"\x00" * (end - len(self.external)))
         self.external.shorten(len(self.external) - end)
+
+        # MX_OCTOSPI1_Init sets DeviceSize to 2^20 (stock's 1 MB chip), and the
+        # OSPI rejects addresses past it (GWemu doesn't). Past 1 MB (the
+        # amalgam) widen it.
+        device_size = max(20, (len(self.external) - 1).bit_length())
+        if device_size > 20:
+            printi(f"Setting OSPI DeviceSize to 2^{device_size}")
+            self.internal.asm(
+                0xA41E, f"movs r0, #{device_size}", size=2, expect="2:5419e562"
+            )
         if not self.args.no_save:
             self.ext_space.note(0xFE000 + ext_shift, 0x2000, self.name, "NVRAM banks")

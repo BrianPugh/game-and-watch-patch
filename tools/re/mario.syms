@@ -565,6 +565,11 @@
 0x20010ecc data flash_state                          # external flash driver state: +0 state (1 idle, 2 memory-mapped), +1 quad mode, +8 OSPI handle pointer (0x2001b1dc)
 0x20010f0c data draw_ctx                             # draw library state: +0 u16 color, +4 target framebuffer
 # --- generated: ldr.w pc, [pc] veneers to named functions
+0x00001e5c func aeabi_uldivmod_veneer
+0x00001e64 func aeabi_l2d_UNVERIFIED_veneer
+0x00001e6c func aeabi_memset_veneer
+0x00001e74 func aeabi_memclr_veneer2
+0x00001e8c func memcpy_bytes_veneer
 0x08005b24 func nes_ppu_render_c_veneer
 0x0800ab24 func nes_cpu_run_veneer
 0x0800ab2c func nes_ppu_render_a_veneer

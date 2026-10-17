@@ -42,6 +42,10 @@ CONFIGS = {
     "zelda_options": "--device=zelda --no-la --no-sleep-images --no-factory-test "
     "--no-second-beep --no-hour-tune --encrypt --debug --game-select-dual-boot",
     "zelda_relocate": "--device=zelda --relocate-stock=0x08120000",
+    "zelda_relocate_bank1": "--device=zelda --extended --relocate-stock=0x08020000",
+    # Both firmwares in one image; --no-factory-test frees stock code in both,
+    # so each device's data lands in the other's holes.
+    "amalgam": "--device=amalgam --game-select-dual-boot --no-factory-test",
 }
 
 OUTPUTS = [
@@ -77,11 +81,20 @@ def _copy_tree(dst):
         shutil.copy2(REPO / rel, dst / rel)
 
 
+def _backups(params):
+    device = params.split()[0].split("=")[1]
+    models = ["mario", "zelda"] if device == "amalgam" else [device]
+    return [
+        name
+        for m in models
+        for name in (f"internal_flash_backup_{m}.bin", f"flash_backup_{m}.bin")
+    ]
+
+
 def _build(tmp_path, params):
     tree = tmp_path / "tree"
     _copy_tree(tree)
-    device = params.split()[0].split("=")[1]
-    for name in (f"internal_flash_backup_{device}.bin", f"flash_backup_{device}.bin"):
+    for name in _backups(params):
         (tree / name).symlink_to(REPO / name)
     ips = tmp_path / "empty.ips"
     ips.write_bytes(EMPTY_IPS)
@@ -103,8 +116,7 @@ def _build(tmp_path, params):
 
 @pytest.mark.parametrize("config", CONFIGS)
 def test_golden(config, tmp_path):
-    device = CONFIGS[config].split()[0].split("=")[1]
-    for name in (f"internal_flash_backup_{device}.bin", f"flash_backup_{device}.bin"):
+    for name in _backups(CONFIGS[config]):
         if not (REPO / name).exists():
             pytest.skip(f"missing {name}")
     toolchain = _toolchain()

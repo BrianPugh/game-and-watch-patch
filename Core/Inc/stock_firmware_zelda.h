@@ -2,13 +2,13 @@
 
 /**
  * Stock functions are absolute symbols: the build turns every function in
- * tools/re/<device>.syms into stock_<name> (build/stock_symbols.s), so every
+ * tools/re/zelda.syms into stock_zelda_<name> (build/stock_symbols.s), so every
  * use is an ELF relocation the patcher can follow when it relocates stock code.
  * Declare a prototype here to call one.
  */
-void stock_Reset_Handler(void);
+void stock_zelda_Reset_Handler(void);
 
-gamepad_t stock_read_buttons(void);
+gamepad_t stock_zelda_read_buttons(void);
 
 #define ZELDA_BACKDROP_COUNT 11
 // DTCM .data: pointers to the backdrop images in external flash.
@@ -16,11 +16,11 @@ static const uint8_t * const * const stock_backdrop_images = (const uint8_t * co
 
 // ITCM overlay UI (menu code copied from external flash at boot). ITCM is out
 // of bl range of internal flash, so these are long calls.
-void stock_ui_draw_text(uint8_t *dst, const uint16_t *tiles, uint32_t n) __attribute__((long_call));
-void stock_ui_draw_cursor(uint8_t *row, uint32_t color) __attribute__((long_call));
-uint32_t stock_ui_cursor_wrap_step(volatile uint8_t *cursor, uint32_t n, gamepad_t pressed) __attribute__((long_call));
-uint32_t stock_game_select_handle_input(gamepad_t held, gamepad_t pressed) __attribute__((long_call));
-void stock_game_select_draw(uint8_t *fb, void *rects, uint32_t color) __attribute__((long_call));
+void stock_zelda_ui_draw_text(uint8_t *dst, const uint16_t *tiles, uint32_t n) __attribute__((long_call));
+void stock_zelda_ui_draw_cursor(uint8_t *row, uint32_t color) __attribute__((long_call));
+uint32_t stock_zelda_ui_cursor_wrap_step(volatile uint8_t *cursor, uint32_t n, gamepad_t pressed) __attribute__((long_call));
+uint32_t stock_zelda_game_select_handle_input(gamepad_t held, gamepad_t pressed) __attribute__((long_call));
+void stock_zelda_game_select_draw(uint8_t *fb, void *rects, uint32_t color) __attribute__((long_call));
 
 // Overlay UI struct: +0x08 bit 5 is the cursor blink phase, +0x1f the row
 // cursor, +0x21/+0x26 nonzero on the SET TIME/other edit pages. Game-select

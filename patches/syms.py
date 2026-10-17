@@ -2,7 +2,7 @@
 
 Each line is ``<addr> <func|data> <name>  # optional note``. One file feeds the
 RE tools (``tools/re/``), the C build (every function becomes the absolute
-symbol ``stock_<name>`` in ``build/stock_symbols.s``) and patch code
+symbol ``stock_<device>_<name>`` in ``build/stock_symbols.s``) and patch code
 (``IntFirmware.sym()``).
 """
 
@@ -45,12 +45,15 @@ def load(device: str) -> dict:
     return out
 
 
-def c_name(name: str) -> str:
-    """Name our C code calls a stock function by."""
-    return name if name.startswith("stock_") else f"stock_{name}"
+def c_name(device: str, name: str) -> str:
+    """Name our C code calls a stock function by: ``stock_<device>_<name>``.
+
+    The device prefix keeps both models' functions apart in the amalgam build.
+    """
+    return f"stock_{device}_{name.removeprefix('stock_')}"
 
 
 def stock_functions(device: str) -> dict:
     """``{C name: Thumb address}`` of every named stock function."""
     funcs, _ = parse_syms(syms_path(device))
-    return {c_name(name): addr | 1 for addr, name in funcs.items()}
+    return {c_name(device, name): addr | 1 for addr, name in funcs.items()}

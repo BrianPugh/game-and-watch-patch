@@ -9,13 +9,15 @@ def test_free_int_fills_udf_and_word_aligns():
     device = Device.__new__(Device)
     device.internal = bytearray(0x1000)
     device.int_space = Region("internal", 0x0800_0000, 0x1000)
+    device.freed_int = []
+    device.relocation = None
     device.free_int(0x102, 0x20A)
     assert device.int_space.holes == [[0x104, 0x208]]
-    assert device.int_space.freed == [(0x104, 0x208)]
+    assert device.freed_int == [(0x104, 0x208)]
     assert device.internal[0x104:0x208] == b"\xfe\xde" * ((0x208 - 0x104) // 2)
     assert device.internal[0x100:0x104] == b"\x00" * 4
     assert device.int_space.hole_space == 0x104
-    assert device.int_space.is_freed(0x104) and not device.int_space.is_freed(0x208)
+    assert device.is_freed_int(0x104) and not device.is_freed_int(0x208)
 
 
 def test_alloc_takes_the_smallest_hole_that_fits():
@@ -56,7 +58,9 @@ def test_layout_shares_bank2_and_maps_every_region():
     class Fake:
         name = "mario"
 
-        def make_regions(self):
+        pending = []
+
+        def make_regions(self, int_space=None):
             self.int_space = Region("mario internal", 0x0800_0000, 0x100, pos=0x80)
             return [self.int_space, Region("mario sram3", 0x240F_2124, 0)]
 
@@ -77,3 +81,27 @@ def test_layout_shares_bank2_and_maps_every_region():
         "  0x08000010        16         free",
         "  0x08000080         6  mario  ext 0x000010",
     ]
+
+
+def test_the_cursor_stops_at_a_reserved_range():
+    region = Region("internal", 0x0800_0000, 0x400, pos=0x100)
+    region.reserve(0x200, 0x100, "zelda", "relocated stock code")
+    assert region.limit == 0x200 and region.free_space == 0x100
+    with pytest.raises(NotEnoughSpaceError):
+        region.alloc(0x104, "zelda")
+    assert region.alloc(0x100, "zelda") == 0x100
+    assert region.used == 0x300  # up to the cursor (0x200) + the reserved 0x100
+
+
+def test_free_int_of_code_relocated_in_the_image_frees_the_new_place():
+    device = Device.__new__(Device)
+    device.internal = bytearray(0x1000)
+    device.int_space = Region("internal", 0x0800_0000, 0x1000)
+    device.freed_int = []
+    device.relocation = type("Reloc", (), {"int_delta": lambda self, off: 0x800})()
+    device.free_int(0x100, 0x110)
+    assert device.int_space.holes == [[0x900, 0x910]]
+    assert device.is_freed_int(0x100) and not device.is_freed_int(0x900)
+    assert (
+        device.internal[0x100:0x110] == device.internal[0x900:0x910] == b"\xfe\xde" * 8
+    )

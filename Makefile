@@ -187,6 +187,8 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=SMB1_ROM \
 		  -Wl,--undefined=bootloader \
 		  -Wl,--undefined=bss_rwdata_init \
+		  -Wl,--undefined=settings_row_input \
+		  -Wl,--undefined=settings_draw_tail \
 		  -Wl,--undefined=GAME_SELECT_DUAL_BOOT_ICON \
 		  -Wl,--undefined=game_select_draw \
 		  -Wl,--undefined=game_select_handle_input \

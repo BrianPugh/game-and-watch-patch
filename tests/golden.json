@@ -26,17 +26,17 @@
       "internal_flash_patched_bank2.bin": "0ed167e66162f7307b3a8525cbbfe04cc4946a16"
     },
     "zelda": {
-      "external_flash_patched.bin": "04d650003985f6c6a1f15fd6fd9cf46297cbfc0e",
-      "internal_flash_patched.bin": "1bfd8633d76054768fd24da505a249a91b9e3b43"
+      "external_flash_patched.bin": "964fbf8a6c523b27e6c2d3c51f5323fc3fa22757",
+      "internal_flash_patched.bin": "827dcb2ef4e07bf243d9508de5911003b35c5407"
     },
     "zelda_options": {
-      "external_flash_patched.bin": "59221a0775f54534f4d2104485c075e1246deac9",
-      "internal_flash_patched.bin": "36e8ed6b126909cc597bd192c202b0d474a9fc80"
+      "external_flash_patched.bin": "1960ca857845ba15b588ecd28efc93042da1f1c7",
+      "internal_flash_patched.bin": "28ca9f7cb9d3acec8cb75d78f16a830b01a333fd"
     },
     "zelda_relocate": {
-      "external_flash_patched.bin": "8cfa702bd28cbf3ad0b16164c3096a4c0fcc4ffa",
-      "internal_flash_patched.bin": "1ee6152402f4183cedd10cf8fb3ccc8f564c12a0",
-      "internal_flash_patched_bank2.bin": "8638d31958b0a64b89e2b9dfb881975da87a4969"
+      "external_flash_patched.bin": "4f1cad6a393379b9b8a1243f7e14c14b40a8bf10",
+      "internal_flash_patched.bin": "284ceb44166fb32eaf3ffb67e334568abf4eb33c",
+      "internal_flash_patched_bank2.bin": "a801f193c44aa536de22f85309b86465a4bacf61"
     }
   },
   "toolchain": "arm-none-eabi-gcc (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) 15.2.1 20251203"

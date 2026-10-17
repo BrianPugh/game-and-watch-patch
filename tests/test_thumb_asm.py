@@ -482,3 +482,87 @@ def test_encode_modified_immediate_examples():
 def test_unsupported(code):
     with pytest.raises(ThumbAssemblyError):
         assemble(code)
+
+
+@pytest.mark.parametrize("rn", ["r0", "r7", "r8", "sp", "lr"])
+def test_ldr_w_imm_capstone(rn):
+    for value in [0, 4, 24, 0x28, 0x7FF, 0xFFF]:
+        ((m, op_str),) = disasm(f"ldr.w r2, [{rn}, #{value}]")
+        assert m == "ldr.w"
+        assert op_str.startswith(f"r2, [{rn}")
+        assert (imm(op_str[:-1]) if value else 0) == value
+
+
+@pytest.mark.parametrize("rn", ["r0", "r3", "r8", "r12", "sp"])
+def test_ldr_w_imm(keystone, rn):
+    for rt in ["r0", "r7", "r9", "pc"]:
+        for value in [0, 1, 24, 0x28, 0xFFF]:
+            assert_match(keystone, f"ldr.w {rt}, [{rn}, #{value}]")
+    assert_match(keystone, f"ldr.w r1, [{rn}]")
+
+
+def test_strb_imm_capstone():
+    for rt in range(8):
+        for rn in range(8):
+            for value in [0, 3, 31]:
+                ((m, op_str),) = disasm(f"strb r{rt}, [r{rn}, #{value}]")
+                assert (m, op_str.split("#")[0].rstrip(", ]")) == (
+                    "strb",
+                    f"r{rt}, [r{rn}",
+                )
+                assert (imm(op_str[:-1]) if value else 0) == value
+
+
+def test_strb_imm(keystone):
+    for rt in range(8):
+        for rn in range(8):
+            for value in range(32):
+                assert_match(keystone, f"strb r{rt}, [r{rn}, #{value}]")
+
+
+def test_lsls_imm_capstone():
+    for rd in range(8):
+        for shift in range(1, 32):
+            ((m, op_str),) = disasm(f"lsls r{rd}, r{7 - rd}, #{shift}")
+            assert (m, imm(op_str)) == ("lsls", shift)
+
+
+def test_lsls_imm(keystone):
+    for rd in range(8):
+        for rm in range(8):
+            for shift in range(1, 32):
+                assert_match(keystone, f"lsls r{rd}, r{rm}, #{shift}")
+
+
+@pytest.mark.parametrize("mnemonic", ["cbz", "cbnz"])
+def test_cbz_capstone(mnemonic):
+    for rn in range(8):
+        for offset in range(0, 128, 2):
+            target = 0x100 + 4 + offset
+            assert disasm(f"{mnemonic} r{rn}, {target:#x}", 0x100) == [
+                (mnemonic, f"r{rn}, #{target:#x}")
+            ]
+
+
+@pytest.mark.parametrize("mnemonic", ["cbz", "cbnz"])
+def test_cbz(keystone, mnemonic):
+    for rn in range(8):
+        for offset in range(0, 128, 2):
+            assert_match(keystone, f"{mnemonic} r{rn}, {0x104 + offset:#x}", 0x100)
+
+
+@pytest.mark.parametrize(
+    "code, addr",
+    [
+        ("cbz r0, 0x0", 0x100),  # backwards
+        ("cbz r0, 0x186", 0x100),  # past +126
+        ("cbz r8, 0x110", 0x100),  # high register
+        ("lsls r0, r1, #0", 0),  # that's movs (register)
+        ("strb r8, [r0, #1]", 0),
+        ("strb r0, [r0, #32]", 0),
+        ("ldr.w r0, [r1, #4096]", 0),
+    ],
+)
+def test_new_forms_reject(code, addr):
+    with pytest.raises(ThumbAssemblyError):
+        assemble(code, addr)

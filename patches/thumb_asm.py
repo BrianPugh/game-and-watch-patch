@@ -17,6 +17,10 @@ this patcher):
 * ``sub.w  Rd, Rn, #const`` (+ conditional)  -- SUB (immediate), T3 (modified immediate)
 * ``sub    sp, #imm``                        -- SUB (SP minus immediate), T2
 * ``ldr.w  Rt, [pc, #imm]``                  -- LDR (literal), T2 (signed offset)
+* ``ldr.w  Rt, [Rn, #imm12]``                -- LDR (immediate), T3
+* ``strb   Rt, [Rn, #imm5]``                 -- STRB (immediate), T1
+* ``lsls   Rd, Rm, #imm5``                   -- LSL (immediate), T1
+* ``cbz``/``cbnz Rn, <target>``              -- CBZ/CBNZ, T1
 * ``b      <target>``                        -- B, T2 (narrow)
 * ``b<cond> <target>``                       -- B, T1 (narrow conditional, e.g. ``blt``)
 * ``b.w    #<target>``                       -- B, T4 (wide)
@@ -74,6 +78,10 @@ _B_COND_RE = re.compile(rf"^b({_COND_RE})$")
 # ``ldr.w Rt, [pc, #imm]`` -- PC-relative literal load with a signed byte offset.
 _LDR_W_PC_RE = re.compile(
     r"^ldr\.w\s+(\w+)\s*,\s*\[\s*pc\s*,\s*#\s*(-?(?:0x)?[0-9a-f]+)\s*\]$"
+)
+# ``ldr.w``/``strb Rt, [Rn{, #imm}]`` -- immediate-offset load/store.
+_MEM_IMM_RE = re.compile(
+    r"^(ldr\.w|strb)\s+(\w+)\s*,\s*\[\s*(\w+)\s*(?:,\s*#\s*((?:0x)?[0-9a-f]+))?\s*\]$"
 )
 
 
@@ -324,6 +332,56 @@ def _ldr_w_literal(rt_token, imm_token):
     return _emit32(hw1, hw2)
 
 
+def _ldr_w_imm(rt_token, rn_token, imm):
+    # LDR (immediate), T3: Rt = [Rn + imm12]. Rn = pc is the literal form.
+    rt = _reg(rt_token)
+    rn = _reg(rn_token)
+    if rn == 15:
+        raise ThumbAssemblyError("ldr.w [pc, #imm] is the literal form")
+    if not 0 <= imm <= 0xFFF:
+        raise ThumbAssemblyError(f"ldr.w offset 0x{imm:X} out of 12-bit range")
+    return _emit32(0xF8D0 | rn, (rt << 12) | imm)
+
+
+def _strb(rt_token, rn_token, imm):
+    # STRB (immediate), T1: low registers, 5-bit offset.
+    rt = _reg(rt_token)
+    rn = _reg(rn_token)
+    if rt > 7 or rn > 7:
+        raise ThumbAssemblyError("strb (immediate) needs low registers")
+    if not 0 <= imm <= 31:
+        raise ThumbAssemblyError(f"strb offset {imm} out of [0, 31]")
+    return _emit16(0x7000 | (imm << 6) | (rn << 3) | rt)
+
+
+def _lsls(ops):
+    # LSL (immediate), T1. A shift of 0 is MOVS (register), a different instruction.
+    if len(ops) != 3:
+        raise ThumbAssemblyError("lsls expects 'Rd, Rm, #imm5'")
+    rd = _reg(ops[0])
+    rm = _reg(ops[1])
+    if rd > 7 or rm > 7:
+        raise ThumbAssemblyError("lsls (immediate) needs low registers")
+    shift = _imm(ops[2])
+    if not 1 <= shift <= 31:
+        raise ThumbAssemblyError(f"lsls shift {shift} out of [1, 31]")
+    return _emit16((shift << 6) | (rm << 3) | rd)
+
+
+def _cbz(ops, addr, nonzero):
+    name = "cbnz" if nonzero else "cbz"
+    if len(ops) != 2:
+        raise ThumbAssemblyError(f"{name} expects 'Rn, <target>'")
+    rn = _reg(ops[0])
+    if rn > 7:
+        raise ThumbAssemblyError(f"{name} needs a low register")
+    offset = _branch_target(ops[1]) - (addr + 4)
+    if offset & 1 or not 0 <= offset <= 126:
+        raise ThumbAssemblyError(f"{name} target out of range (offset {offset})")
+    i, imm5 = offset >> 6, (offset >> 1) & 0x1F
+    return _emit16(0xB100 | (nonzero << 11) | (i << 9) | (imm5 << 3) | rn)
+
+
 def _b(ops, addr):
     if len(ops) != 1:
         raise ThumbAssemblyError("b expects a single target")
@@ -409,6 +467,13 @@ def _assemble_one(text: str, addr: int) -> List[int]:
     ldr = _LDR_W_PC_RE.match(text)
     if ldr:
         return _ldr_w_literal(ldr.group(1), ldr.group(2))
+    mem = _MEM_IMM_RE.match(text)
+    if mem:
+        op, rt, rn, offset = mem.groups()
+        offset = int(offset, 0) if offset else 0
+        if op == "strb":
+            return _strb(rt, rn, offset)
+        return _ldr_w_imm(rt, rn, offset)
 
     tokens = text.replace(",", " ").split()
     if not tokens:
@@ -427,6 +492,10 @@ def _assemble_one(text: str, addr: int) -> List[int]:
         return _low_reg_imm8(ops, 0x3000, "adds")
     if mnemonic == "cmp":
         return _cmp(ops)
+    if mnemonic == "lsls":
+        return _lsls(ops)
+    if mnemonic in ("cbz", "cbnz"):
+        return _cbz(ops, addr, mnemonic == "cbnz")
     if mnemonic == "cmp.w":
         return _cmp_w(ops)
     if mnemonic == "nop" and not ops:

@@ -357,10 +357,16 @@ void __attribute__((naked)) settings_row_input(void){
 }
 
 /**
- * Draws the AUTO SLEEP text (the stock tail call) and then the 5th row.
+ * Draws the stock tail call's text (AUTO SLEEP on the main page) and then the
+ * 5th row.
  */
 void second_beep_draw(uint8_t *dst, const uint16_t *tiles, uint32_t n){
     stock_ui_draw_text(dst, tiles, n);
+    // The SET TIME (+0x21) and other edit (+0x26) pages end in the same tail
+    // call with their own layout; the rows are only on the main page.
+    if(stock_ui_state[0x21] || stock_ui_state[0x26]){
+        return;
+    }
     uint8_t *row = dst - 16 + SETTINGS_ROW_STEP;  // The text starts 16 px in.
     if(stock_ui_state[0x1f] == SETTINGS_SECOND_BEEP_ROW){
         stock_ui_draw_cursor(row, (stock_ui_state[0x08] & 0x20) ? 0 : 0x90d8);

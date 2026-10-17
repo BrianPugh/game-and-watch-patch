@@ -73,3 +73,31 @@ def test_bundled_retro_go_icon():
     assert (
         len(png_to_icon_4bpp(Path("patches/assets/retro_go_icon.png"))) == 96 * 48 // 2
     )
+
+
+def test_render_label_icon_zelda():
+    from patches.tileset import ZELDA_ICON_ROLES
+
+    icon = render_label_icon("DUAL BOOT", 96, 32, ZELDA_ICON_ROLES)
+    assert len(icon) == 96 * 32 // 2
+    pixels = np.frombuffer(icon, dtype=np.uint8)
+    nibbles = np.stack([pixels >> 4, pixels & 0xF], axis=-1).reshape(32, 96)
+    assert (nibbles[0, :] == ZELDA_ICON_ROLES.highlight).all()
+    assert (nibbles[-1, :] == ZELDA_ICON_ROLES.shadow).all()
+    assert (nibbles[1:-1, 1:-1] == ZELDA_ICON_ROLES.background).any()
+
+
+def test_bundled_retro_go_icon_zelda():
+    from pathlib import Path
+
+    from patches.tileset import ZELDA_GAME_SELECT_PALETTE, png_to_icon_4bpp
+
+    path = Path("patches/assets/retro_go_icon_zelda.png")
+    icon = png_to_icon_4bpp(path, 96, 32, ZELDA_GAME_SELECT_PALETTE)
+    assert len(icon) == 96 * 32 // 2
+    # Drawn in the menu palette, so every pixel maps exactly.
+    from PIL import Image
+
+    with Image.open(path) as img:
+        colors = {c for _, c in img.convert("RGB").getcolors()}
+    assert colors <= set(ZELDA_GAME_SELECT_PALETTE)

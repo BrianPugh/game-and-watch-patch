@@ -247,6 +247,17 @@ def test_b_wide_capstone():
         assemble(f"b.w #{addr + 4 + (1 << 24):#x}", addr)
 
 
+def test_bl_capstone():
+    addr = 0x0801_0936
+    deltas = list(range(-0x2000, 0x2000, 2)) + [-(1 << 24), 0x7F_FFFE, (1 << 24) - 2]
+    for delta in deltas:
+        target = addr + 4 + delta
+        ((mnemonic, op_str),) = disasm(f"bl #{target:#x}", addr)
+        assert mnemonic == "bl" and imm(op_str) == target, hex(delta)
+    with pytest.raises(ThumbAssemblyError):
+        assemble(f"bl #{addr + 4 + (1 << 24):#x}", addr)
+
+
 @pytest.mark.parametrize("pattern", ["", "t", "e", "tt", "te", "et", "ee", "ete"])
 @pytest.mark.parametrize("cond", ["eq", "ne", "cs", "mi", "ge", "lt", "gt", "le"])
 def test_it_blocks_capstone(pattern, cond):
@@ -366,6 +377,12 @@ def test_b_wide_range(keystone):
     addr = 0x0800_0000
     for delta in list(range(-0x2000, 0x2000, 2)) + [-0x80_0000, 0x10_0000, 0x7F_FFFE]:
         assert_match(keystone, f"b.w #{addr + delta}", addr)
+
+
+def test_bl_range(keystone):
+    addr = 0x0800_0000
+    for delta in list(range(-0x2000, 0x2000, 2)) + [-0x80_0000, 0x10_0000, 0x7F_FFFE]:
+        assert_match(keystone, f"bl #{addr + delta}", addr)
 
 
 @pytest.mark.parametrize(

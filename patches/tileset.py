@@ -1,5 +1,6 @@
 from io import BytesIO
 from math import ceil
+from typing import NamedTuple
 
 import numpy as np
 from PIL import Image
@@ -249,11 +250,19 @@ def decode_backdrop(data):
     return im, idx
 
 
-# Nibble roles in the stock game-select menu icons (sampled from the SMB1 icon).
-_ICON_HIGHLIGHT = 5  # Top/left frame edge and text.
-_ICON_BACKGROUND = 6
-_ICON_SHADOW = 7  # Bottom/right frame edge.
-_ICON_TEXT_SHADOW = 0
+class IconRoles(NamedTuple):
+    """Palette nibbles of a rendered label icon's parts."""
+
+    highlight: int  # Top/left frame edge and text.
+    background: int
+    shadow: int  # Bottom/right frame edge.
+    text_shadow: int
+
+
+# Sampled from Mario's SMB1 icon.
+MARIO_ICON_ROLES = IconRoles(highlight=5, background=6, shadow=7, text_shadow=0)
+# Cream on orange, like Zelda's LoZ1 icon (ZELDA_GAME_SELECT_PALETTE).
+ZELDA_ICON_ROLES = IconRoles(highlight=5, background=7, shadow=12, text_shadow=0)
 
 
 def _default_bitmap_font():
@@ -284,7 +293,9 @@ def _wrap_words(words, font, max_width):
     return lines
 
 
-def render_label_icon(label: str, width: int = 96, height: int = 48) -> bytes:
+def render_label_icon(
+    label: str, width: int = 96, height: int = 48, roles: IconRoles = MARIO_ICON_ROLES
+) -> bytes:
     """Render a game-select menu icon containing ``label``.
 
     The icon mimics the stock menu icons' frame and colors, and is returned
@@ -325,17 +336,17 @@ def render_label_icon(label: str, width: int = 96, height: int = 48) -> bytes:
     mask = mask.resize((text_w * scale, text_h * scale), Image.NEAREST)
     text = np.array(mask, dtype=bool)
 
-    icon = np.full((height, width), _ICON_BACKGROUND, dtype=np.uint8)
-    icon[0, :] = _ICON_HIGHLIGHT
-    icon[:, 0] = _ICON_HIGHLIGHT
-    icon[-1, :] = _ICON_SHADOW
-    icon[1:, -1] = _ICON_SHADOW
+    icon = np.full((height, width), roles.background, dtype=np.uint8)
+    icon[0, :] = roles.highlight
+    icon[:, 0] = roles.highlight
+    icon[-1, :] = roles.shadow
+    icon[1:, -1] = roles.shadow
 
     x0 = (width - text.shape[1]) // 2
     y0 = (height - text.shape[0]) // 2
     h, w = text.shape
-    icon[y0 + 1 : y0 + 1 + h, x0 + 1 : x0 + 1 + w][text] = _ICON_TEXT_SHADOW
-    icon[y0 : y0 + h, x0 : x0 + w][text] = _ICON_HIGHLIGHT
+    icon[y0 + 1 : y0 + 1 + h, x0 + 1 : x0 + 1 + w][text] = roles.text_shadow
+    icon[y0 : y0 + h, x0 : x0 + w][text] = roles.highlight
 
     return bytes((icon[:, 0::2] << 4) | icon[:, 1::2])
 
@@ -361,11 +372,34 @@ GAME_SELECT_PALETTE = [
     (0xFF, 0x57, 0xD6),  # 15: magenta
 ]
 
+# Zelda's overlay UI palette entries 0xF0-0xFF, read from the stock firmware's
+# ARGB color table in RAM (GWemu 0.0.23, game-select menu open).
+ZELDA_GAME_SELECT_PALETTE = [
+    (0x00, 0x00, 0x00),  # 0: transparent (shows the black panel background)
+    (0xFF, 0xFF, 0xFF),  # 1: white
+    (0xE4, 0x00, 0xFF),  # 2: magenta
+    (0x00, 0x5D, 0x04),  # 3: dark green
+    (0x00, 0xB3, 0x08),  # 4: green
+    (0xE1, 0xDC, 0xA1),  # 5: cream (LoZ1 icon background)
+    (0xEB, 0x00, 0x00),  # 6: red
+    (0xBF, 0x65, 0x00),  # 7: orange (LoZ1 icon text)
+    (0x74, 0x74, 0x74),  # 8: gray
+    (0x00, 0x7C, 0x8D),  # 9: teal
+    (0xFF, 0xF0, 0x00),  # 10: yellow (variant arrows, TIMER text)
+    (0xAE, 0xC5, 0xAF),  # 11: light gray-green (LA icon)
+    (0x40, 0x47, 0x40),  # 12: dark gray-green
+    (0x73, 0x8E, 0x75),  # 13: gray-green
+    (0x93, 0x93, 0x93),  # 14: light gray
+    (0x18, 0x00, 0xFF),  # 15: blue
+]
 
-def png_to_icon_4bpp(path, width: int = 96, height: int = 48) -> bytes:
+
+def png_to_icon_4bpp(
+    path, width: int = 96, height: int = 48, palette=GAME_SELECT_PALETTE
+) -> bytes:
     """Convert an image to a game-select menu icon.
 
-    Each pixel is mapped to the nearest color in ``GAME_SELECT_PALETTE``; for
+    Each pixel is mapped to the nearest color in ``palette``; for
     exact results, draw the image using only those colors. Returned as linear
     4bpp (high nibble first) pixel data, ``width * height // 2`` bytes.
 
@@ -383,7 +417,7 @@ def png_to_icon_4bpp(path, width: int = 96, height: int = 48) -> bytes:
             )
         rgb = np.asarray(img.convert("RGB"), dtype=np.int32)
 
-    palette = np.array(GAME_SELECT_PALETTE, dtype=np.int32)
+    palette = np.array(palette, dtype=np.int32)
     distances = ((rgb[:, :, None, :] - palette[None, None, :, :]) ** 2).sum(axis=-1)
     icon = distances.argmin(axis=-1).astype(np.uint8)
     return bytes((icon[:, 0::2] << 4) | icon[:, 1::2])

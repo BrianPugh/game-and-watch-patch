@@ -45,6 +45,10 @@ variant (LoZ1/LoZ2 EN/JP, LA EN/FR/DE/JP, Vermin, Timer) from the clock,
 checks `g_app_id` and that the frame isn't blank, and returns with TIME.
 Screenshots go to `build/emu/zelda_shots/`. A full run takes ~5 minutes.
 
+For a `--game-select-dual-boot` build, add `--dual-boot spin` (a tiny valid
+image in bank 2: checks the 6th row, its scrolling window and that A runs
+bank 2) or `--dual-boot erased` (the row must be hidden).
+
 gwprov registers one backup pair per directory, so it only finds Mario when
 both pairs sit in the repo root. `emu_driver.make_profile` registers each
 model from its own directory of symlinks (`build/emu/<model>-backups/`).

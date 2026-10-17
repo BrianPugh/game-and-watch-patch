@@ -23,11 +23,13 @@
 0x0000a2c4 func ui_slider_step                      # identical logic to Mario 0x0800c716 (ITCM; copied from 0x90315d34)
 0x0000a2f8 func ui_reset_blink  # ITCM; copied from 0x90315d68
 0x0000a304 func ui_cursor_wrap_step_dir             # like ui_cursor_wrap_step but returns -1/+1 direction (drives carousel slide) (ITCM; copied from 0x90315d74)
-0x0000a4fe func game_select_handle_input            # (held, pressed): UP/DOWN over 5 fixed rows, LEFT/RIGHT slides variant carousel, A switches (ITCM; copied from 0x90315f6e)
+0x0000a4fe func game_select_handle_input            # (held, pressed) -> nonzero closes the menu (A/B): UP/DOWN over 5 fixed rows (ui_cursor_wrap_step at 0xa576), LEFT/RIGHT slides variant carousel, A switches; called only from ui_handle_input 0xa886 (ITCM; copied from 0x90315f6e)
 0x0000ab78 func game_select_draw_row_carousel       # uses slide offset (ui+0x28), thresholds 104/184 (ITCM; copied from 0x903165e8)
 0x00001598 func memcpy_like                         # (dst, src, n); UNVERIFIED (ITCM; copied from 0x9030d920)
 0x902df1b0 data menu_rows                           # 5 rows x 11 bytes: [count, variant ids...]: {0,1} {2,3} {4,5,6,7} {8} {9}
-0x2001a7bc data ui_state                            # overlay UI struct; +0x28 s16 carousel slide offset, +0x2a row cursor, +0x2d chosen variant per row
+0x0000ac60 data menu_rows_literal                   # literal pool word = menu_rows, read by menu_select_variant_for_app and game_select_handle_input
+0x0000b788 data game_select_draw_menu_rows_literal  # literal pool word = menu_rows, read only by game_select_draw (0xacfa, 0xad76; it reads only the row counts)
+0x2001a7bc data ui_state                            # overlay UI struct; +0x28 s16 carousel slide offset, +0x2a row cursor, +0x2c slide direction, +0x2d chosen/previous variant per row (2 bytes), +0x37 and +0x46 their backups on A, +0x41 variant index per row
 0x2000ab9f data current_app_id                      # UNVERIFIED
 # RAM never written by stock fw (GWemu canary probe 2026-10-16, 2 identical runs: boot, clock, every game-select variant played briefly; sleep images / nvram UNVERIFIED)
 0x0000b7c0 data itcm_unused                           # to 0x00010000 (18496 B): past the last itcm_overlay_load copy (menu UI ends at 0x0000b7c0)
@@ -86,7 +88,7 @@
 0x0000a990 func ui_draw_panel                        # (dst, w, h, color): framed panel (min 24x24) with border colors 0x51cc/0x51ac; runs in ITCM; copied from external flash 0x90316400 by itcm_overlay_load
 0x0000aacc func ui_draw_bar                          # (dst, n, filled, colors...): segmented slider bar (UNVERIFIED); runs in ITCM; copied from external flash 0x9031653c by itcm_overlay_load
 0x0000ab5a func menu_find_variant_info               # (variant): entry of menu_variant_info whose [2] == variant, else 0; runs in ITCM; copied from external flash 0x903165ca by itcm_overlay_load
-0x0000ac74 func game_select_draw                     # draws the 5 game-select rows (menu_rows) and the carousel of the selected row; runs in ITCM; copied from external flash 0x903166e4 by itcm_overlay_load
+0x0000ac74 func game_select_draw                     # (fb, rects, color): draws the 5 game-select rows (menu_rows) and the carousel of the selected row; 8bpp fb, rows 40 px apart from y=32, 96x32 icons at x=80, 4bpp UI tiles use palette 0xf0-0xff; called only from ui_render_overlay 0xb532; runs in ITCM; copied from external flash 0x903166e4 by itcm_overlay_load
 0x0000ae1c func settings_clock_draw                  # clock/settings overlay page (data 0x902df00c); runs in ITCM; copied from external flash 0x9031688c by itcm_overlay_load
 0x0000afce func settings_game_draw                   # in-game settings overlay page (data 0x902df090); runs in ITCM; copied from external flash 0x90316a3e by itcm_overlay_load
 0x0000b156 func settings_game_draw_alt               # second settings page layout (data 0x902df090) (UNVERIFIED); runs in ITCM; copied from external flash 0x90316bc6 by itcm_overlay_load

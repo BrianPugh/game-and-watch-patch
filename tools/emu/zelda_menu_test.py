@@ -59,9 +59,10 @@ UI_SLIDE = UI_STATE + 0x2C  # s8 carousel slide direction, 0 when idle
 UI_VARIANT = UI_STATE + 0x2D  # u8 chosen variant of each row, stride 2
 BANK2_SPIN_PC = 0x0810_0008
 
-# --amalgam: Zelda's stock code sits 0x24000 up (patches/amalgam.py), and
-# main.c keeps the selection in AMALGAM_BOOT_REG.
-AMALGAM_STOCK_OFFSET = 0x24000
+# --amalgam: Zelda's stock code below its factory test (read_buttons' return
+# included) sits 0x1B400 up (patches/amalgam.py ZELDA_DST), and main.c keeps
+# the selection in AMALGAM_BOOT_REG.
+AMALGAM_STOCK_OFFSET = 0x1B400
 TAMP_BKP31R = 0x5800_457C
 BOOT_MARIO, BOOT_ZELDA = 0, 0x444C_455A  # "ZELD"
 SCB_VTOR = 0xE000_ED08
@@ -237,7 +238,7 @@ def amalgam_to_zelda(d: Driver) -> bool:
         d.press_until("DOWN", lambda: d.read16(choice) != before, "the cursor to move")
     d.shot("00_mario_menu_zelda")
     return amalgam_switch(
-        d, BOOT_ZELDA, READ_BUTTONS_RETURN + AMALGAM_STOCK_OFFSET, 0x0802_4000
+        d, BOOT_ZELDA, READ_BUTTONS_RETURN + AMALGAM_STOCK_OFFSET, 0x0801_B400
     )
 
 

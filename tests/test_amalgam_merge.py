@@ -25,7 +25,7 @@ def device(name, stock, relocates, holes=()):
         internal=internal,
         internal_orig=bytes(internal),
         relocates_in_amalgam=relocates,
-        STOCK_RELOCATE_END=0x0800_0000 + RELOCATE_END,
+        AMALGAM_RELOCATE_END=0x0800_0000 + RELOCATE_END,
         freed_int_ranges=lambda: list(holes),
     )
 

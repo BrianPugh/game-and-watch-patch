@@ -65,8 +65,11 @@ class Region:
 
     @property
     def used(self):
-        """Bytes taken: up to the cursor less the holes, plus reserved ranges."""
-        reserved = sum(a.size for a in self.allocations if a.reserved)
+        """Bytes taken: up to the cursor less the holes, plus reserved ranges
+        past it."""
+        reserved = sum(
+            a.size for a in self.allocations if a.reserved and a.offset >= self.pos
+        )
         return self.pos - self.hole_space + reserved
 
     @property
@@ -122,9 +125,23 @@ class Region:
         """Record data that was already there, for the map only."""
         self.allocations.append(Allocation(offset, size, owner, label))
 
-    def free(self, start, end):
-        """Make [start, end) reusable."""
-        self.holes.append([start, end])
+    def free(self, start, end, owner=None):
+        """Make [start, end) reusable. With ``owner``, only the parts no
+        other owner's allocation covers (the amalgam: Zelda's factory test
+        lies under Mario's code)."""
+        pieces = [[start, end]]
+        if owner is not None:
+            for a in self.allocations:
+                if a.owner == owner:
+                    continue
+                lo, hi = a.offset, a.offset + a.size
+                cut = []
+                for s, e in pieces:
+                    cut += [
+                        p for p in ([s, min(e, lo)], [max(s, hi), e]) if p[0] < p[1]
+                    ]
+                pieces = cut
+        self.holes += pieces
 
     def map_lines(self):
         """The allocations and remaining holes, in address order."""

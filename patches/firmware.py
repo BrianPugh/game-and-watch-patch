@@ -803,8 +803,8 @@ class Device:
             int_space.note(stock_end, int_space.pos - stock_end, name, "our code")
         elif self.relocates_in_amalgam:
             # The rest moves with Relocation (a reserved range).
-            hi = self.STOCK_RELOCATE_END - base
-            int_space.note(hi, stock_end - hi, name, "stock init table")
+            kept = self.AMALGAM_KEPT_START - base
+            int_space.note(kept, stock_end - kept, name, "stock code (in place)")
         else:
             int_space.note(0, stock_end, name, "stock code")
         self.ext_space = ExtRegion(
@@ -856,7 +856,7 @@ class Device:
         shift = self.relocation.int_delta(start) if self.relocation else 0
         for s in {0, shift}:
             self.internal[start + s : end + s] = b"\xfe\xde" * ((end - start) // 2)
-        self.int_space.free(start + shift, end + shift)
+        self.int_space.free(start + shift, end + shift, self.name)
         printd(f"Freed internal 0x{start:X}-0x{end:X} ({end - start} bytes).")
 
     def freed_int_ranges(self):

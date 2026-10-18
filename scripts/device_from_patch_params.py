@@ -32,12 +32,13 @@ def _write_if_changed(path, text):
 
 def device_ld(name):
     if name == AMALGAM:
-        # Our code starts past both stock images: each firmware is patched in
-        # its own buffer at its stock addresses (patches/amalgam.py). Each
-        # owns all RAM while it runs, so each keeps its own objects' RAM in its
-        # own free window (STM32H7B0VBTx_FLASH_amalgam.ld).
-        end = max(Device.registry[m].Int.STOCK_ROM_END for m in RAM)
-        ld = f"\n__STOCK_ROM_END__ = 0x{end:08X};\n"
+        # Our code starts past Zelda's relocated stock code (patches/amalgam.py).
+        # Each firmware owns all RAM while it runs, so each keeps its own
+        # objects' RAM in its own free window (STM32H7B0VBTx_FLASH_amalgam.ld).
+        from patches.amalgam import OUR_CODE, ZELDA_DST
+
+        ld = f"\n__STOCK_ROM_END__ = 0x{OUR_CODE - 0x0800_0000:08X};\n"
+        ld += f"__zelda_vector_table__ = 0x{ZELDA_DST:08X};\n"
         for model, (origin, length) in RAM.items():
             ld += f"__{model.upper()}_RAM_ORIGIN__ = 0x{origin:08X};\n"
             ld += f"__{model.upper()}_RAM_LENGTH__ = 0x{length:X};\n"

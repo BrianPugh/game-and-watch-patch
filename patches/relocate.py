@@ -104,8 +104,12 @@ class Relocation:
         ``keep_vector_table``: the moved vector table also stays at the start
         of the image (boot and VTOR use 0x08000000). The amalgam sets it false:
         Mario's vector table is there."""
-        if (dst - lo) % 0x1000:
-            raise ValueError("relocation offset must be a multiple of 4 KB")
+        # PC-relative loads need word alignment; a moved vector table, VTOR's
+        # (its 179 entries round up to 256 words).
+        if (dst - lo) % 4:
+            raise ValueError("relocation offset must be a multiple of 4")
+        if lo == device.internal.FLASH_BASE and dst % 0x400:
+            raise ValueError("a moved vector table must be 1 KB aligned")
         if dst_in_bank2(dst):
             if dst + hi - lo > BANK2_END:
                 raise ValueError(
@@ -240,13 +244,41 @@ class Relocation:
                     f"PC-relative access at 0x{src:08X} leaves the range"
                 )
 
-        # Our code: branches into and pointers to the range. The amalgam's
-        # ELF also calls the other firmware's stock code at the same addresses.
+        # Stock code left in place (the amalgam keeps Zelda's code past its
+        # factory test): its branches into the range, as patched.
+        def stays(a):
+            return not self.moves(a) and not self.freed(a) and not d.xip_hides(a)
+
+        for src, t, mn, size in self.map.code.branches:
+            if not (stays(src) and self.moves(t)):
+                continue
+            if size != 4:
+                raise NotImplementedError(
+                    f"16-bit branch at 0x{src:08X} enters the range"
+                )
+            o = src - base
+            hw1, hw2 = struct.unpack_from("<HH", d.internal, o)
+            decoded = _decode_branch(hw1, hw2)
+            if decoded is None or not self.moves(src + 4 + decoded[1]):
+                continue  # A patch replaced it.
+            hw1, hw2 = _encode_branch(hw1, hw2, decoded[1] + delta)
+            _pack("<HH", d.internal, o, hw1, hw2)
+            self._count("branch in")
+        for src, t, sz in self.map.code.pcrel:
+            if stays(src) and self.moves(t):
+                raise NotImplementedError(
+                    f"PC-relative access at 0x{src:08X} enters the range"
+                )
+
+        # Our code: branches into and pointers to the range. It reaches stock
+        # code only through stock_<device>_* symbols, so the symbol tells what
+        # moves, not the address: the amalgam's ELF also calls the other
+        # firmware's stock code at the same addresses.
         stock_end = base + d.internal.STOCK_ROM_END
         for addr, rtype, name in elf_relocs(d):
             if not stock_end <= addr < base + len(d.internal):
                 continue
-            if name.startswith("stock_") and not name.startswith(f"stock_{d.name}_"):
+            if not name.startswith(f"stock_{d.name}_"):
                 continue
             o = addr - base
             if rtype in (R_ARM_THM_CALL, R_ARM_THM_JUMP24):

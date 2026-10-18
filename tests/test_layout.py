@@ -7,6 +7,7 @@ from patches.layout import Layout, Region
 
 def test_free_int_fills_udf_and_word_aligns():
     device = Device.__new__(Device)
+    device.name = "mario"
     device.internal = bytearray(0x1000)
     device.int_space = Region("internal", 0x0800_0000, 0x1000)
     device.freed_int = []
@@ -95,6 +96,7 @@ def test_the_cursor_stops_at_a_reserved_range():
 
 def test_free_int_of_code_relocated_in_the_image_frees_the_new_place():
     device = Device.__new__(Device)
+    device.name = "mario"
     device.internal = bytearray(0x1000)
     device.int_space = Region("internal", 0x0800_0000, 0x1000)
     device.freed_int = []
@@ -105,3 +107,15 @@ def test_free_int_of_code_relocated_in_the_image_frees_the_new_place():
     assert (
         device.internal[0x100:0x110] == device.internal[0x900:0x910] == b"\xfe\xde" * 8
     )
+
+
+def test_free_clips_other_owners():
+    region = Region("bank1", 0x0800_0000, 0x1000)
+    region.note(0, 0x100, "mario", "stock code")
+    region.note(0x200, 0x100, "zelda", "stock code")
+    # Zelda frees code that lies under Mario's in the image.
+    region.free(0x80, 0x180, "zelda")
+    assert region.holes == [[0x100, 0x180]]
+    # Its own range is freed whole.
+    region.free(0x200, 0x240, "zelda")
+    assert region.holes[-1] == [0x200, 0x240]

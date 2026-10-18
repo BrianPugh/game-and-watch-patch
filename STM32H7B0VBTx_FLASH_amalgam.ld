@@ -24,10 +24,6 @@ MEMORY
   FLASH     (xr ) : ORIGIN = 0x8000000,  LENGTH = 256K
 }
 
-/* Zelda's stock code (vector table first) at the top of the bank; the
-   bootloader boots it from here. patches/amalgam.py checks it. */
-__zelda_vector_table__ = ORIGIN(FLASH) + 0x24000;
-
 SECTIONS
 {
   INCLUDE STM32H7B0VBTx_FLASH_text.ld

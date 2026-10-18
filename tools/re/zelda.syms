@@ -26,7 +26,7 @@
 0x0000a4fe func game_select_handle_input            # (held, pressed) -> nonzero closes the menu (A/B): UP/DOWN over 5 fixed rows (ui_cursor_wrap_step at 0xa576), LEFT/RIGHT slides variant carousel, A switches; called only from ui_handle_input 0xa886 (ITCM; copied from 0x90315f6e)
 0x0000ab78 func game_select_draw_row_carousel       # uses slide offset (ui+0x28), thresholds 104/184 (ITCM; copied from 0x903165e8)
 0x00001598 func memcpy_like                         # (dst, src, n); UNVERIFIED (ITCM; copied from 0x9030d920)
-0x902df1b0 data menu_rows                           # 5 rows x 11 bytes: [count, variant ids...]: {0,1} {2,3} {4,5,6,7} {8} {9}
+0x902df1b0 data menu_rows                           # 5 rows x 11 bytes: [count, variant ids...]: {0,1} {2,3} {4,5,6,7} {8} {9}; zelda.py --no-la drops the LA row
 0x0000ac60 data menu_rows_literal                   # literal pool word = menu_rows, read by menu_select_variant_for_app and game_select_handle_input
 0x0000b788 data game_select_draw_menu_rows_literal  # literal pool word = menu_rows, read only by game_select_draw (0xacfa, 0xad76; it reads only the row counts)
 0x2001a7bc data ui_state                            # overlay UI struct; +0x28 s16 carousel slide offset, +0x2a row cursor, +0x2c slide direction, +0x2d chosen/previous variant per row (2 bytes), +0x37 and +0x46 their backups on A, +0x41 variant index per row

@@ -49,6 +49,10 @@ For a `--game-select-dual-boot` build, add `--dual-boot spin` (a tiny valid
 image in bank 2: checks the 6th row, its scrolling window and that A runs
 bank 2) or `--dual-boot erased` (the row must be hidden).
 
+For a `--no-la` build, add `--no-la`: it skips the LA games, expects Vermin
+and Timer a row up and the cursor to wrap over 4 rows (5 with DUAL BOOT, which
+then takes LA's old slot without scrolling).
+
 gwprov registers one backup pair per directory, so it only finds Mario when
 both pairs sit in the repo root. `emu_driver.make_profile` registers each
 model from its own directory of symlinks (`build/emu/<model>-backups/`).

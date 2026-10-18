@@ -1,8 +1,8 @@
 {
   "configs": {
     "amalgam": {
-      "external_flash_patched.bin": "2bbf893a39b271ec7f1badff84bfabd9b3fb0f17",
-      "internal_flash_patched.bin": "920491070bce7cfde0ac24ad1a2f96d0493a1784"
+      "external_flash_patched.bin": "e00fd6a5d410a81078a587605a8cf67e5a664886",
+      "internal_flash_patched.bin": "c53fe6231420c06e78447d9917b686e2d6bbef34"
     },
     "mario": {
       "external_flash_patched.bin": "bf0cf36ebdbe9493bd0b7c4072d5bfab43b7928c",
@@ -34,8 +34,8 @@
       "internal_flash_patched.bin": "82a81483749e471abb0b6675cfe144a33db90cdc"
     },
     "zelda_options": {
-      "external_flash_patched.bin": "740e2fc7be014332dcc5b1a364a258ccecfb4aec",
-      "internal_flash_patched.bin": "90a95fbf9d4761992a76388547cdb0ec86e1c090"
+      "external_flash_patched.bin": "c714c1d2d62e728e8ccdc19aefac8a39a89d36a8",
+      "internal_flash_patched.bin": "a85c33e411a1615dfc34ff5cc34b344e19841b23"
     },
     "zelda_relocate": {
       "external_flash_patched.bin": "07f3b010b1f39516cad5770bc06a31ab051e6f90",

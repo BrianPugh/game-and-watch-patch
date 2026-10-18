@@ -54,6 +54,9 @@ CONFIGS = {
     "mario_xip": "--device=mario --xip-minigame",
     "zelda_xip_relocate": "--device=zelda --xip-minigame --relocate-stock=0x08120000",
     "amalgam_xip": "--device=amalgam --no-factory-test --xip-minigame",
+    # Sylverb's SD bootloader past 0x08032000: our code in freed stock code
+    # (scripts/amalgam_holes.py), the SMB1 table written before its free.
+    "amalgam_sd": "--device=amalgam --sd-bootloader --smb1-graphics {ips}",
 }
 
 OUTPUTS = [

@@ -95,3 +95,41 @@ def test_data_over_own_relocated_code_fails(setup):
     zelda.internal[off : off + 8] = b"D" * 8
     with pytest.raises(AmalgamError, match="over its own relocated stock code"):
         merge_internal(region, [zelda, mario])
+
+
+def _link(region, devices, start, data):
+    """Our code linked at [start, start + len(data)): the baseline both
+    buffers are compared with (patches/amalgam.py load)."""
+    region.linked.append((start, start + len(data)))
+    for d in devices:
+        orig = bytearray(d.internal_orig)
+        orig[start : start + len(data)] = data
+        d.internal_orig = bytes(orig)
+
+
+def test_linked_code_in_a_freed_hole():
+    mario = device("mario", b"M", relocates=False, holes=[(0x10, 0x20)])
+    zelda = device("zelda", b"Z", relocates=True)
+    region = Region("bank1", 0x0800_0000, SIZE, pos=0x50)
+    region.note(0, STOCK_END, "mario", "stock code")
+    _link(region, [mario, zelda], 0x10, b"L" * 8)
+    # free_int: udf, then our code back; a Mario patch to it.
+    mario.internal[0x10:0x20] = b"\xfe\xde" * 8
+    mario.internal[0x10:0x18] = b"L" * 8
+    mario.internal[0x11] = ord("p")
+    out = merge_internal(region, [zelda, mario])
+    assert out[0x10:0x18] == b"LpLLLLLL"
+
+
+def test_linked_code_must_be_freed():
+    mario = device("mario", b"M", relocates=False)
+    zelda = device("zelda", b"Z", relocates=True)
+    region = Region("bank1", 0x0800_0000, SIZE, pos=0x50)
+    region.note(0, STOCK_END, "mario", "stock code")
+    _link(region, [mario, zelda], 0x10, b"L" * 8)
+    with pytest.raises(AmalgamError, match="wasn't freed.*0x08000010"):
+        merge_internal(region, [zelda, mario])
+    # Zelda's free doesn't count: Mario's code is there.
+    zelda.freed_int_ranges = lambda: [(0x10, 0x20)]
+    with pytest.raises(AmalgamError, match="wasn't freed"):
+        merge_internal(region, [zelda, mario])

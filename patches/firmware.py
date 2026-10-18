@@ -317,26 +317,36 @@ class RWData:
         assert len(self.datas) == len(self.dsts)
 
     @property
-    def compressed_len(self):
-        compressed_len = 0
+    def compressed_lens(self):
+        """Each block's compressed length."""
+        out = []
         for data in self.datas:
             data = bytes(data)
             if data not in self.__compressed_len_memo:
                 compressed_data = lzma_compress(bytes(data))
                 self.__compressed_len_memo[data] = len(compressed_data)
-            compressed_len += self.__compressed_len_memo[data]
-        return compressed_len
+            out.append(self.__compressed_len_memo[data])
+        return out
 
-    def write_table_and_data(self, end_of_table_reference, data_offset=None):
+    def write_table_and_data(
+        self, end_of_table_reference, data_offset=None, alloc=None
+    ):
         with writelog.step("rwdata table: rwdata_inflate's compressed RAM images"):
-            return self._write_table_and_data(end_of_table_reference, data_offset)
+            return self._write_table_and_data(
+                end_of_table_reference, data_offset, alloc
+            )
 
-    def _write_table_and_data(self, end_of_table_reference, data_offset=None):
+    def _write_table_and_data(
+        self, end_of_table_reference, data_offset=None, alloc=None
+    ):
         """
         Parameters
         ----------
         data_offset : int
             Where to write the compressed data
+        alloc : callable
+            Instead of ``data_offset``: returns where each block goes, given
+            its compressed length.
         """
 
         # Write Compressed Data
@@ -349,6 +359,8 @@ class RWData:
         total_len = 0
         for data in self.datas:
             compressed_data = lzma_compress(bytes(data))
+            if alloc is not None:
+                index = alloc(len(compressed_data))
             print(
                 f"    compressed {len(data)}->{len(compressed_data)} bytes "
                 f"(saves {len(data)-len(compressed_data)}). "
@@ -437,6 +449,9 @@ class IntFirmware(Firmware):
         self._elf_f = open(elf, "rb")
         self.elf = ELFFile(self._elf_f)
         self.symtab = self.elf.get_section_by_name(".symtab")
+        # Every symbol address() looked up (patches/amalgam.py checks where
+        # the data ones are linked).
+        self.looked_up = set()
         if self.RWDATA_OFFSET is None:
             self.rwdata = None
         else:
@@ -461,6 +476,7 @@ class IntFirmware(Firmware):
         address = symbols[0]["st_value"]
         if address == 0:
             raise MissingSymbolError(f"{symbol_name} has address 0x0")
+        self.looked_up.add(symbol_name)
         print(f"    found {symbol_name} at 0x{address:08X}")
         if sub_base:
             address -= self.FLASH_BASE
@@ -648,10 +664,13 @@ class Device:
 
         base = self.internal.FLASH_BASE
         refs = {r["src"]: r for r in ext_refs(self.stock_map)}
+        # Our code can be linked where stock code was (Device.linked), so its
+        # pointers are kept apart from the stock references.
+        ours = {}
         for off, value, lo, hi in self.expected_refs:
             src = base + off
-            if off >= self.internal.STOCK_ROM_END:
-                refs[src] = {"kind": "our pointer", "src": src, "target": value}
+            if off >= self.internal.STOCK_ROM_END or self.is_linked(off):
+                ours[src] = {"kind": "our pointer", "src": src, "target": value}
                 continue
             r = refs.get(src)
             if (
@@ -666,11 +685,13 @@ class Device:
 
         with writelog.step("Repoint references into moved external data"):
             counts = self._fix_ext_refs(refs)
+            for kind, n in self._fix_ext_refs(ours, ours=True).items():
+                counts[kind] = counts.get(kind, 0) + n
         self.ext_refs_fixed = True
         printd(f"Fixed references into moved external data: {counts}")
         return counts
 
-    def _fix_ext_refs(self, refs):
+    def _fix_ext_refs(self, refs, ours=False):
         counts = {}
         for src, r in sorted(refs.items()):
             kind, target = r["kind"], r["target"]
@@ -682,7 +703,10 @@ class Device:
                     f"{kind} at 0x{src:08X} points into moved data (0x{target:08X}); "
                     f"classify it in patches/xrefs.py LAYOUT"
                 )
-            buf, off = self._ref_site(src)
+            if ours:
+                buf, off = self.internal, src - self.internal.FLASH_BASE
+            else:
+                buf, off = self._ref_site(src)
             if buf is None:
                 continue
             cur = int.from_bytes(buf[off : off + 4], "little")
@@ -789,7 +813,7 @@ class Device:
         # The compressed images are written at the cursor last.
         self.pending = [self.compressed_memory_compressed_len]
         if self.internal.rwdata is not None:
-            self.pending.append(lambda: self.internal.rwdata.compressed_len)
+            self.pending.append(lambda: self.internal.rwdata.compressed_lens)
         int_space.pending += self.pending
         int_space.slack = self.COMPRESSED_FIXUP_SLACK
         self.sram3_space = Region(
@@ -827,6 +851,9 @@ class Device:
 
     # Moves its stock code to the top of bank 1 in the amalgam.
     relocates_in_amalgam = False
+    # (offset, bytes) of our code linked into stock code that gets freed (the
+    # amalgam with --sd-bootloader), at its final place; set by patches/amalgam.py.
+    linked = ()
 
     def rwdata_erase(self, lower, size):
         """
@@ -854,10 +881,61 @@ class Device:
         self.freed_int.append((start, end))
         # Stock code moved within this image leaves its holes at the new place.
         shift = self.relocation.int_delta(start) if self.relocation else 0
+        linked = self._linked_code(start + shift, end + shift)
         for s in {0, shift}:
             self.internal[start + s : end + s] = b"\xfe\xde" * ((end - start) // 2)
+        for lo, data in linked:
+            with writelog.step("Our code, linked into freed stock code"):
+                self.internal[lo : lo + len(data)] = data
         self.int_space.free(start + shift, end + shift, self.name)
         printd(f"Freed internal 0x{start:X}-0x{end:X} ({end - start} bytes).")
+
+    def _linked_code(self, start, end):
+        """(offset, bytes) of our code linked into [start, end), which is
+        about to be freed: as linked where the buffer held stock code, as it
+        is now (patched) where it held our code from the start (past
+        ``STOCK_ROM_END``, ``patches/amalgam.py`` ``load``)."""
+        out = []
+        for offset, data in self.linked:
+            lo, hi = max(start, offset), min(end, offset + len(data))
+            if lo >= hi:
+                continue
+            if lo >= self.internal.STOCK_ROM_END:
+                out.append((lo, bytes(self.internal[lo:hi])))
+            else:
+                out.append((lo, data[lo - offset : hi - offset]))
+        return out
+
+    def write_rwdata(self, end_of_table_reference):
+        """Compress, insert, and reference the modified rwdata: at the cursor,
+        or each block in a hole (``Region.pending_in_holes``)."""
+        space = self.int_space
+        if not space.pending_in_holes:
+            rwdata_len = self.internal.rwdata.write_table_and_data(
+                end_of_table_reference, data_offset=space.pos
+            )
+            space.append(rwdata_len, self.name, "rwdata (LZMA)")
+            return
+        # Placed now, so no longer pending.
+        for p in self.pending:
+            space.pending.remove(p)
+        self.pending = []
+        self.internal.rwdata.write_table_and_data(
+            end_of_table_reference,
+            alloc=lambda n: space.alloc(n, self.name, "rwdata (LZMA)"),
+        )
+
+    def is_linked(self, offset):
+        """Whether internal ``offset`` is our code linked into freed stock code."""
+        return any(o <= offset < o + len(data) for o, data in self.linked)
+
+    def our_code(self, offset, size):
+        """``size`` bytes of our code at internal ``offset``; linked code (see
+        ``linked``) as linked, since its stock code may not be freed yet."""
+        for o, data in self.linked:
+            if o <= offset and offset + size <= o + len(data):
+                return data[offset - o : offset - o + size]
+        return bytes(self.internal[offset : offset + size])
 
     def freed_int_ranges(self):
         """Every freed range where it is in the final image."""
@@ -944,7 +1022,7 @@ class Device:
             f"    {Fore.YELLOW}compression_ratio: {compression_ratio}{Style.RESET_ALL}"
         )
 
-        if diff > self.int_space.free_space:
+        if not self.int_space.pending_fits(self.compressed_memory_compressed_len, diff):
             print(
                 f"        {Fore.RED}not putting into free memory due not enough free "
                 f"internal storage for compressed data.{Style.RESET_ALL}"

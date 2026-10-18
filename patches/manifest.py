@@ -206,7 +206,7 @@ class DeviceImages:
                     INT_BASE + fs,
                     e - s,
                     INT_BASE + s,
-                    "freed stock code: udf, or data (layout.txt)",
+                    "freed stock code: udf, our code or data (layout.txt)",
                 )
             )
         return views, summaries

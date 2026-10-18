@@ -619,7 +619,8 @@ class ZeldaGnW(Device, name="zelda"):
         timer, timer_end = 0xD_0000, 0xD_2000
         compressed_len = self.external.compress(timer, timer_end - timer)
         self.internal.asm(0xF430, b_w_memcpy_inflate_asm, expect="4:625bb93e")
-        self.move_to_int(timer, compressed_len, 0xFCF8)
+        # External flash if internal is full (the amalgam with --sd-bootloader).
+        self.move_ext(timer, compressed_len, 0xFCF8)
         self.ext_space.drop(timer, timer_end)
 
         if self.args.no_la:
@@ -908,8 +909,4 @@ class ZeldaGnW(Device, name="zelda"):
 
         self._finish_ext()
 
-        # Compress, insert, and reference the modified rwdata
-        rwdata_len = self.internal.rwdata.write_table_and_data(
-            0x1B070, data_offset=self.int_space.pos
-        )
-        self.int_space.append(rwdata_len, self.name, "rwdata (LZMA)")
+        self.write_rwdata(0x1B070)

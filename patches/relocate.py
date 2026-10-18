@@ -134,9 +134,29 @@ class Relocation:
         self.counts = {}
         # writelog provenance of the moved range at dst, once applied.
         self.prov = None
+        self._linked_symbols = None
 
     def moves(self, addr):
         return self.lo <= addr < self.hi
+
+    def linked(self, addr):
+        """In our code linked into freed stock code (``Device.linked``)."""
+        return self.device.is_linked(addr - self.device.internal.FLASH_BASE)
+
+    def linked_symbols(self):
+        """Addresses of our symbols linked into freed stock code. Stock code
+        is there too in this device's view (the amalgam: the other device
+        freed it), so a branch or pointer there is ours only by its target."""
+        if self._linked_symbols is None:
+            symtab = self.device.internal.elf.get_section_by_name(".symtab")
+            self._linked_symbols = {
+                sym["st_value"] & ~1
+                for sym in symtab.iter_symbols()
+                if sym["st_info"]["type"] in ("STT_FUNC", "STT_OBJECT")
+                and not sym.name.startswith("stock_")
+                and self.linked(sym["st_value"] & ~1)
+            }
+        return self._linked_symbols
 
     def freed(self, addr):
         """In stock code the patcher removed."""
@@ -226,8 +246,14 @@ class Relocation:
             code.descend({a | 1 for a in self.map.code.entries if self.moves(a)})
 
         # Branches out of the range (e.g. hooks into our code).
+        stock_branches = {src: t for src, t, mn, size in self.map.code.branches}
         for src, t, mn, size in code.branches:
             if self.moves(t):
+                if t in self.linked_symbols() and stock_branches.get(src) != t:
+                    raise NotImplementedError(
+                        f"0x{src:08X} branches to our code at 0x{t:08X}, which "
+                        "is linked into the range (scripts/amalgam_holes.py)"
+                    )
                 continue
             if size != 4:
                 raise NotImplementedError(
@@ -276,10 +302,15 @@ class Relocation:
         # firmware's stock code at the same addresses.
         stock_end = base + d.internal.STOCK_ROM_END
         for addr, rtype, name in elf_relocs(d):
-            if not stock_end <= addr < base + len(d.internal):
+            if not (stock_end <= addr < base + len(d.internal) or self.linked(addr)):
                 continue
             if not name.startswith(f"stock_{d.name}_"):
                 continue
+            if self.moves(addr):
+                raise NotImplementedError(
+                    f"our code at 0x{addr:08X} uses {name}, but it's linked "
+                    "into the range (scripts/amalgam_holes.py)"
+                )
             o = addr - base
             if rtype in (R_ARM_THM_CALL, R_ARM_THM_JUMP24):
                 hw1, hw2 = struct.unpack_from("<HH", d.internal, o)
@@ -295,6 +326,12 @@ class Relocation:
             elif rtype == R_ARM_ABS32:
                 self._fix_abs(d.internal, o, "our pointer")
         for o in d.int_pointers:
+            v = struct.unpack_from("<I", d.internal, o)[0] & ~1
+            if self.moves(v) and v in self.linked_symbols():
+                raise NotImplementedError(
+                    f"pointer at 0x{base + o:08X} to our code at 0x{v:08X}, "
+                    "which is linked into the range (scripts/amalgam_holes.py)"
+                )
             self._fix_abs(d.internal, o, "patcher pointer")
 
         # Absolute words in internal flash.

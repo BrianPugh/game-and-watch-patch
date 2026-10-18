@@ -161,7 +161,7 @@ class XipUnit:
                 continue
             if not name.startswith(f"stock_{d.name}_"):
                 continue
-            hw1, hw2 = struct.unpack_from("<HH", d.internal, addr - base)
+            hw1, hw2 = struct.unpack_from("<HH", d.our_code(addr - base, 4))
             decoded = _decode_branch(hw1, hw2)
             if decoded and lo <= addr + 4 + decoded[1] < hi:
                 entries.append(addr + 4 + decoded[1])

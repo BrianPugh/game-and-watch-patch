@@ -955,11 +955,7 @@ class MarioGnW(Device, name="mario"):
                 self.compressed_memory.FLASH_BASE,
             )
 
-        # Compress, insert, and reference the modified rwdata
-        rwdata_len = self.internal.rwdata.write_table_and_data(
-            0x17DB4, data_offset=self.int_space.pos
-        )
-        self.int_space.append(rwdata_len, self.name, "rwdata (LZMA)")
+        self.write_rwdata(0x17DB4)
 
         # Shorten the external firmware. The NVRAM banks go at the end, after
         # the compacted data; rounding the negative shift towards zero leaves

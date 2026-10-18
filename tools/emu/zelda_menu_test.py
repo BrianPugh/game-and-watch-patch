@@ -23,6 +23,10 @@ after the games: 6 rows that wrap, LEFT/RIGHT inert on it, a carousel slide
 while the window is scrolled, and A ending with the CPU spinning in bank 2.
 ``--dual-boot erased`` checks that the row is hidden (5 rows).
 
+``--no-la`` runs a ``--no-la`` build: no LA games, VERMIN and TIMER a row
+up, and 4 stock rows (5 with DUAL BOOT, so the window never scrolls and the
+carousel check uses LoZ1's row).
+
 ``--amalgam`` runs a ``--device=amalgam`` build: it boots Mario, picks Mario's
 DUAL BOOT (ZELDA) entry, and runs the checks on the Zelda it resets into; the
 DUAL BOOT row must then reset back into Mario. Each switch checks the
@@ -53,7 +57,6 @@ UI_STATE = 0x2001A7BC
 UI_ROW = UI_STATE + 0x2A  # u8 row cursor
 UI_SLIDE = UI_STATE + 0x2C  # s8 carousel slide direction, 0 when idle
 UI_VARIANT = UI_STATE + 0x2D  # u8 chosen variant of each row, stride 2
-DUAL_BOOT_ROW = 5
 BANK2_SPIN_PC = 0x0810_0008
 
 # --amalgam: Zelda's stock code sits 0x24000 up (patches/amalgam.py), and
@@ -75,6 +78,15 @@ GAMES = [
     ("la_jp", 2, 7, 14),
     ("vermin", 3, 8, 15),
     ("timer", 4, 9, 5),
+]
+# --no-la (patches/zelda.py _game_select_drop_la_row): VERMIN and TIMER move up.
+GAMES_NO_LA = [
+    ("loz1_en", 0, 0, 6),
+    ("loz1_jp", 0, 1, 7),
+    ("loz2_en", 1, 2, 8),
+    ("loz2_jp", 1, 3, 9),
+    ("vermin", 2, 8, 15),
+    ("timer", 3, 9, 5),
 ]
 
 
@@ -114,8 +126,9 @@ def step(d: Driver, buttons: str):
     d.press_until(buttons, lambda: d.read8(UI_ROW) != cur, "the row cursor to move")
 
 
-def dual_boot(d: Driver, bank2: str) -> bool:
-    ok = True
+def row_wrap(d: Driver, n: int) -> list:
+    """Open the menu and press DOWN 6 times from the first row; returns the rows
+    the cursor visited, which should wrap after ``n``."""
     d.press_until("GAME", lambda: app(d) == APP_MENU, "the game-select menu")
     while d.read8(UI_ROW) != 0:
         step(d, "UP")
@@ -123,13 +136,27 @@ def dual_boot(d: Driver, bank2: str) -> bool:
     for _ in range(6):
         step(d, "DOWN")
         rows.append(d.read8(UI_ROW))
+    return rows
+
+
+def wraps(n: int) -> list:
+    return [(i + 1) % n for i in range(6)]
+
+
+def dual_boot(d: Driver, bank2: str, n_stock: int) -> bool:
+    ok = True
+    dual_boot_row = n_stock
+    rows = row_wrap(d, n_stock)
     if bank2 == "erased":
         d.shot("90_menu_no_dual_boot")
-        return check(rows == [1, 2, 3, 4, 0, 1], f"DUAL BOOT row hidden (DOWN: {rows})")
-    ok &= check(rows == [1, 2, 3, 4, 5, 0], f"6 rows, DOWN wraps (DOWN: {rows})")
+        return check(rows == wraps(n_stock), f"DUAL BOOT row hidden (DOWN: {rows})")
+    n = n_stock + 1
+    ok &= check(rows == wraps(n), f"{n} rows, DOWN wraps (DOWN: {rows})")
+    while d.read8(UI_ROW) != 0:
+        step(d, "UP")
     step(d, "UP")
     ok &= check(
-        d.read8(UI_ROW) == DUAL_BOOT_ROW, "UP from the first row wraps to DUAL BOOT"
+        d.read8(UI_ROW) == dual_boot_row, "UP from the first row wraps to DUAL BOOT"
     )
     d.shot("90_menu_dual_boot")
 
@@ -142,20 +169,21 @@ def dual_boot(d: Driver, bank2: str) -> bool:
         before == after and app(d) == APP_MENU, "LEFT/RIGHT do nothing on DUAL BOOT"
     )
 
-    # Slide LA's carousel with the window scrolled down by a row.
-    while d.read8(UI_ROW) != 2:
+    # Slide a carousel; with 6 rows, LA's, with the window scrolled down by a row.
+    row = 2 if n > 5 else 0
+    while d.read8(UI_ROW) != row:
         step(d, "UP")
-    variant = d.read8(UI_VARIANT + 2 * 2)
+    variant = d.read8(UI_VARIANT + 2 * row)
     d.press_until(
         "RIGHT",
-        lambda: d.read8(UI_VARIANT + 2 * 2) != variant,
-        "LA's variant to change",
+        lambda: d.read8(UI_VARIANT + 2 * row) != variant,
+        f"row {row}'s variant to change",
     )
     d.wait_until(lambda: d.read8(UI_SLIDE) == 0, "the carousel slide")
-    d.shot("91_menu_scrolled_carousel")
-    ok &= check(app(d) == APP_MENU, "carousel slides in the scrolled window")
+    d.shot("91_menu_carousel")
+    ok &= check(app(d) == APP_MENU, f"carousel slides ({n} rows)")
 
-    while d.read8(UI_ROW) != DUAL_BOOT_ROW:
+    while d.read8(UI_ROW) != dual_boot_row:
         step(d, "DOWN")
     if bank2 == "amalgam":
         ok &= amalgam_switch(d, BOOT_MARIO, mario.READ_BUTTONS_RETURN, 0x0800_0000)
@@ -213,7 +241,7 @@ def amalgam_to_zelda(d: Driver) -> bool:
     )
 
 
-def run(d: Driver, games, run_frames: int, bank2: str = None) -> bool:
+def run(d: Driver, games, run_frames: int, bank2: str = None, n_stock: int = 5) -> bool:
     ok = True
     d.frames("", 30)
     ok &= check(app(d) == APP_FIRST_BOOT, f"first-boot screen (g_app_id={app(d)})")
@@ -238,11 +266,15 @@ def run(d: Driver, games, run_frames: int, bank2: str = None) -> bool:
         except RuntimeError as e:
             ok &= check(False, f"{name}: {e}")
             return ok  # The firmware is likely stuck; later checks would only time out.
-    if bank2:
-        try:
-            ok &= dual_boot(d, bank2)
-        except RuntimeError as e:
-            ok &= check(False, f"dual boot: {e}")
+    try:
+        if bank2:
+            ok &= dual_boot(d, bank2, n_stock)
+        else:
+            rows = row_wrap(d, n_stock)
+            d.shot("90_menu")
+            ok &= check(rows == wraps(n_stock), f"{n_stock} rows (DOWN: {rows})")
+    except RuntimeError as e:
+        ok &= check(False, f"menu rows: {e}")
     return ok
 
 
@@ -271,6 +303,11 @@ def main():
         action="store_true",
         help="Check a --device=amalgam build, booting Zelda from Mario (see above).",
     )
+    parser.add_argument(
+        "--no-la",
+        action="store_true",
+        help="Check a --no-la build (no LA row; see above).",
+    )
     parser.add_argument("--work-dir", type=Path, default=REPO / "build/emu")
     parser.add_argument(
         "--internal", type=Path, default=REPO / "build/internal_flash_patched.bin"
@@ -291,13 +328,14 @@ def main():
         help="How far the stock firmware was relocated (--relocate-stock minus 0x08000000).",
     )
     args = parser.parse_args()
-    games = GAMES
+    games = GAMES_NO_LA if args.no_la else GAMES
+    n_stock = 4 if args.no_la else 5
     if args.only:
         names = args.only.split(",")
-        unknown = set(names) - {g[0] for g in GAMES}
+        unknown = set(names) - {g[0] for g in games}
         if unknown:
             parser.error(f"unknown games: {', '.join(sorted(unknown))}")
-        games = [g for g in GAMES if g[0] in names]
+        games = [g for g in games if g[0] in names]
 
     work = args.work_dir.resolve()
     out_dir = work / "zelda_shots"
@@ -321,11 +359,11 @@ def main():
             d = Driver(pid, out_dir, mario.READ_BUTTONS_RETURN)
             ok = amalgam_to_zelda(d)
             if ok:
-                ok &= run(d, games, args.run_frames, "amalgam")
+                ok &= run(d, games, args.run_frames, "amalgam", n_stock)
         else:
             poll_pc = READ_BUTTONS_RETURN + args.stock_offset
             d = Driver(pid, out_dir, poll_pc)
-            ok = run(d, games, args.run_frames, args.dual_boot)
+            ok = run(d, games, args.run_frames, args.dual_boot, n_stock)
     finally:
         stop_instance(pid=pid)
     print(f"Screenshots: {out_dir}")

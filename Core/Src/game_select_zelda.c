@@ -10,7 +10,7 @@
 #define FB_WIDTH GAME_SELECT_FB_WIDTH
 
 // Stock game-select layout: 5 rows of 96x32 icons.
-#define N_STOCK_ROWS 5
+#define MAX_STOCK_ROWS 5
 #define VISIBLE_ROWS 5
 #define ROW_Y 32
 #define ROW_PITCH 40
@@ -19,8 +19,6 @@
 #define ICON_H 32
 // menu_rows: [count, variant ids...] per row.
 #define MENU_ROW_SIZE 11
-
-#define DUAL_BOOT_ROW N_STOCK_ROWS
 
 #define UI_PALETTE 0xF0
 #define ARROW_COLOR (UI_PALETTE | 0xA)  // Yellow, like the variant arrows.
@@ -44,9 +42,20 @@ const uint8_t ZELDA_GAME_SELECT_DUAL_BOOT_ICON[ICON_W * ICON_H / 2] = { [0 ... I
  */
 uint8_t zelda_game_select_view_rows[VISIBLE_ROWS * MENU_ROW_SIZE];
 
+/**
+ * The stock rows in use: the patcher may drop some (--no-la) and moves the
+ * rest up, leaving a count of 0 in the unused rows. DUAL BOOT follows them.
+ */
+static uint8_t n_stock_rows(){
+    const uint8_t *menu_rows = *stock_menu_rows_literal;
+    uint8_t n = 0;
+    while(n < MAX_STOCK_ROWS && menu_rows[n * MENU_ROW_SIZE]) n++;
+    return n;
+}
+
 static uint8_t n_rows(){
     // Only offer the dual-boot entry if there's something to boot.
-    return game_select_target_valid() ? N_STOCK_ROWS + 1 : N_STOCK_ROWS;
+    return game_select_target_valid() ? n_stock_rows() + 1 : n_stock_rows();
 }
 
 /**
@@ -60,10 +69,11 @@ uint32_t zelda_game_select_row_step(volatile uint8_t *row, uint32_t n, gamepad_t
 /**
  * The DUAL BOOT row has no variants and no app: A boots the target, and
  * the stock handler only sees UP/DOWN/B there (its LEFT/RIGHT and A paths
- * would index past menu_rows and the per-row state).
+ * would act on an empty stock row, or index past menu_rows and the per-row
+ * state).
  */
 uint32_t zelda_game_select_handle_input(gamepad_t held, gamepad_t pressed){
-    if(stock_ui_state[UI_ROW] == DUAL_BOOT_ROW){
+    if(stock_ui_state[UI_ROW] == n_stock_rows()){
         if(pressed == GAMEPAD_A && held == pressed){
             game_select_launch();
         }
@@ -80,6 +90,8 @@ uint32_t zelda_game_select_handle_input(gamepad_t held, gamepad_t pressed){
 void zelda_game_select_draw(uint8_t *fb, void *rects, uint32_t color){
     static uint8_t top = 0;
 
+    uint8_t n_stock = n_stock_rows();
+    uint8_t dual_boot_row = n_stock;
     uint8_t n = n_rows();
     uint8_t selected = stock_ui_state[UI_ROW];
     game_select_scroll(&top, selected, n, VISIBLE_ROWS);
@@ -87,11 +99,11 @@ void zelda_game_select_draw(uint8_t *fb, void *rects, uint32_t color){
     const uint8_t *menu_rows = *stock_menu_rows_literal;
     for(uint8_t i = 0; i < VISIBLE_ROWS; i++){
         uint8_t row = top + i;
-        zelda_game_select_view_rows[i * MENU_ROW_SIZE] = row < N_STOCK_ROWS ? menu_rows[row * MENU_ROW_SIZE] : 0;
+        zelda_game_select_view_rows[i * MENU_ROW_SIZE] = row < n_stock ? menu_rows[row * MENU_ROW_SIZE] : 0;
     }
 
     volatile uint8_t *variants = &stock_ui_state[UI_VARIANTS];
-    uint8_t saved[2 * N_STOCK_ROWS];
+    uint8_t saved[2 * MAX_STOCK_ROWS];
     for(uint8_t i = 0; i < sizeof(saved); i++) saved[i] = variants[i];
     for(uint8_t i = 0; i + 2 * top < sizeof(saved); i++) variants[i] = saved[i + 2 * top];
     stock_ui_state[UI_ROW] = selected - top;
@@ -101,8 +113,8 @@ void zelda_game_select_draw(uint8_t *fb, void *rects, uint32_t color){
     stock_ui_state[UI_ROW] = selected;
     for(uint8_t i = 0; i < sizeof(saved); i++) variants[i] = saved[i];
 
-    if(DUAL_BOOT_ROW < n && DUAL_BOOT_ROW - top < VISIBLE_ROWS){
-        uint32_t y = ROW_Y + (DUAL_BOOT_ROW - top) * ROW_PITCH;
+    if(dual_boot_row < n && dual_boot_row - top < VISIBLE_ROWS){
+        uint32_t y = ROW_Y + (dual_boot_row - top) * ROW_PITCH;
         game_select_blit_icon(fb + y * FB_WIDTH + ICON_X, launder(ZELDA_GAME_SELECT_DUAL_BOOT_ICON), ICON_W, ICON_H, UI_PALETTE);
     }
 

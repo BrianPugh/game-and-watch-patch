@@ -140,7 +140,7 @@ class ZeldaGnW(Device, name="zelda"):
         group.add_argument(
             "--no-la",
             action="store_true",
-            help="Remove Link's Awakening rom (all languages).",
+            help="Remove Link's Awakening rom (all languages) and its game-select row.",
         )
         group.add_argument(
             "--no-sleep-images",
@@ -278,8 +278,34 @@ class ZeldaGnW(Device, name="zelda"):
         veneer = self._itcm_veneer("settings_draw_tail")
         self._itcm_menu_patch(0xAFBA, f"b.w #{veneer:#x}", expect="4:7ab9482a")
 
+    def _game_select_drop_la_row(self):
+        """Remove LA's game-select row; VERMIN and TIMER move up into its place.
+
+        The 5th row is left empty (a count of 0, which game_select_draw skips),
+        and the UP/DOWN cursor wraps over 4 rows. With --game-select-dual-boot,
+        DUAL BOOT takes the empty row (game_select_zelda.c counts the rows).
+        """
+        printi("Remove the LA row from the game-select menu.")
+        # menu_rows: 5 rows x 11 bytes, [count, variant ids...]; LA's are 4-7.
+        menu_rows, size = 0x2D_F1B0, 11
+        rows = [
+            bytes(self.external[menu_rows + i * size : menu_rows + (i + 1) * size])
+            for i in range(5)
+        ]
+        kept = [row for row in rows if not set(row[1 : 1 + row[0]]) & {4, 5, 6, 7}]
+        assert len(kept) == 4, rows
+        data = b"".join(kept) + bytes(size)
+        self.external.replace(menu_rows, data, expect="55:22f5ca23")
+        # menu_app_id_to_row, which places the cursor when the menu opens.
+        self._itcm_menu_patch(0xA156, "movs r0, #0", expect="2:488150b5")  # LA
+        self._itcm_menu_patch(0xA15A, "movs r0, #2", expect="2:519a61f4")  # VERMIN
+        self._itcm_menu_patch(0xA15E, "movs r0, #3", expect="2:1edbf733")  # TIMER
+        # game_select_handle_input's UP/DOWN step (--game-select-dual-boot
+        # replaces the call and counts the rows itself).
+        self._itcm_menu_patch(0xA572, "movs r1, #4", expect="2:70c7f6e4")
+
     def _game_select_dual_boot(self):
-        """DUAL BOOT as a 6th game-select row, scrolled into a 5-row window.
+        """DUAL BOOT after the stock game-select rows, in a scrolling 5-row window.
 
         See game_select_zelda.c. Runs after fix_ext_refs(), so
         the menu_rows literals hold their final address.
@@ -802,6 +828,7 @@ class ZeldaGnW(Device, name="zelda"):
             self.external[0x315B60] = 0x00  # Ignore LA JP menu selection
             # The LA ROM base (la_load): nothing can launch LA any more.
             self.internal.replace(0x1_4418, b"\x00" * 4, expect="4:5ca874f5")
+            self._game_select_drop_la_row()
 
         if self.args.no_sleep_images:
             printi("Remove the sleep backdrops.")

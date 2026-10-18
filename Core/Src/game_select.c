@@ -7,8 +7,8 @@
  * positions.
  *
  * Zelda (game_select_zelda.c): the stock menu fills the screen with 5 rows.
- * The entry is a 6th row, and the stock draw function shows a window of 5
- * rows.
+ * The entry follows the stock rows (a 6th row, or the 5th with --no-la), and
+ * the stock draw function shows a window of 5 rows.
  *
  * This file holds the drawing and scrolling both share. Hook sites are in
  * patches/<device>.py; the reverse-engineered stock UI is mapped in

@@ -13,9 +13,9 @@
 0x00009d52 func ui_draw_tile                         # draws one ui_tiles tile (UNVERIFIED) (ITCM; copied from 0x903157c2)
 0x08016808 func read_buttons
 # --- game-select menu (external flash). Same code lineage as Mario's overlay UI.
-0x0000a0c0 func menu_variant_to_app_id              # variant id 1..9 -> app id (6,7,8,9,11,12,13,14,5; else 15). zelda.py --no-la zeroes the LA immediates (ITCM; copied from 0x90315b30)
+0x0000a0c0 func menu_variant_to_app_id              # variant id (menu_rows entries) -> app id: 1..9 -> 7,8,9,11,12,13,14,15,5 (tbb on variant-1), anything else (variant 0) -> 6. So 0/1 LoZ1 EN/JP, 2/3 LoZ2 EN/JP, 4-7 LA EN/FR/DE/JP, 8 Vermin, 9 Timer. zelda.py --no-la zeroes the LA immediates (ITCM; copied from 0x90315b30)
 0x0000a0fc func menu_app_id_to_variant              # inverse of menu_variant_to_app_id (ITCM; copied from 0x90315b6c)
-0x0000a13a func menu_app_id_to_row  # ITCM; copied from 0x90315baa
+0x0000a13a func menu_app_id_to_row                  # app id -> menu row the cursor opens on (menu_open): 8/9 -> 1, 11-14 -> 2, 15 -> 3, 5 -> 4, else 0 (ITCM; copied from 0x90315baa)
 0x0000a162 func menu_select_variant_for_app         # (row, app) -> stores chosen variant of row (ITCM; copied from 0x90315bd2)
 0x0000a1a0 func menu_init_selection_from_app  # ITCM; copied from 0x90315c10
 0x0000a1cc func menu_open  # ITCM; copied from 0x90315c3c

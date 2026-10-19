@@ -2,15 +2,15 @@
   "configs": {
     "amalgam": {
       "external_flash_patched.bin": "8620c5a15cb7e0608fa5ade509b381a97159fc0b",
-      "internal_flash_patched.bin": "42c4dba42c00c2e7ad126a1a5824d19a1d5835d3"
+      "internal_flash_patched.bin": "11ba6f3248a93a8ecbd884b1120c1ae7ac8bce7f"
     },
     "amalgam_sd": {
       "external_flash_patched.bin": "247e0c5cabde5b08ac6aee48f456c262ac6ac39b",
-      "internal_flash_patched.bin": "fd75036743398d5143ae0f40089b0e33cbda80ea"
+      "internal_flash_patched.bin": "1e788f860b36033d473a2525684ede4f47f948ac"
     },
     "amalgam_xip": {
       "external_flash_patched.bin": "0a3e1bcfdf27d275f83769d11d0b1a49318f9457",
-      "internal_flash_patched.bin": "119a0bc88cee57e583c096fb3da5d75f857b748a"
+      "internal_flash_patched.bin": "f3d8e856f3e25bc0aeec556d903b6179f3714266"
     },
     "mario": {
       "external_flash_patched.bin": "bf0cf36ebdbe9493bd0b7c4072d5bfab43b7928c",
@@ -18,11 +18,11 @@
     },
     "mario_clock_only": {
       "external_flash_patched.bin": "62eda149f6b159a89fefee9f88f5fcf052c47f9a",
-      "internal_flash_patched.bin": "9043b903b302a7c5e537047763771ba37be71c58"
+      "internal_flash_patched.bin": "9eb00f37c71b253dad587ea2bac3ee14c1c67c98"
     },
     "mario_internal_only": {
       "external_flash_patched.bin": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-      "internal_flash_patched.bin": "03fb816dff7b100da5d4ec331cd7b334ebe044ea"
+      "internal_flash_patched.bin": "1c571b244feea1a985f92f7ededd01ae98379deb"
     },
     "mario_no_song": {
       "external_flash_patched.bin": "95c332591510b0857f32bd679ad6142d83e832a5",
@@ -35,7 +35,7 @@
     "mario_relocate": {
       "external_flash_patched.bin": "63f58c707901db5645c71be52bdd4ad053e63806",
       "internal_flash_patched.bin": "761ed4162584f712cc9383877b83ee1e1fbde74e",
-      "internal_flash_patched_bank2.bin": "b8e510342d8757032f3d77c257bf10680e016c39"
+      "internal_flash_patched_bank2.bin": "9bc4c75724c9974f7cb73a3b3abd77d068442317"
     },
     "mario_xip": {
       "external_flash_patched.bin": "a15ab25e3373decdd29d82c266f79bf4e8f3cfdb",
@@ -47,7 +47,7 @@
     },
     "zelda_options": {
       "external_flash_patched.bin": "c126c9c945af962da38c6e989f497de804e53971",
-      "internal_flash_patched.bin": "7678e1a52f7c79fced8aef1ac38cfb196f44295e"
+      "internal_flash_patched.bin": "dc9b914da011fcd282997e1449f09f5f8498ed7d"
     },
     "zelda_relocate": {
       "external_flash_patched.bin": "07f3b010b1f39516cad5770bc06a31ab051e6f90",

@@ -66,8 +66,9 @@ SD_BOOTLOADER = 0x0803_2000
 # addresses. ``zelda`` is false for holes in Zelda's relocation source range:
 # Zelda's buffer still holds its stock code there, and its relocation would
 # move a branch or pointer into it, so only code Zelda's stock code never
-# reaches goes there (scripts/amalgam_holes.py). The patcher checks that each
-# piece of our code lies in a hole its device freed.
+# reaches goes there (scripts/amalgam_holes.py). The link runs before the
+# patcher frees anything, so this is a copy: the patch step checks it against
+# what the devices free (check_sd_holes) and prints the table to use.
 #
 # Below SD_PRELOADED, a device's buffer holds its stock code until it frees
 # it, and free_int() then writes our code there as linked, which would undo a
@@ -76,6 +77,7 @@ SD_BOOTLOADER = 0x0803_2000
 # PATCHER_DATA; check_patcher_data).
 SD_PRELOADED = BASE + ZeldaGnW.Int.STOCK_ROM_END
 SD_HOLES = (
+    (0x0800_3384, 0x0800_3390, False),  # Mario's BALL (XIP)
     (0x0800_33B0, 0x0800_3FC0, False),  # Mario's BALL (XIP)
     (0x0800_3FC4, 0x0800_45C8, False),  # Mario's BALL (XIP)
     (0x0801_1A94, 0x0801_2EE4, False),  # Mario's factory test
@@ -221,6 +223,54 @@ def check_patcher_data(devices):
                 )
 
 
+def derived_sd_holes(freed):
+    """SD_HOLES from the ranges each device freed (``{name: [(start, end)]}``
+    at final bank-1 offsets): the pieces outside the other device's code, and
+    the alignment padding below ZELDA_DST."""
+    code = {
+        "mario": [(0, MarioGnW.Int.STOCK_ROM_END)],
+        "zelda": [
+            (ZeldaGnW.AMALGAM_KEPT_START - BASE, ZeldaGnW.Int.STOCK_ROM_END),
+            (ZELDA_DST - BASE, OUR_CODE - BASE),
+        ],
+    }
+    pieces = [(ZeldaGnW.Int.STOCK_ROM_END, ZELDA_DST - BASE)]
+    for name, ranges in freed.items():
+        other = [r for n, rs in code.items() if n != name for r in rs]
+        for start, end in ranges:
+            cut = [(start, end)]
+            for lo, hi in other:
+                cut = [
+                    p
+                    for s, e in cut
+                    for p in ((s, min(e, lo)), (max(s, hi), e))
+                    if p[0] < p[1]
+                ]
+            pieces += cut
+    # In Zelda's relocation source range, only code Zelda never reaches.
+    src_end = ZeldaGnW.AMALGAM_RELOCATE_END - BASE
+    return tuple((BASE + s, BASE + e, s >= src_end) for s, e in sorted(pieces))
+
+
+def check_sd_holes(devices):
+    """SD_HOLES must be exactly the stock code the devices freed: a stale
+    entry fails only once our code grows into it, and a missing one wastes
+    the space."""
+    derived = derived_sd_holes({d.name: d.freed_int_ranges() for d in devices})
+    if derived != SD_HOLES:
+
+        def addr(a):
+            return f"0x{a >> 16:04X}_{a & 0xFFFF:04X}"
+
+        table = "\n".join(
+            f"    ({addr(s)}, {addr(e)}, {zelda})," for s, e, zelda in derived
+        )
+        raise AmalgamError(
+            "SD_HOLES (patches/amalgam.py) doesn't match the stock code "
+            f"--no-factory-test and --xip-minigame free; it should be:\n{table}"
+        )
+
+
 def patch(layout, zelda, mario):
     region = zelda.int_space
     if region.pending_in_holes:
@@ -237,6 +287,8 @@ def patch(layout, zelda, mario):
     base = max(len(zelda.external), len(mario.external))
     mario.set_ext_base(round_up_page(base))
     layout.patch_device(mario)
+    if mario.args.sd_bootloader:
+        check_sd_holes((zelda, mario))
     check_patcher_data((zelda, mario))
 
 

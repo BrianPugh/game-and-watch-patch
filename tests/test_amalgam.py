@@ -13,7 +13,14 @@ import pytest
 from elftools.elf.elffile import ELFFile
 from test_golden import _copy_tree, _toolchain
 
-from patches.amalgam import BASE, SD_BOOTLOADER, SD_HOLES, SD_PRELOADED
+from patches.amalgam import (
+    BASE,
+    SD_BOOTLOADER,
+    SD_HOLES,
+    SD_PRELOADED,
+    ZELDA_DST,
+    derived_sd_holes,
+)
 from patches.zelda import ZeldaGnW
 from scripts.amalgam_holes import PATCHER_DATA
 from scripts.device_from_patch_params import RAM
@@ -129,3 +136,21 @@ def test_sd_bootloader_zelda_code_outside_its_relocation(sd_elf, name):
 def test_sd_bootloader_patcher_data_preloaded(sd_elf, name):
     syms, _ = sd_elf
     assert syms[name]["st_value"] >= SD_PRELOADED
+
+
+def test_derived_sd_holes():
+    """Each device's freed ranges, clipped against the other device's code,
+    plus the padding below ZELDA_DST; flagged by Zelda's relocation range."""
+    zelda_end = ZeldaGnW.Int.STOCK_ROM_END
+    holes = derived_sd_holes(
+        {
+            # Zelda's factory test: only the part past Mario's code is free.
+            "zelda": [(0x1_68D8, 0x1_8154)],
+            "mario": [(0x1_1A94, 0x1_2EE4)],
+        }
+    )
+    assert holes == (
+        (BASE + 0x1_1A94, BASE + 0x1_2EE4, False),
+        (BASE + 0x1_8100, BASE + 0x1_8154, True),
+        (BASE + zelda_end, ZELDA_DST, True),
+    )

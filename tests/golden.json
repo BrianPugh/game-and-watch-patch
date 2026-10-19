@@ -5,8 +5,8 @@
       "internal_flash_patched.bin": "d00213f6c6b28e8544d89a6fbf79f78a4dc55122"
     },
     "amalgam_sd": {
-      "external_flash_patched.bin": "85ed4ce436e60a572e7968e16e36b649017362e5",
-      "internal_flash_patched.bin": "4bf046ed48e3d5c65d95427d1717361cc4800244"
+      "external_flash_patched.bin": "638d16e18a55c5d3b6b7f4db2d43f91bc9b42f7c",
+      "internal_flash_patched.bin": "13202ccdcb96d491e686920f097dc2bac3165a58"
     },
     "amalgam_xip": {
       "external_flash_patched.bin": "cb47bc183fbb30abde2477a31560a7339d48945c",

@@ -582,6 +582,8 @@ class Device:
         self._stock_map = None
         # Every range given to free_int(), at stock offsets.
         self.freed_int = []
+        # patches.xip.XipUnit of each unit of stock code moved to external flash.
+        self.xip_units = []
         # Set by patches/amalgam.py: this device shares bank 1 with another,
         # and its external data starts at ext_base (the other's comes first).
         self.amalgam = False
@@ -609,6 +611,10 @@ class Device:
         """(buffer, offset) of the stock word at run-time address ``src``, or
         (None, None) if the patcher removed it."""
         base = self.internal.FLASH_BASE
+        for unit in self.xip_units:
+            site = unit.site(src)
+            if site is not None:
+                return site
         if base <= src < base + len(self.internal):
             if self.is_freed_int(src - base):
                 return None, None
@@ -860,6 +866,10 @@ class Device:
             shift = self.relocation.int_delta(start) if self.relocation else 0
             out.append((start + shift, end + shift))
         return out
+
+    def xip_hides(self, addr):
+        """Whether internal ``addr`` lost its code to external flash (``patches/xip.py``)."""
+        return any(unit.hides(addr) for unit in self.xip_units)
 
     def is_freed_int(self, offset):
         """Whether stock internal ``offset`` was given to free_int()."""

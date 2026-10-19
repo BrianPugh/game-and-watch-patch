@@ -247,6 +247,19 @@ class DeviceImages:
                     skip=skip,
                 )
             )
+        # Stock code run from external flash (patches/xip.py).
+        int_stock = _u8(d.internal_stock)
+        for u in d.xip_units:
+            fo, n = u.ext_addr - EXT_BASE, u.hi - u.lo
+            views.append(
+                View(
+                    u.ext_addr,
+                    u.lo,
+                    self.external[fo : fo + n],
+                    int_stock[u.lo - INT_BASE : u.hi - INT_BASE],
+                    u.ext_prov,
+                )
+            )
         return views, summaries
 
     # RAM images ---------------------------------------------------------------
@@ -288,6 +301,11 @@ class DeviceImages:
         d = self.d
         if INT_BASE <= addr < INT_BASE + len(d.internal_stock):
             off = addr - INT_BASE
+            for u in d.xip_units:
+                if u.lo <= addr < u.hi:
+                    new = u.final_address(addr)
+                    if new != addr:
+                        return new
             if off >= d.internal.STOCK_ROM_END or d.is_freed_int(off):
                 return None
             if d.relocation and d.relocation.moves(addr):

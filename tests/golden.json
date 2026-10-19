@@ -4,6 +4,10 @@
       "external_flash_patched.bin": "e00fd6a5d410a81078a587605a8cf67e5a664886",
       "internal_flash_patched.bin": "c53fe6231420c06e78447d9917b686e2d6bbef34"
     },
+    "amalgam_xip": {
+      "external_flash_patched.bin": "0e4be21a498ac0ca1316735348ead75cd37ebca0",
+      "internal_flash_patched.bin": "fec4dc3d0f131d8cdd24968df455c23f61d00d4e"
+    },
     "mario": {
       "external_flash_patched.bin": "bf0cf36ebdbe9493bd0b7c4072d5bfab43b7928c",
       "internal_flash_patched.bin": "0a73c2c0cd00be2c503e351a8023b0f84bcc71f9"
@@ -29,6 +33,10 @@
       "internal_flash_patched.bin": "761ed4162584f712cc9383877b83ee1e1fbde74e",
       "internal_flash_patched_bank2.bin": "b8e510342d8757032f3d77c257bf10680e016c39"
     },
+    "mario_xip": {
+      "external_flash_patched.bin": "a15ab25e3373decdd29d82c266f79bf4e8f3cfdb",
+      "internal_flash_patched.bin": "a42ddc4104807113e3151479783e93a082ab8b42"
+    },
     "zelda": {
       "external_flash_patched.bin": "63925f1ab20fd29fd1dc13416a84e3f49728fe24",
       "internal_flash_patched.bin": "82a81483749e471abb0b6675cfe144a33db90cdc"
@@ -45,6 +53,11 @@
     "zelda_relocate_bank1": {
       "external_flash_patched.bin": "d4ca697a4c1dd71a94b4fc4aff79bf312497ed00",
       "internal_flash_patched.bin": "5cabb22a46a47cbc6337f37e337cf08d5f7e9106"
+    },
+    "zelda_xip_relocate": {
+      "external_flash_patched.bin": "eb51396c3a56428ad613876eeaee1c56538e117a",
+      "internal_flash_patched.bin": "3f32b7c8402d674bdd02895637e6fc2add293fc5",
+      "internal_flash_patched_bank2.bin": "0adf0173f4007baeacd69b1524d36ba9eebe121a"
     }
   },
   "toolchain": "arm-none-eabi-gcc (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) 15.2.1 20251203"

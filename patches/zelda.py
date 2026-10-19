@@ -70,6 +70,7 @@ from .tileset import (
     render_label_icon,
 )
 from .utils import fds_remove_crc_gaps, printd, printi, round_up_page, round_up_word
+from .xip import XipUnit
 
 build_dir = Path("build")  # TODO: expose this properly or put in better location
 
@@ -100,6 +101,10 @@ OVERLAY_COPIES = [
     (0xFD5C, 0x31_56EC, 0x1B44),
 ]
 OVERLAY_START, OVERLAY_END = 0x30_B4A0, 0x31_7230
+
+# Vermin's code: its API (called from main_loop_tick and app_load), game,
+# sound and high-score save.
+VERMIN_UNIT = (0x0801_4938, 0x0801_6268)
 # The last copy is the menu UI, linked at ITCM 0x9C7C. ITCM past its end is
 # never loaded, so veneers from ITCM to our code are appended to it.
 ITCM_MENU, ITCM_MENU_SRC, ITCM_MENU_SIZE = 0x9C7C, 0x31_56EC, 0x1B44
@@ -110,6 +115,7 @@ class ZeldaGnW(Device, name="zelda"):
     # included; the amalgam moves it to the top of bank 1.
     STOCK_RELOCATE_END = 0x0801_B368
     relocates_in_amalgam = True
+    xip_vermin = None
 
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "ac14bcea6e4ff68c88fd2302c021025a2fb47940"
@@ -209,6 +215,11 @@ class ZeldaGnW(Device, name="zelda"):
             "(e.g. 0x08120000, written to a separate bank-2 image) or past our "
             "code in bank 1 (e.g. 0x08020000 with --extended). "
             "Tests stock-code relocation; see tools/emu/README.md.",
+        )
+        group.add_argument(
+            "--xip-minigame",
+            action="store_true",
+            help="Run Vermin's code from external flash (frees ~6KB of internal flash).",
         )
 
     def _itcm_menu_offset(self, itcm):
@@ -677,6 +688,8 @@ class ZeldaGnW(Device, name="zelda"):
                 data_end, len(blob), self.name, f"overlay 0x{offset:06X} (LZMA)"
             )
             data_end += round_up_word(len(blob))
+        if self.xip_vermin:
+            data_end += round_up_word(self.xip_vermin.write(data_end))
         # The first 4 copies are bl memcpy, the last a tail call.
         self.internal.bl(0xF7A2, "memcpy_inflate", expect="4:d2879707")
         self.internal.bl(0xF7B2, "memcpy_inflate", expect="4:1a5e1d0f")
@@ -874,6 +887,10 @@ class ZeldaGnW(Device, name="zelda"):
         # is only reached from backdrop_tick's tail call at 0x0801642c, which
         # either goes to backdrop_inflate or is skipped without backdrops.
         self.free_int(0x1_9CA4, 0x1_9F58)
+
+        if self.args.xip_minigame:
+            printi("Run Vermin from external flash.")
+            self.xip_vermin = XipUnit(self, *VERMIN_UNIT, "Vermin code (XIP)")
 
         self._compact_ext()
 

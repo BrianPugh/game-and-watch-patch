@@ -43,6 +43,7 @@ def make_device(refs, monkeypatch, extra=()):
     device.int_space = Region("internal", Int.FLASH_BASE, Int.FLASH_LEN)
     device.expected_refs = []
     device.freed_int = []
+    device.xip_units = []
     device.ext_refs_fixed = False
     device._stock_map = object()
 

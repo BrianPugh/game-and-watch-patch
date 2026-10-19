@@ -196,30 +196,6 @@ class Relocation:
                 return src + addr - dst
         return None
 
-    def _elf_relocs(self):
-        """(address, type, symbol name) of every relocation in our ELF that
-        lands in flash."""
-        elf = self.device.internal.elf
-        load = [
-            (s["p_vaddr"], s["p_paddr"], s["p_memsz"])
-            for s in elf.iter_segments()
-            if s["p_type"] == "PT_LOAD"
-        ]
-        for sec in elf.iter_sections():
-            if not isinstance(sec, RelocationSection):
-                continue
-            target = elf.get_section(sec["sh_info"])
-            if not target["sh_flags"] & 2:  # SHF_ALLOC
-                continue
-            symtab = elf.get_section(sec["sh_link"])
-            for rel in sec.iter_relocations():
-                vaddr = rel["r_offset"]
-                name = symtab.get_symbol(rel["r_info_sym"]).name
-                for v, p, n in load:  # .data relocations land in its flash copy
-                    if v <= vaddr < v + n:
-                        yield p + vaddr - v, rel["r_info_type"], name
-                        break
-
     def apply(self):
         d = self.device
         base = d.internal.FLASH_BASE
@@ -238,7 +214,10 @@ class Relocation:
         # Freed stock code may hold data now. Live code can still branch there
         # behind a guard that's never taken (e.g. sleep_image_tick skips the
         # removed decoder when the images are deleted), so don't descend into it.
-        code.contains = lambda a: code.lo <= a < code.hi and not self.freed(a)
+        # Code moved to external flash leaves only stubs (patches/xip.py).
+        code.contains = lambda a: (
+            code.lo <= a < code.hi and not self.freed(a) and not d.xip_hides(a)
+        )
         with contextlib.redirect_stdout(io.StringIO()):
             code.descend({a | 1 for a in self.map.code.entries if self.moves(a)})
 
@@ -264,7 +243,7 @@ class Relocation:
         # Our code: branches into and pointers to the range. The amalgam's
         # ELF also calls the other firmware's stock code at the same addresses.
         stock_end = base + d.internal.STOCK_ROM_END
-        for addr, rtype, name in self._elf_relocs():
+        for addr, rtype, name in elf_relocs(d):
             if not stock_end <= addr < base + len(d.internal):
                 continue
             if name.startswith("stock_") and not name.startswith(f"stock_{d.name}_"):
@@ -369,6 +348,31 @@ class Relocation:
                 if not keep[0] <= a < keep[1]:
                     d.internal[a - base : a - base + 2] = b"\xfe\xde"
         return self.counts
+
+
+def elf_relocs(device):
+    """(address, type, symbol name) of every relocation in our ELF that
+    lands in flash."""
+    elf = device.internal.elf
+    load = [
+        (s["p_vaddr"], s["p_paddr"], s["p_memsz"])
+        for s in elf.iter_segments()
+        if s["p_type"] == "PT_LOAD"
+    ]
+    for sec in elf.iter_sections():
+        if not isinstance(sec, RelocationSection):
+            continue
+        target = elf.get_section(sec["sh_info"])
+        if not target["sh_flags"] & 2:  # SHF_ALLOC
+            continue
+        symtab = elf.get_section(sec["sh_link"])
+        for rel in sec.iter_relocations():
+            vaddr = rel["r_offset"]
+            name = symtab.get_symbol(rel["r_info_sym"]).name
+            for v, p, n in load:  # .data relocations land in its flash copy
+                if v <= vaddr < v + n:
+                    yield p + vaddr - v, rel["r_info_type"], name
+                    break
 
 
 def _pack(fmt, buf, off, *values):

@@ -24,6 +24,11 @@ from .utils import (
     round_up_word,
     seconds_to_frames,
 )
+from .xip import XipUnit
+
+# BALL's code: its API (called from main_loop_tick), game, sound and save.
+# Its static constructor (zeroes 3 halfwords of ball_ctx) stays internal.
+BALL_UNIT = (0x0800_3350, 0x0800_45D2)
 
 build_dir = Path("build")  # TODO: expose this properly or put in better location
 
@@ -43,6 +48,7 @@ class MarioGnW(Device, name="mario"):
     # --relocate-stock moves everything below the init table, vector table
     # included.
     STOCK_RELOCATE_END = 0x0801_807C
+    xip_ball = None
 
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
@@ -206,6 +212,11 @@ class MarioGnW(Device, name="mario"):
             "code in bank 1 (e.g. 0x08020000 with --extended). "
             "Tests stock-code relocation; see tools/emu/README.md.",
         )
+        group.add_argument(
+            "--xip-minigame",
+            action="store_true",
+            help="Run BALL's code from external flash (frees ~4.5KB of internal flash).",
+        )
 
         group = parser.add_argument_group("High level flash savings flags")
         group.add_argument(
@@ -253,6 +264,9 @@ class MarioGnW(Device, name="mario"):
             self.args.no_save = True
             if self.args.sd_bootloader:
                 self.args.no_smb2 = True
+
+        if self.args.internal_only and self.args.xip_minigame:
+            parser.error("--xip-minigame needs external flash")
 
         if self.args.clock_only:
             self.args.slim = True
@@ -554,6 +568,10 @@ class MarioGnW(Device, name="mario"):
                 self.internal.replace(table, loc, size=4)
                 self.int_pointers.append(table)
                 table += 4
+
+        if self.args.xip_minigame:
+            printi("Run BALL from external flash.")
+            self.xip_ball = XipUnit(self, *BALL_UNIT, "BALL code (XIP)")
 
         printi("Compressing and moving stuff stuff to internal firmware.")
         # game_reload copies it to ITCM 0: the NES CPU core.
@@ -916,9 +934,17 @@ class MarioGnW(Device, name="mario"):
         # An ITCM overlay that game_reload copies with length 0 (literal at
         # 0x08007210), so it's never used.
         self.external.replace(0xF5858, b"\x00" * 34728)
-        self.ext_space.drop(0xF5858, 0xF5858 + 34728)
+        xip_size = round_up_word(self.xip_ball.ext_size) if self.xip_ball else 0
+        if xip_size:
+            # Room for BALL's code; written once its pointers are fixed.
+            self.ext_space.keep(0xF5858)
+            xip_offset = 0xF5858 + self.ext_space.shift
+            self.ext_space.cursor += xip_size
+        self.ext_space.drop(0xF5858 + xip_size, 0xF5858 + 34728)
 
         self.fix_ext_refs()
+        if self.xip_ball:
+            self.xip_ball.write(xip_offset)
         if self.relocation:
             self.relocation.fix_ram_images()
 

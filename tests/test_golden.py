@@ -50,6 +50,10 @@ CONFIGS = {
     # Both firmwares in one image; --no-factory-test frees stock code in both,
     # so each device's data lands in the other's holes.
     "amalgam": "--device=amalgam --game-select-dual-boot --no-factory-test",
+    # BALL and Vermin run from external flash; Zelda's stock code moves too.
+    "mario_xip": "--device=mario --xip-minigame",
+    "zelda_xip_relocate": "--device=zelda --xip-minigame --relocate-stock=0x08120000",
+    "amalgam_xip": "--device=amalgam --no-factory-test --xip-minigame",
 }
 
 OUTPUTS = [

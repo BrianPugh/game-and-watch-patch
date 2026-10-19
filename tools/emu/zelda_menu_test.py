@@ -60,9 +60,9 @@ UI_VARIANT = UI_STATE + 0x2D  # u8 chosen variant of each row, stride 2
 BANK2_SPIN_PC = 0x0810_0008
 
 # --amalgam: Zelda's stock code below its factory test (read_buttons' return
-# included) sits 0x1B400 up (patches/amalgam.py ZELDA_DST), and main.c keeps
-# the selection in AMALGAM_BOOT_REG.
-AMALGAM_STOCK_OFFSET = 0x1B400
+# included) moves up and closes the gaps the patcher frees there
+# (patches/amalgam.py), so the harness looks its new place up in
+# build/patched.elf; main.c keeps the selection in AMALGAM_BOOT_REG.
 TAMP_BKP31R = 0x5800_457C
 BOOT_MARIO, BOOT_ZELDA = 0, 0x444C_455A  # "ZELD"
 SCB_VTOR = 0xE000_ED08
@@ -204,6 +204,22 @@ def elf_symbol(name: str) -> int:
     return sym[0]["st_value"] & ~1
 
 
+def final_address(addr: int) -> int:
+    """Where Zelda's stock ``addr`` is in the patched image: its function's
+    stock_zelda_* symbol in build/patched.elf, plus the offset into it."""
+    import importlib.util
+
+    # patches/syms.py alone: the patches package needs capstone.
+    spec = importlib.util.spec_from_file_location("syms", REPO / "patches/syms.py")
+    syms = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(syms)
+    funcs = syms.stock_functions("zelda")
+    name = max((a, n) for n, a in funcs.items() if a & ~1 <= addr)[1]
+    with open(REPO / "build/patched.elf", "rb") as f:
+        sym = ELFFile(f).get_section_by_name(".symtab").get_symbol_by_name(name)
+    return (sym[0]["st_value"] & ~1) + addr - (funcs[name] & ~1)
+
+
 def read32(d: Driver, addr: int) -> int:
     return struct.unpack("<I", d.dbg.backend.read_memory(addr, 4))[0]
 
@@ -238,7 +254,7 @@ def amalgam_to_zelda(d: Driver) -> bool:
         d.press_until("DOWN", lambda: d.read16(choice) != before, "the cursor to move")
     d.shot("00_mario_menu_zelda")
     return amalgam_switch(
-        d, BOOT_ZELDA, READ_BUTTONS_RETURN + AMALGAM_STOCK_OFFSET, 0x0801_B400
+        d, BOOT_ZELDA, final_address(READ_BUTTONS_RETURN), 0x0801_B400
     )
 
 

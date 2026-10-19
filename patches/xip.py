@@ -264,7 +264,7 @@ class XipUnit:
         r = d.relocation
 
         def final(a):
-            return a + r.delta if r and r.moves(a & ~1) else a
+            return r.final(a & ~1) | (a & 1) if r else a
 
         out = bytearray(self.buf).ljust(round_up_word(hi - lo), b"\x00")
         targets = self._veneer_targets()

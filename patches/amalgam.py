@@ -9,7 +9,9 @@ bank-1 ``Region``; the amalgam removes both factory tests (--no-factory-test):
     0x08018154  Zelda's stock code past its factory test (reset handler,
                 init and rwdata tables), in place
     0x0801B400  Zelda's stock code below its factory test, vector table
-                included (``ZELDA_DST``: 1 KB aligned for VTOR)
+                included (``ZELDA_DST``: 1 KB aligned for VTOR), compacted:
+                the stock code it frees there is left out (``Relocation``)
+                and the room shows up past it
     0x08031CD8  our code (``OUR_CODE``), then data and compressed images
 
 Our code starts past both firmwares, so neither stock image overlaps it in its
@@ -27,6 +29,14 @@ byte differently, is an error.
 Mario's vector table boots the image into our bootloader, which starts Zelda
 through its own vector table when a backup register selects it (main.c). Each
 game-select DUAL BOOT entry selects the other firmware and resets.
+
+With --sd-bootloader, Sylverb's SD bootloader owns 0x08032000 on (LEFT+GAME
+boots it), so the image ends there, and our code is linked to end there too
+(scripts/amalgam_sd.py). That leaves 808 bytes past Zelda's code, so
+--xip-minigame is implied: with --no-factory-test it frees enough of Zelda's
+code that the compaction makes room for ours. Mario's freed code holds data.
+The compressed RAM images go into holes, a block each
+(``Region.pending_in_holes``).
 """
 
 import copy
@@ -48,6 +58,10 @@ ZELDA_DST = BASE + (
     -(-max(ZeldaGnW.Int.STOCK_ROM_END, MarioGnW.Int.STOCK_ROM_END) // 0x400) * 0x400
 )
 OUR_CODE = ZELDA_DST + ZeldaGnW.AMALGAM_RELOCATE_END - BASE
+
+# --sd-bootloader: Sylverb's SD bootloader runs in place from here to the end
+# of bank 1 (its SD updater writes it there), so nothing of ours goes there.
+SD_BOOTLOADER = 0x0803_2000
 # Shared by our code and data, no device owns these bytes.
 SHARED = "both"
 # Default label of each device's game-select entry: the firmware it boots.
@@ -74,7 +88,7 @@ def configure(zelda, mario, parser):
         device.add_arguments(p)
         args, rest = p.parse_known_args()
         unknown = set(rest) if unknown is None else unknown & set(rest)
-        for flag in ("encrypt", "triple_boot", "sd_bootloader", "relocate_stock"):
+        for flag in ("encrypt", "triple_boot", "relocate_stock"):
             if getattr(args, flag, None):
                 parser.error(
                     f"--{flag.replace('_', '-')} isn't supported with --device=amalgam"
@@ -84,6 +98,9 @@ def configure(zelda, mario, parser):
         args.extended = True
         # Its holes make room for both firmwares in one bank.
         args.no_factory_test = True
+        if args.sd_bootloader:
+            # Our code needs the room it frees in Zelda's code.
+            args.xip_minigame = True
         # The game-select DUAL BOOT entry switches to the other firmware
         # (main.c), and it's the only way to; label it with that firmware.
         args.game_select_dual_boot = True
@@ -103,8 +120,11 @@ def configure(zelda, mario, parser):
 
 def load(devices, patch):
     """Copy our code into each device's (extended) internal image."""
-    if len(patch) != SIZE:
+    # With --sd-bootloader, our code ends at the SD bootloader, and so does
+    # the image.
+    if len(patch) not in (SIZE, SD_BOOTLOADER - BASE):
         raise AmalgamError(f"Expected a {SIZE} byte patch, got {len(patch)}")
+    patch = bytes(patch).ljust(SIZE, b"\x00")
     zelda = next(d for d in devices if d.relocates_in_amalgam)
     vt = zelda.internal.address("__zelda_vector_table__")
     if vt != zelda.args.relocate_stock:
@@ -121,14 +141,29 @@ def load(devices, patch):
 def bank1_region(zelda, mario):
     """The bank-1 region both devices allocate from."""
     region = Region("bank1", BASE, SIZE, pos=mario.internal.empty_offset)
-    region.note(OUR_CODE - BASE, region.pos - (OUR_CODE - BASE), SHARED, "our code")
+    ours = mario.internal.address("__our_code__", sub_base=True)
+    region.note(ours, region.pos - ours, SHARED, "our code")
     # Past Zelda's code kept in place, below its relocated code.
     region.free(zelda.internal.STOCK_ROM_END, ZELDA_DST - BASE)
+    if mario.args.sd_bootloader:
+        region.reserve(
+            SD_BOOTLOADER - BASE, BASE + SIZE - SD_BOOTLOADER, SHARED, "SD bootloader"
+        )
+        # There's hardly any room at the cursor.
+        region.pending_in_holes = True
     return region
 
 
 def patch(layout, zelda, mario):
+    region = zelda.int_space
+    if region.pending_in_holes:
+        # Mario's compressed images go in the holes Mario frees, so they
+        # don't hold Zelda's back.
+        for p in mario.pending:
+            region.pending.remove(p)
     layout.patch_device(zelda)
+    if region.pending_in_holes:
+        region.pending += mario.pending
     # Mario's stock data moves up in its own buffer, so it has to start past
     # its stock image (only matters when Zelda's data shrinks below 1 MB).
     base = max(len(zelda.external), len(mario.external))
@@ -184,14 +219,15 @@ def merge_internal(region, devices):
                     f"{d.name} placed data over its own relocated stock code: "
                     + _addresses(mine, base)
                 )
-        # A relocated device's buffer holds the stock code it moved; what
-        # it patched there is in its relocated copy.
+        # Its freed code is udf in its buffer; the other device may own data
+        # there.
         exempt = np.zeros(region.size, dtype=bool)
-        if d.relocates_in_amalgam:
-            exempt[: d.AMALGAM_RELOCATE_END - base] = True
-        # Its freed code is udf in its buffer; the other device may own data there.
         for start, end in d.freed_int_ranges():
             exempt[start:end] = True
+        # A relocated device's buffer holds the stock code it moved; what
+        # it patched there is in its relocated copy.
+        if d.relocates_in_amalgam:
+            exempt[: d.AMALGAM_RELOCATE_END - base] = True
         changed = (bufs[i] != origs[i]) & ~exempt
         foreign = changed & ~shared & (owner != i)
         if foreign.any():

@@ -99,6 +99,19 @@ C_DEFS += -DGNW_DEVICE_MARIO=1 -DGNW_DEVICE_ZELDA=1
 C_DEFS += -DGAME_SELECT_DUAL_BOOT
 C_SOURCES += $(MARIO_SOURCES) $(ZELDA_SOURCES)
 LDSCRIPT = STM32H7B0VBTx_FLASH_amalgam.ld
+# Its linker script INCLUDEs the generated device.ld and amalgam_text.ld.
+AMALGAM_LDFLAGS = -L$(BUILD_DIR)
+# --sd-bootloader: our code ends at the SD bootloader. A first link
+# (build/pass1/, the plain layout) gives its size to scripts/amalgam_sd.py,
+# which places it for the second.
+ifneq (,$(findstring --sd-bootloader, $(PATCH_PARAMS)))
+LDSCRIPT_DEPS = $(BUILD_DIR)/pass1/device.ld $(BUILD_DIR)/pass1/amalgam_text.ld \
+	scripts/amalgam_sd.py patches/amalgam.py
+LINK_PASS1 = $(CC) $(OBJECTS) -L$(BUILD_DIR)/pass1 $(LDFLAGS) -o $(BUILD_DIR)/pass1/$(TARGET).elf && \
+	$(PYTHON) -m scripts.amalgam_sd $(BUILD_DIR)/pass1/$(TARGET).elf $(BUILD_DIR)/amalgam_text.ld
+else
+LDSCRIPT_DEPS = $(BUILD_DIR)/amalgam_text.ld
+endif
 else
 C_DEFS += -DGNW_DEVICE_$(GNW_DEVICE)=1
 C_SOURCES += $($(GNW_DEVICE)_SOURCES)
@@ -219,6 +232,7 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=prepare_clock_rom \
 		  -Wl,--undefined=read_buttons \
 		  -Wl,--undefined=rwdata_inflate \
+		  $(AMALGAM_LDFLAGS) \
 
 # These flags all imply --no-sleep-images, leaving sleep_image_inflate unused.
 ifeq (,$(filter --no-sleep-images --slim --internal-only --clock-only,$(PATCH_PARAMS)))
@@ -254,7 +268,8 @@ $(BUILD_DIR)/%.o: %.s Makefile $(BUILD_DIR)/env | $(BUILD_DIR)
 $(BUILD_DIR)/stock_symbols.o: $(BUILD_DIR)/stock_symbols.s Makefile | $(BUILD_DIR)
 	$(AS) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile $(LDSCRIPT) STM32H7B0VBTx_FLASH_text.ld $(BUILD_DIR)/device.ld
+$(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile $(LDSCRIPT) STM32H7B0VBTx_FLASH_text.ld $(BUILD_DIR)/device.ld $(LDSCRIPT_DEPS)
+	$(LINK_PASS1)
 	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
 	$(SZ) $@
 

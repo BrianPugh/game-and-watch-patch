@@ -1,18 +1,21 @@
 """Relocate a range of (patched) stock internal code to another address.
 
-The stock reference map comes from ``patches/xrefs.py``. Moving a range by
-``delta`` needs:
+The stock reference map comes from ``patches/xrefs.py``. Moving a range
+(each address to ``Relocation.final``) needs:
 
 * absolute words (vector table, literal pools, pointer tables, ITCM/DTCM
   rwdata, external and SRAM3 data, our code's ``R_ARM_ABS32`` relocations)
-  pointing into the range: ``+ delta``.
+  pointing into the range: repointed.
 * self-relative words (constructor, init and rwdata tables, ``ldr``/``add pc``
   offsets) whose word and target are on opposite sides of the boundary.
 * 32-bit branches crossing the boundary, in either direction: re-encoded. That's
   stock code calling our hooks, and our code calling stock (ELF relocations;
   link with ``--emit-relocs``).
 
-Relative branches and PC-relative loads inside the range need nothing.
+Relative branches and PC-relative loads inside the range need nothing, unless
+the move compacts: then stock code freed in the range is left out, every kept
+run moves by its own offset (``final``), and 32-bit branches between runs are
+re-encoded too.
 
 It runs in 2 steps because the RAM images are compressed before the internal
 image is final: ``fix_ram_images()`` before the rwdata/SRAM3 blobs are
@@ -27,6 +30,7 @@ import numpy as np
 from elftools.elf.relocation import RelocationSection
 
 from . import writelog, xrefs
+from .exception import NotEnoughSpaceError
 from .layout import BANK2_BASE, BANK2_END
 from .xrefs import Code
 
@@ -96,14 +100,19 @@ def _encode_branch(hw1, hw2, offset):
 class Relocation:
     """Move internal ``[lo, hi)`` of a patched device to ``dst``."""
 
-    def __init__(self, device, lo, hi, dst, keep_vector_table=True):
+    def __init__(self, device, lo, hi, dst, keep_vector_table=True, compact=False):
         """``dst`` is in bank 2 (a separate image) or in this device's own
         internal image, past its code and data; either range is reserved now so
         nothing else is placed there.
 
         ``keep_vector_table``: the moved vector table also stays at the start
         of the image (boot and VTOR use 0x08000000). The amalgam sets it false:
-        Mario's vector table is there."""
+        Mario's vector table is there.
+
+        ``compact`` (the amalgam): stock code freed in the range (``add_hole``,
+        from ``Device.free_int``) is left out. ``finalize`` then fixes where
+        each kept run goes, reserves only those and frees the rest up to our
+        code; nothing may ask where moved code goes before that."""
         # PC-relative loads need word alignment; a moved vector table, VTOR's
         # (its 179 entries round up to 256 words).
         if (dst - lo) % 4:
@@ -111,6 +120,8 @@ class Relocation:
         if lo == device.internal.FLASH_BASE and dst % 0x400:
             raise ValueError("a moved vector table must be 1 KB aligned")
         if dst_in_bank2(dst):
+            if compact:
+                raise ValueError("only a move within the image compacts")
             if dst + hi - lo > BANK2_END:
                 raise ValueError(
                     f"0x{dst:08X}-0x{dst + hi - lo:08X} doesn't fit in bank 2 "
@@ -122,14 +133,19 @@ class Relocation:
         else:
             if dst < hi:
                 raise ValueError(f"0x{dst:08X} overlaps the range it moves")
-            region = device.int_space
-            region.reserve(
-                dst - region.base, hi - lo, device.name, "relocated stock code"
-            )
+            if not compact:
+                region = device.int_space
+                region.reserve(
+                    dst - region.base, hi - lo, device.name, "relocated stock code"
+                )
         self.device = device
         self.keep_vector_table = keep_vector_table
         self.lo, self.hi, self.dst = lo, hi, dst
-        self.delta = dst - lo
+        self.compact = compact
+        # [start, end) addresses of freed stock code compaction leaves out.
+        self.holes = []
+        # (start, end, new start) of each kept run, once finalized.
+        self.runs = None if compact else [(lo, hi, dst)]
         self.map = device.stock_map
         self.counts = {}
         # writelog provenance of the moved range at dst, once applied.
@@ -138,6 +154,50 @@ class Relocation:
     def moves(self, addr):
         return self.lo <= addr < self.hi
 
+    def compacts(self, addr):
+        """Whether freeing stock code at ``addr`` closes the gap instead of
+        leaving a hole at the new place."""
+        return self.compact and self.moves(addr)
+
+    def add_hole(self, start, end):
+        """Leave the freed stock code [start, end) out of the move."""
+        if self.runs is not None:
+            raise RuntimeError("stock code freed after the compaction was finalized")
+        if not (self.lo <= start and end <= self.hi):
+            raise ValueError(f"0x{start:08X}-0x{end:08X} straddles the moved range")
+        self.holes.append((start, end))
+
+    def finalize(self, limit):
+        """Fix where each kept run goes (back to back from ``dst``), reserve
+        them, and free the rest up to ``limit`` (where our code starts)."""
+        if self.runs is not None:
+            return
+        self.runs = compact_runs(self.lo, self.hi, self.dst, self.holes)
+        s, e, d = self.runs[-1]
+        end = d + e - s
+        if end > limit:
+            raise NotEnoughSpaceError(
+                f"the compacted stock code ends at 0x{end:08X}, past our code "
+                f"(0x{limit:08X})"
+            )
+        region = self.device.int_space
+        region.reserve(
+            self.dst - region.base,
+            end - self.dst,
+            self.device.name,
+            "relocated stock code",
+        )
+        region.free(end - region.base, limit - region.base)
+
+    def final(self, addr):
+        """Where ``addr`` ends up; freed code compaction left out maps to
+        where its gap was closed."""
+        if not self.moves(addr):
+            return addr
+        if self.runs is None:
+            raise RuntimeError("compacting relocation used before finalize()")
+        return final_address(self.runs, addr)
+
     def freed(self, addr):
         """In stock code the patcher removed."""
         base = self.device.internal.FLASH_BASE
@@ -145,12 +205,12 @@ class Relocation:
 
     def int_delta(self, offset):
         """How far the internal image's stock ``offset`` moves within the
-        image: ``delta`` if it's in the range and the destination is in the
-        same image, else 0."""
+        image: if it's in the range and the destination is in the same image,
+        else 0."""
         base = self.device.internal.FLASH_BASE
         if dst_in_bank2(self.dst) or not self.moves(base + offset):
             return 0
-        return self.delta
+        return self.final(base + offset) - (base + offset)
 
     def _count(self, kind):
         self.counts[kind] = self.counts.get(kind, 0) + 1
@@ -158,7 +218,7 @@ class Relocation:
     def _fix_abs(self, buf, off, kind):
         v = struct.unpack_from("<I", buf, off)[0]
         if self.moves(v & ~1):
-            _pack("<I", buf, off, v + self.delta)
+            _pack("<I", buf, off, v + self.final(v & ~1) - (v & ~1))
             self._count(kind)
 
     def fix_ram_images(self):
@@ -204,7 +264,7 @@ class Relocation:
         d = self.device
         base = d.internal.FLASH_BASE
         cur = bytes(d.internal)
-        lo, hi, delta = self.lo, self.hi, self.delta
+        lo, hi, final = self.lo, self.hi, self.final
         moved = bytearray(cur[lo - base : hi - base])
         prov = writelog.provenance(d.internal, lo - base, hi - base)
 
@@ -225,24 +285,51 @@ class Relocation:
         with contextlib.redirect_stdout(io.StringIO()):
             code.descend({a | 1 for a in self.map.code.entries if self.moves(a)})
 
-        # Branches out of the range (e.g. hooks into our code).
-        for src, t, mn, size in code.branches:
-            if self.moves(t):
+        # Branches and PC-relative loads in the range: the descent's, and,
+        # as now encoded, the stock map's in code it doesn't reach (only data
+        # or freed code leads there). With one offset, branches within the
+        # range need nothing; compaction needs every one.
+        def kept(a):
+            return self.moves(a) and not self.freed(a) and not d.xip_hides(a)
+
+        branches = {src: (t, size) for src, t, mn, size in code.branches}
+        for src, t, mn, size in self.map.code.branches:
+            if src not in branches and kept(src):
+                now = _branch_target(moved, src - lo, src, size)
+                if now is not None:
+                    branches[src] = (now, size)
+        pcrel = {src: t for src, t, sz in code.pcrel}
+        for src, t, sz in self.map.code.pcrel:
+            if src not in pcrel and kept(src):
+                now = _pcrel_target(moved, src - lo, src)
+                if now is not None:
+                    pcrel[src] = now
+
+        # Branches out of the range (e.g. hooks into our code), and with
+        # compaction, between runs.
+        for src, (t, size) in sorted(branches.items()):
+            if self.moves(t) and final(t) - final(src) == t - src:
                 continue
+            where_to = (
+                "crosses a gap compaction closes"
+                if self.moves(t)
+                else "leaves the range"
+            )
             if size != 4:
-                raise NotImplementedError(
-                    f"16-bit branch at 0x{src:08X} leaves the range"
-                )
+                raise NotImplementedError(f"16-bit branch at 0x{src:08X} {where_to}")
             o = src - lo
             hw1, hw2 = struct.unpack_from("<HH", moved, o)
-            hw1, hw2 = _encode_branch(hw1, hw2, t - (src + delta + 4))
+            hw1, hw2 = _encode_branch(hw1, hw2, final(t) - (final(src) + 4))
             struct.pack_into("<HH", moved, o, hw1, hw2)
-            self._count("branch out")
-        for src, t, sz in code.pcrel:
+            self._count("branch between runs" if self.moves(t) else "branch out")
+        for src, t in sorted(pcrel.items()):
             if not self.moves(t):
                 raise NotImplementedError(
                     f"PC-relative access at 0x{src:08X} leaves the range"
                 )
+            if final(t) - final(src) != t - src:
+                _encode_pcrel(moved, src - lo, final(t) - ((final(src) + 4) & ~3))
+                self._count("pc-relative between runs")
 
         # Stock code left in place (the amalgam keeps Zelda's code past its
         # factory test): its branches into the range, as patched.
@@ -261,7 +348,7 @@ class Relocation:
             decoded = _decode_branch(hw1, hw2)
             if decoded is None or not self.moves(src + 4 + decoded[1]):
                 continue  # A patch replaced it.
-            hw1, hw2 = _encode_branch(hw1, hw2, decoded[1] + delta)
+            hw1, hw2 = _encode_branch(hw1, hw2, final(src + 4 + decoded[1]) - (src + 4))
             _pack("<HH", d.internal, o, hw1, hw2)
             self._count("branch in")
         for src, t, sz in self.map.code.pcrel:
@@ -289,7 +376,7 @@ class Relocation:
                 kind, off = decoded
                 t = addr + 4 + off
                 if self.moves(t):
-                    hw1, hw2 = _encode_branch(hw1, hw2, t + delta - (addr + 4))
+                    hw1, hw2 = _encode_branch(hw1, hw2, final(t) - (addr + 4))
                     _pack("<HH", d.internal, o, hw1, hw2)
                     self._count("our branch in")
             elif rtype == R_ARM_ABS32:
@@ -331,8 +418,8 @@ class Relocation:
         for a, b in sorted(selfrel.items()):
             v = struct.unpack_from("<i", cur, a - base)[0]
             t = (b + v) & 0xFFFF_FFFF
-            new_t = t + delta if self.moves(t & ~1) else t
-            new_b = b + delta if self.moves(b) else b
+            new_t = t + final(t & ~1) - (t & ~1)
+            new_b = final(b)
             if new_t - new_b != v:
                 buf, o = where(a)
                 _pack("<i", buf, o, new_t - new_b)
@@ -358,17 +445,26 @@ class Relocation:
         else:
             off = self.dst - base
             out = d.internal
-            # Freed stock code moved with the rest, but its holes were handed
-            # out at the new place (Device.free_int) and may hold data now.
-            for start, end in d.freed_int:
-                if self.moves(base + start):
-                    s, e = start - (lo - base), end - (lo - base)
-                    moved[s:e] = out[off + s : off + e]
-                    prov[s:e] = writelog.provenance(out, off + s, off + e)
-        with writelog.untracked():
-            out[off : off + len(moved)] = moved
+            if not self.compact:
+                # Freed stock code moved with the rest, but its holes were
+                # handed out at the new place (Device.free_int) and may hold
+                # data now.
+                for start, end in d.freed_int:
+                    if self.moves(base + start):
+                        s, e = start - (lo - base), end - (lo - base)
+                        moved[s:e] = out[off + s : off + e]
+                        prov[s:e] = writelog.provenance(out, off + s, off + e)
         if out is d.internal:
-            writelog.set_provenance(out, off, prov)
+            # Each kept run (all of it unless compacted); what compaction
+            # left out isn't copied.
+            for s, e, new in self.runs:
+                o = new - base
+                with writelog.untracked():
+                    out[o : o + e - s] = moved[s - lo : e - lo]
+                writelog.set_provenance(out, o, prov[s - lo : e - lo])
+        else:
+            with writelog.untracked():
+                out[off : off + len(moved)] = moved
         self.prov = prov
 
         # Old copy: udf, so anything still pointing here faults. The OTFDEC
@@ -380,6 +476,113 @@ class Relocation:
                 if not keep[0] <= a < keep[1]:
                     d.internal[a - base : a - base + 2] = b"\xfe\xde"
         return self.counts
+
+
+# 32-bit literal loads (U bit cleared): LDRB, LDRH, LDR, LDRSB, LDRSH with a
+# 12-bit offset; LDRD and VLDR with an 8-bit word offset.
+_LDR_IMM12 = (0xF81F, 0xF83F, 0xF85F, 0xF91F, 0xF93F)
+_LDR_IMM8X4 = {0xE95F: 0xFF7F, 0xED1F: 0xFF3F}  # LDRD, VLDR: (pattern, mask)
+
+
+def _branch_target(buf, o, addr, size):
+    """Target of the branch at ``buf[o]`` (at ``addr``), or None if a patch
+    made it something else."""
+    if size == 4:
+        hw1, hw2 = struct.unpack_from("<HH", buf, o)
+        decoded = _decode_branch(hw1, hw2)
+        return None if decoded is None else addr + 4 + decoded[1]
+    hw = struct.unpack_from("<H", buf, o)[0]
+    if hw & 0xF800 == 0xE000:  # B (T2)
+        off = (hw & 0x7FF) << 1
+        off -= (off & 0x800) << 1
+    elif hw & 0xF000 == 0xD000 and (hw >> 8) & 0xF < 0xE:  # B<c> (T1)
+        off = (hw & 0xFF) << 1
+        off -= (off & 0x100) << 1
+    elif hw & 0xF500 == 0xB100:  # CBZ, CBNZ
+        off = ((hw >> 9) & 1) << 6 | ((hw >> 3) & 0x1F) << 1
+    else:
+        return None
+    return addr + 4 + off
+
+
+def _pcrel_target(buf, o, addr):
+    """Address the PC-relative load or ``adr`` at ``buf[o]`` (at ``addr``)
+    reaches, or None if it's something else (``_encode_pcrel``'s forms)."""
+    pc = (addr + 4) & ~3
+    hw1 = struct.unpack_from("<H", buf, o)[0]
+    if hw1 & 0xF800 in (0x4800, 0xA000):
+        return pc + (hw1 & 0xFF) * 4
+    hw2 = struct.unpack_from("<H", buf, o + 2)[0]
+    sign = 1 if hw1 & 0x80 else -1
+    if hw1 & 0xFF7F in _LDR_IMM12:
+        return pc + sign * (hw2 & 0xFFF)
+    if any(hw1 & mask == pattern for pattern, mask in _LDR_IMM8X4.items()):
+        return pc + sign * (hw2 & 0xFF) * 4
+    if hw1 & 0xFBFF in (0xF20F, 0xF2AF):
+        imm = ((hw1 >> 10) & 1) << 11 | ((hw2 >> 12) & 7) << 8 | (hw2 & 0xFF)
+        return pc + (imm if hw1 & 0xFBFF == 0xF20F else -imm)
+    return None
+
+
+def _encode_pcrel(buf, o, offset):
+    """Re-encode the PC-relative load or ``adr`` at ``buf[o]`` to reach
+    ``offset`` bytes from Align(PC, 4)."""
+    hw1 = struct.unpack_from("<H", buf, o)[0]
+    if hw1 & 0xF800 in (0x4800, 0xA000):  # LDR (literal), ADR: 16-bit
+        if offset % 4 or not 0 <= offset <= 1020:
+            raise NotImplementedError(
+                f"16-bit PC-relative offset {offset:#x} at {o:#x}"
+            )
+        struct.pack_into("<H", buf, o, (hw1 & 0xFF00) | offset // 4)
+        return
+    hw2 = struct.unpack_from("<H", buf, o + 2)[0]
+    u = int(offset >= 0)
+    mag = abs(offset)
+    if hw1 & 0xFF7F in _LDR_IMM12:
+        if mag > 0xFFF:
+            raise NotImplementedError(f"PC-relative offset {offset:#x} at {o:#x}")
+        hw1 = (hw1 & ~0x80) | (u << 7)
+        hw2 = (hw2 & 0xF000) | mag
+    elif any(hw1 & mask == pattern for pattern, mask in _LDR_IMM8X4.items()):
+        if mag % 4 or mag > 1020:
+            raise NotImplementedError(f"PC-relative offset {offset:#x} at {o:#x}")
+        hw1 = (hw1 & ~0x80) | (u << 7)
+        hw2 = (hw2 & 0xFF00) | mag // 4
+    elif hw1 & 0xFBFF in (0xF20F, 0xF2AF):  # ADDW/SUBW Rd, PC, #imm12 (ADR.W)
+        if mag > 0xFFF:
+            raise NotImplementedError(f"PC-relative offset {offset:#x} at {o:#x}")
+        hw1 = (0xF20F if u else 0xF2AF) | ((mag >> 11) & 1) << 10
+        hw2 = (hw2 & 0x0F00) | ((mag >> 8) & 7) << 12 | (mag & 0xFF)
+    else:
+        raise NotImplementedError(f"unknown PC-relative instruction at {o:#x}")
+    struct.pack_into("<HH", buf, o, hw1, hw2)
+
+
+def compact_runs(lo, hi, dst, holes):
+    """(start, end, new start) of each part of [lo, hi) outside ``holes``,
+    back to back from ``dst``."""
+    runs, pos, cur = [], dst, lo
+    for start, end in sorted(holes):
+        if start > cur:
+            runs.append((cur, start, pos))
+            pos += start - cur
+        cur = max(cur, end)
+    if cur < hi:
+        runs.append((cur, hi, pos))
+    return runs
+
+
+def final_address(runs, addr):
+    """Where ``addr`` goes with ``runs`` (``compact_runs``); an address in a
+    left-out hole maps to where the hole was closed."""
+    closed = runs[0][2]
+    for start, end, new in runs:
+        if addr < start:
+            return closed
+        if addr < end:
+            return new + addr - start
+        closed = new + end - start
+    return closed
 
 
 def elf_relocs(device):

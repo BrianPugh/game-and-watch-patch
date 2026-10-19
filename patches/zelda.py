@@ -112,9 +112,14 @@ ITCM_MENU, ITCM_MENU_SRC, ITCM_MENU_SIZE = 0x9C7C, 0x31_56EC, 0x1B44
 
 class ZeldaGnW(Device, name="zelda"):
     # --relocate-stock moves everything below the init table, vector table
-    # included; the amalgam moves it to the top of bank 1.
+    # included.
     STOCK_RELOCATE_END = 0x0801_B368
+    # The amalgam moves only the code below the factory test (removed there);
+    # the code from its end on (reset handler, init and rwdata tables) stays,
+    # past Mario's.
     relocates_in_amalgam = True
+    AMALGAM_RELOCATE_END = 0x0801_68D8
+    AMALGAM_KEPT_START = 0x0801_8154
     xip_vermin = None
 
     class Int(IntFirmware):
@@ -765,7 +770,7 @@ class ZeldaGnW(Device, name="zelda"):
             self.relocation = Relocation(
                 self,
                 0x0800_0000,
-                self.STOCK_RELOCATE_END,
+                self.AMALGAM_RELOCATE_END if self.amalgam else self.STOCK_RELOCATE_END,
                 self.args.relocate_stock,
                 keep_vector_table=not self.amalgam,
             )

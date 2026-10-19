@@ -1,15 +1,20 @@
 """Mario and Zelda in one 256 KB bank-1 image (``--device=amalgam``).
 
 Each firmware is patched in its own buffers at its stock addresses, like a
-single-model build, from the same ELF. Our code starts past both stock images
-(0x0801B3E0), so neither stock image overlaps it in its own buffer. Both
-allocate internal space from one bank-1 ``Region``:
+single-model build, from the same ELF. Both allocate internal space from one
+bank-1 ``Region``; the amalgam removes both factory tests (--no-factory-test):
 
     0x08000000  Mario's stock code (it doesn't move)
-    0x08018100  Mario's data (Mario's code ends here, Zelda's init table starts at 0x0801B368)
-    0x0801B368  Zelda's init table (stays, like --relocate-stock)
-    0x0801B3E0  our code, then data and compressed images from the cursor
-    0x08024000  Zelda's stock code, relocated to the top of the bank
+    0x08018100  free (84 bytes; Zelda's factory test in its buffer)
+    0x08018154  Zelda's stock code past its factory test (reset handler,
+                init and rwdata tables), in place
+    0x0801B400  Zelda's stock code below its factory test, vector table
+                included (``ZELDA_DST``: 1 KB aligned for VTOR)
+    0x08031CD8  our code (``OUR_CODE``), then data and compressed images
+
+Our code starts past both firmwares, so neither stock image overlaps it in its
+own buffer. A hole one device frees under the other's code (Zelda's factory
+test lies under Mario's code) is clipped (``Region.free``).
 
 Zelda is patched first: its external data stays at offset 0 (its saves are raw
 flash offsets below 0x20000), and Mario's goes after it (``set_ext_base``).
@@ -31,9 +36,18 @@ import numpy as np
 
 from .firmware import HeaderMetaData
 from .layout import Region
-from .utils import round_down_page, round_up_page
+from .mario import MarioGnW
+from .utils import round_up_page
+from .zelda import ZeldaGnW
 
 SIZE = 0x4_0000
+BASE = 0x0800_0000
+# Zelda's code below its factory test moves past both stock images (1 KB
+# aligned for VTOR: its vector table moves too), and our code follows it.
+ZELDA_DST = BASE + (
+    -(-max(ZeldaGnW.Int.STOCK_ROM_END, MarioGnW.Int.STOCK_ROM_END) // 0x400) * 0x400
+)
+OUR_CODE = ZELDA_DST + ZeldaGnW.AMALGAM_RELOCATE_END - BASE
 # Shared by our code and data, no device owns these bytes.
 SHARED = "both"
 # Default label of each device's game-select entry: the firmware it boots.
@@ -68,6 +82,8 @@ def configure(zelda, mario, parser):
         if getattr(args, "internal_only", False):
             parser.error("--internal-only isn't supported with --device=amalgam")
         args.extended = True
+        # Its holes make room for both firmwares in one bank.
+        args.no_factory_test = True
         # The game-select DUAL BOOT entry switches to the other firmware
         # (main.c), and it's the only way to; label it with that firmware.
         args.game_select_dual_boot = True
@@ -81,10 +97,7 @@ def configure(zelda, mario, parser):
         device.set_args(args, p)
     if unknown:
         parser.error(f"unrecognized arguments: {' '.join(sorted(unknown))}")
-    base = zelda.internal.FLASH_BASE
-    zelda.args.relocate_stock = round_down_page(
-        base + SIZE - (zelda.STOCK_RELOCATE_END - base)
-    )
+    zelda.args.relocate_stock = ZELDA_DST
     return mario.args
 
 
@@ -107,20 +120,15 @@ def load(devices, patch):
 
 def bank1_region(zelda, mario):
     """The bank-1 region both devices allocate from."""
-    base = mario.internal.FLASH_BASE
-    our_start = max(zelda.internal.STOCK_ROM_END, mario.internal.STOCK_ROM_END)
-    region = Region("bank1", base, SIZE, pos=mario.internal.empty_offset)
-    region.note(our_start, region.pos - our_start, SHARED, "our code")
+    region = Region("bank1", BASE, SIZE, pos=mario.internal.empty_offset)
+    region.note(OUR_CODE - BASE, region.pos - (OUR_CODE - BASE), SHARED, "our code")
+    # Past Zelda's code kept in place, below its relocated code.
+    region.free(zelda.internal.STOCK_ROM_END, ZELDA_DST - BASE)
     return region
 
 
 def patch(layout, zelda, mario):
     layout.patch_device(zelda)
-    # Past Mario's code, below Zelda's init table: free in the image, but
-    # Zelda's stock code in Zelda's buffer, which its relocation copies out
-    # after the data is placed. So only Mario's data goes there.
-    base = mario.internal.FLASH_BASE
-    zelda.int_space.free(mario.internal.STOCK_ROM_END, zelda.STOCK_RELOCATE_END - base)
     # Mario's stock data moves up in its own buffer, so it has to start past
     # its stock image (only matters when Zelda's data shrinks below 1 MB).
     base = max(len(zelda.external), len(mario.external))
@@ -165,18 +173,18 @@ def merge_internal(region, devices):
     for i, d in enumerate(devices):
         if d.relocates_in_amalgam:
             # Its relocation copied this range out after any data put there.
-            end = d.STOCK_RELOCATE_END - base
+            end = d.AMALGAM_RELOCATE_END - base
             mine = (owner[:end] == i) & ~shared[:end]
             if mine.any():
                 raise AmalgamError(
                     f"{d.name} placed data over its own relocated stock code: "
                     + _addresses(mine, base)
                 )
-        # A relocated device's buffer holds its stock image below our code;
-        # what it patched there is in its relocated copy.
+        # A relocated device's buffer holds the stock code it moved; what
+        # it patched there is in its relocated copy.
         exempt = np.zeros(region.size, dtype=bool)
         if d.relocates_in_amalgam:
-            exempt[: d.internal.STOCK_ROM_END] = True
+            exempt[: d.AMALGAM_RELOCATE_END - base] = True
         # Its freed code is udf in its buffer; the other device may own data there.
         for start, end in d.freed_int_ranges():
             exempt[start:end] = True

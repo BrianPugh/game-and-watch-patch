@@ -329,8 +329,24 @@ flash_stock: internal_flash_backup_$(GNW_DEVICE_LOWER).bin flash_backup_$(GNW_DE
 ##################
 # PATCH FLASHING #
 ##################
-flash_patched_int: build/internal_flash_patched.bin
-	$(GNWMANAGER) flash bank1 $< -- start bank1
+# --sd-bootloader: our bank-1 image ends at 0x08032000, and Sylverb's SD
+# bootloader goes there (downloaded, pinned in scripts/fetch_sd_bootloader.py;
+# point SD_BOOTLOADER_BIN at your own copy to override).
+SD_BOOTLOADER_BIN ?= $(BUILD_DIR)/gnw_bootloader_0x08032000.bin
+ifneq (,$(findstring --sd-bootloader, $(PATCH_PARAMS)))
+FLASH_SD_BOOTLOADER = -- flash 0x08032000 $(SD_BOOTLOADER_BIN)
+SD_BOOTLOADER_DEP = $(SD_BOOTLOADER_BIN)
+endif
+
+$(BUILD_DIR)/gnw_bootloader_0x08032000.bin: scripts/fetch_sd_bootloader.py
+	$(PYTHON) -m scripts.fetch_sd_bootloader $@
+
+flash_sd_bootloader: $(SD_BOOTLOADER_BIN)
+	$(GNWMANAGER) flash 0x08032000 $< -- start bank1
+.PHONY: flash_sd_bootloader
+
+flash_patched_int: build/internal_flash_patched.bin $(SD_BOOTLOADER_DEP)
+	$(GNWMANAGER) flash bank1 $< $(FLASH_SD_BOOTLOADER) -- start bank1
 .PHONY: flash_patched_int
 
 flash_patched_ext: build/external_flash_patched.bin
@@ -339,9 +355,10 @@ flash_patched_ext: build/external_flash_patched.bin
 	fi
 .PHONY: flash_patched_ext
 
-flash_patched: build/internal_flash_patched.bin build/external_flash_patched.bin
+flash_patched: build/internal_flash_patched.bin build/external_flash_patched.bin $(SD_BOOTLOADER_DEP)
 	$(GNWMANAGER) flash ext build/external_flash_patched.bin \
 		-- flash bank1 build/internal_flash_patched.bin \
+		$(FLASH_SD_BOOTLOADER) \
 		-- start bank1
 .PHONY: flash_patched
 

@@ -1,12 +1,12 @@
 {
   "configs": {
     "amalgam": {
-      "external_flash_patched.bin": "02a9fda31478e33ddf6bf17b024889103f5256b0",
-      "internal_flash_patched.bin": "d00213f6c6b28e8544d89a6fbf79f78a4dc55122"
+      "external_flash_patched.bin": "24fb7187fdc41ec0cc5f88f0843d76d1682bd18e",
+      "internal_flash_patched.bin": "e7586d841587790b9122faca011c641451f7ecb9"
     },
     "amalgam_xip": {
-      "external_flash_patched.bin": "cb47bc183fbb30abde2477a31560a7339d48945c",
-      "internal_flash_patched.bin": "2fa2a7e7eebc70ed1634b32c94f7774611302d4a"
+      "external_flash_patched.bin": "1b43a81eed7d7fbea1b483cc3791dec0e8e8c637",
+      "internal_flash_patched.bin": "21105e831f6f23a7cf054f3a9601b9a3320ff63c"
     },
     "mario": {
       "external_flash_patched.bin": "bf0cf36ebdbe9493bd0b7c4072d5bfab43b7928c",
@@ -25,8 +25,8 @@
       "internal_flash_patched.bin": "620d66740bc2199a4ac078c494f68a55976a9e69"
     },
     "mario_options": {
-      "external_flash_patched.bin": "4616c1f30e76822edfd1ec7f0acef55610738b97",
-      "internal_flash_patched.bin": "f2397f97369374fa1f511642dc9955199f6e0af3"
+      "external_flash_patched.bin": "b4700aa73d006a8f311d5b1522fbf9d3438ddc89",
+      "internal_flash_patched.bin": "3529a6e8cab601b7d592870d0af7b9c3063282fa"
     },
     "mario_relocate": {
       "external_flash_patched.bin": "63f58c707901db5645c71be52bdd4ad053e63806",
@@ -42,8 +42,8 @@
       "internal_flash_patched.bin": "82a81483749e471abb0b6675cfe144a33db90cdc"
     },
     "zelda_options": {
-      "external_flash_patched.bin": "c714c1d2d62e728e8ccdc19aefac8a39a89d36a8",
-      "internal_flash_patched.bin": "a85c33e411a1615dfc34ff5cc34b344e19841b23"
+      "external_flash_patched.bin": "11a23abbf644f45db573dc75f75aa0bcd50f280c",
+      "internal_flash_patched.bin": "aac89b1ec4a86dcd8a4142065bb31669d3161a31"
     },
     "zelda_relocate": {
       "external_flash_patched.bin": "07f3b010b1f39516cad5770bc06a31ab051e6f90",

@@ -571,6 +571,13 @@ class Device:
         # Internal offsets of words the patcher filled with internal addresses
         # (no ELF relocation covers them).
         self.int_pointers = []
+        # [symbol, data, label, ext offset] of data place_ext() put in
+        # external flash; backfill() retries internal flash once every
+        # device is placed.
+        self.ext_placed = []
+        # (internal offset, size) of what backfill() moved inside, after the
+        # stock code relocation.
+        self.backfilled = []
         # patches.relocate.Relocation when stock code is moved; bank2 (the
         # Layout's) holds it.
         self.relocation = None
@@ -916,6 +923,52 @@ class Device:
                 f"        {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}"
             )
             return self.move_ext_external(ext, size, reference)
+
+    def place_int(self, symbol, data, label, quiet=False):
+        """Put ``data`` in internal flash and point our pointer ``symbol`` at
+        it. False if it doesn't fit; the caller then uses ``place_ext`` once
+        external offsets are final. Allocations are at their final address,
+        so the pointer isn't one ``Relocation`` fixes (``int_pointers``)."""
+        try:
+            offset = self.int_space.alloc(len(data), self.name, label)
+        except NotEnoughSpaceError:
+            if not quiet:
+                print(
+                    f"        {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}"
+                )
+            return False
+        self.internal[offset : offset + len(data)] = data
+        self._point(symbol, self.internal.FLASH_BASE + offset)
+        return True
+
+    def place_ext(self, symbol, offset, data, label):
+        """Write ``data`` at its final external ``offset`` and point our
+        pointer ``symbol`` at it; ``backfill`` may still move it inside."""
+        self.external[offset : offset + len(data)] = data
+        self.ext_space.note(offset, len(data), self.name, label)
+        self._point(symbol, self.external.FLASH_BASE + offset)
+        self.ext_placed.append([symbol, data, label, offset])
+
+    def backfill(self, item):
+        """Move a ``place_ext`` item into internal flash if it fits now. Its
+        external copy stays (the data after it is placed), unused."""
+        symbol, data, label, offset = item
+        with writelog.step(f"Move the {label} into internal flash"):
+            if not self.place_int(symbol, data, label, quiet=True):
+                return False
+        a = self.int_space.allocations[-1]
+        self.backfilled.append((a.offset, a.size))
+        self.ext_placed.remove(item)
+        for a in self.ext_space.allocations:
+            if a.offset == offset and a.label == label:
+                a.label += " (unused: moved to internal flash)"
+        printi(f"Moved the {label} into internal flash.")
+        return True
+
+    def _point(self, symbol, addr):
+        self.internal.replace(
+            self.internal.address(symbol, sub_base=True), addr, size=4
+        )
 
     def move_to_compressed_memory(self, ext, size, reference):
         """Attempt to relocate in priority order:

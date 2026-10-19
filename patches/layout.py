@@ -276,6 +276,7 @@ class Layout:
         """Patch every device."""
         for device in self.devices:
             self.patch_device(device)
+        backfill(self.devices)
 
     def patch_device(self, device):
         device()
@@ -295,3 +296,12 @@ class Layout:
             )
             out += r.map_lines()
         return out
+
+
+def backfill(devices):
+    """Move data ``place_ext`` put in external flash into the internal flash
+    left once every device is placed (holes a later device freed, room held
+    for compressed images that came out smaller), largest first."""
+    items = [(d, item) for d in devices for item in d.ext_placed]
+    for d, item in sorted(items, key=lambda x: -len(x[1][1])):
+        d.backfill(item)

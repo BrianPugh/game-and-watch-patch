@@ -29,6 +29,8 @@ from .xip import XipUnit
 # BALL's code: its API (called from main_loop_tick), game, sound and save.
 # Its static constructor (zeroes 3 halfwords of ball_ctx) stays internal.
 BALL_UNIT = (0x0800_3350, 0x0800_45D2)
+# Our pointer to the game-select DUAL BOOT icon (game_select_mario.c).
+ICON_SYMBOL = "MARIO_GAME_SELECT_DUAL_BOOT_ICON"
 
 build_dir = Path("build")  # TODO: expose this properly or put in better location
 
@@ -49,6 +51,7 @@ class MarioGnW(Device, name="mario"):
     # included.
     STOCK_RELOCATE_END = 0x0801_807C
     xip_ball = None
+    dual_boot_icon = None
 
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
@@ -406,12 +409,8 @@ class MarioGnW(Device, name="mario"):
                 icon = render_label_icon(self.args.game_select_dual_boot_label)
             else:
                 icon = png_to_icon_4bpp(self.args.game_select_dual_boot_icon)
-            self.internal.replace(
-                self.internal.address(
-                    "MARIO_GAME_SELECT_DUAL_BOOT_ICON", sub_base=True
-                ),
-                icon,
-            )
+            # Placed after the stock data moves, in whatever room they leave.
+            self.dual_boot_icon = icon
 
         printi("Mute clock audio on first boot.")
         self.internal.asm(0x49E0, "mov.w r1, #0x00000", expect="4:42e9afc9")
@@ -931,20 +930,36 @@ class MarioGnW(Device, name="mario"):
         # The TIME graphic of the first-boot PRESS TIME BUTTON screen.
         self.move_to_compressed_memory(0xF4D18, 2880, 0x10960)
 
+        icon_ext = None
+        if self.dual_boot_icon is not None:
+            printi("Place the game-select DUAL BOOT icon.")
+            if not self.place_int(
+                ICON_SYMBOL, self.dual_boot_icon, "game-select DUAL BOOT icon"
+            ):
+                icon_ext = self.dual_boot_icon
+
         # An ITCM overlay that game_reload copies with length 0 (literal at
         # 0x08007210), so it's never used.
         self.external.replace(0xF5858, b"\x00" * 34728)
         xip_size = round_up_word(self.xip_ball.ext_size) if self.xip_ball else 0
-        if xip_size:
-            # Room for BALL's code; written once its pointers are fixed.
+        icon_size = round_up_word(len(icon_ext)) if icon_ext else 0
+        if xip_size or icon_size:
+            # Room for BALL's code and the icon; written once pointers are fixed.
             self.ext_space.keep(0xF5858)
-            xip_offset = 0xF5858 + self.ext_space.shift
-            self.ext_space.cursor += xip_size
-        self.ext_space.drop(0xF5858 + xip_size, 0xF5858 + 34728)
+            dead_offset = 0xF5858 + self.ext_space.shift
+            self.ext_space.cursor += xip_size + icon_size
+        self.ext_space.drop(0xF5858 + xip_size + icon_size, 0xF5858 + 34728)
 
         self.fix_ext_refs()
         if self.xip_ball:
-            self.xip_ball.write(xip_offset)
+            self.xip_ball.write(dead_offset)
+        if icon_ext:
+            self.place_ext(
+                ICON_SYMBOL,
+                dead_offset + xip_size,
+                icon_ext,
+                "game-select DUAL BOOT icon",
+            )
         if self.relocation:
             self.relocation.fix_ram_images()
 

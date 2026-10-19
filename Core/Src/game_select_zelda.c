@@ -28,11 +28,27 @@
 #define UI_VARIANTS 0x2d  // 2 bytes per row.
 
 /**
- * Linear 4bpp (high nibble first) icon, wherever the patcher put it: internal
- * flash if it fits, else external flash. volatile, so reads aren't folded to
- * the NULL initializer.
+ * LZMA'd linear 4bpp (high nibble first) icon, wherever the patcher put it:
+ * internal flash if it fits, else external flash. volatile, so reads aren't
+ * folded to the NULL initializer.
  */
 const uint8_t * const volatile ZELDA_GAME_SELECT_DUAL_BOOT_ICON = NULL;
+
+static uint8_t dual_boot_icon[ICON_W * ICON_H / 2];
+static bool dual_boot_icon_ready;
+
+/**
+ * The inflated icon; inflated on the first draw (the menu only draws while
+ * external flash is mapped). The stream ends with an end marker, so the
+ * input bound only has to be large enough.
+ */
+static const uint8_t *dual_boot_icon_pixels(void){
+    if(!dual_boot_icon_ready){
+        memcpy_inflate(dual_boot_icon, ZELDA_GAME_SELECT_DUAL_BOOT_ICON, 2 * sizeof(dual_boot_icon));
+        dual_boot_icon_ready = true;
+    }
+    return dual_boot_icon;
+}
 
 /**
  * menu_rows as the stock draw function sees it (the patcher points its
@@ -114,7 +130,7 @@ void zelda_game_select_draw(uint8_t *fb, void *rects, uint32_t color){
 
     if(dual_boot_row < n && dual_boot_row - top < VISIBLE_ROWS){
         uint32_t y = ROW_Y + (dual_boot_row - top) * ROW_PITCH;
-        game_select_blit_icon(fb + y * FB_WIDTH + ICON_X, ZELDA_GAME_SELECT_DUAL_BOOT_ICON, ICON_W, ICON_H, UI_PALETTE);
+        game_select_blit_icon(fb + y * FB_WIDTH + ICON_X, dual_boot_icon_pixels(), ICON_W, ICON_H, UI_PALETTE);
     }
 
     // Scroll hints between the panel border and the first/last icon.

@@ -410,7 +410,7 @@ class MarioGnW(Device, name="mario"):
             else:
                 icon = png_to_icon_4bpp(self.args.game_select_dual_boot_icon)
             # Placed after the stock data moves, in whatever room they leave.
-            self.dual_boot_icon = icon
+            self.dual_boot_icon = lzma_compress(icon)
 
         printi("Mute clock audio on first boot.")
         self.internal.asm(0x49E0, "mov.w r1, #0x00000", expect="4:42e9afc9")
@@ -934,7 +934,7 @@ class MarioGnW(Device, name="mario"):
         if self.dual_boot_icon is not None:
             printi("Place the game-select DUAL BOOT icon.")
             if not self.place_int(
-                ICON_SYMBOL, self.dual_boot_icon, "game-select DUAL BOOT icon"
+                ICON_SYMBOL, self.dual_boot_icon, "game-select DUAL BOOT icon (LZMA)"
             ):
                 icon_ext = self.dual_boot_icon
 
@@ -958,7 +958,7 @@ class MarioGnW(Device, name="mario"):
                 ICON_SYMBOL,
                 dead_offset + xip_size,
                 icon_ext,
-                "game-select DUAL BOOT icon",
+                "game-select DUAL BOOT icon (LZMA)",
             )
         if self.relocation:
             self.relocation.fix_ram_images()

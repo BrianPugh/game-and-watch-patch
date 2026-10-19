@@ -11,15 +11,6 @@
 #define GAME_SELECT_FB_WIDTH 320
 
 /**
- * Hide a patcher-populated array's contents from the optimizer; otherwise
- * reads from its compile-time initializer may be folded to constants.
- */
-static inline const uint8_t *launder(const uint8_t *p){
-    __asm__("" : "+r"(p));
-    return p;
-}
-
-/**
  * Moves the first visible entry `*top` of a `visible`-entry window over `n`
  * entries so it shows `selected`.
  */

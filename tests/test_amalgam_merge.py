@@ -27,6 +27,7 @@ def device(name, stock, relocates, holes=()):
         relocates_in_amalgam=relocates,
         AMALGAM_RELOCATE_END=0x0800_0000 + RELOCATE_END,
         freed_int_ranges=lambda: list(holes),
+        backfilled=[],
     )
 
 
@@ -95,6 +96,17 @@ def test_data_over_own_relocated_code_fails(setup):
     zelda.internal[off : off + 8] = b"D" * 8
     with pytest.raises(AmalgamError, match="over its own relocated stock code"):
         merge_internal(region, [zelda, mario])
+
+
+def test_backfilled_data_over_own_relocated_code(setup):
+    # Backfilled after the relocation copied the range out, so it stays.
+    region, mario, zelda = setup
+    region.free(0x20, 0x28)
+    off = region.alloc(8, "zelda", "data")
+    zelda.internal[off : off + 8] = b"D" * 8
+    zelda.backfilled.append((off, 8))
+    out = merge_internal(region, [zelda, mario])
+    assert out[off : off + 8] == b"D" * 8
 
 
 def _link(region, devices, start, data):

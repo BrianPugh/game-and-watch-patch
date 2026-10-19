@@ -117,7 +117,7 @@ def test_sd_bootloader_code_in_holes(sd_elf):
             used += size
         elif name.startswith((".text", ".rodata", ".init_array", ".fini_array")):
             assert addr + size <= SD_BOOTLOADER, name
-    assert used > 10_000
+    assert used > 7_000  # ~8.3 KB of our code (the icons are patcher data)
     assert sections[".fill"][0] <= SD_BOOTLOADER
     assert sections[".bin_origin"] == (BASE, 4)
 

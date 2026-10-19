@@ -60,6 +60,7 @@ def test_layout_shares_bank2_and_maps_every_region():
         name = "mario"
 
         pending = []
+        ext_placed = []
 
         def make_regions(self, int_space=None):
             self.int_space = Region("mario internal", 0x0800_0000, 0x100, pos=0x80)

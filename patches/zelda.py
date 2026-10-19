@@ -105,6 +105,8 @@ OVERLAY_START, OVERLAY_END = 0x30_B4A0, 0x31_7230
 # Vermin's code: its API (called from main_loop_tick and app_load), game,
 # sound and high-score save.
 VERMIN_UNIT = (0x0801_4938, 0x0801_6268)
+# Our pointer to the game-select DUAL BOOT icon (game_select_zelda.c).
+ICON_SYMBOL = "ZELDA_GAME_SELECT_DUAL_BOOT_ICON"
 # The last copy is the menu UI, linked at ITCM 0x9C7C. ITCM past its end is
 # never loaded, so veneers from ITCM to our code are appended to it.
 ITCM_MENU, ITCM_MENU_SRC, ITCM_MENU_SIZE = 0x9C7C, 0x31_56EC, 0x1B44
@@ -121,6 +123,8 @@ class ZeldaGnW(Device, name="zelda"):
     AMALGAM_RELOCATE_END = 0x0801_68D8
     AMALGAM_KEPT_START = 0x0801_8154
     xip_vermin = None
+    # The game-select DUAL BOOT icon if internal flash had no room.
+    dual_boot_icon_ext = None
 
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "ac14bcea6e4ff68c88fd2302c021025a2fb47940"
@@ -355,10 +359,9 @@ class ZeldaGnW(Device, name="zelda"):
             icon = png_to_icon_4bpp(
                 self.args.game_select_dual_boot_icon, 96, 32, ZELDA_GAME_SELECT_PALETTE
             )
-        self.internal.replace(
-            self.internal.address("ZELDA_GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
-            icon,
-        )
+        # After the stock data moves, in whatever room they leave.
+        if not self.place_int(ICON_SYMBOL, icon, "game-select DUAL BOOT icon"):
+            self.dual_boot_icon_ext = icon
 
     def _flash_roms(self):
         # English Zelda 1
@@ -696,6 +699,11 @@ class ZeldaGnW(Device, name="zelda"):
             data_end += round_up_word(len(blob))
         if self.xip_vermin:
             data_end += round_up_word(self.xip_vermin.write(data_end))
+        if self.dual_boot_icon_ext:
+            printi("Put the game-select DUAL BOOT icon in external flash.")
+            icon = self.dual_boot_icon_ext
+            self.place_ext(ICON_SYMBOL, data_end, icon, "game-select DUAL BOOT icon")
+            data_end += round_up_word(len(icon))
         # The first 4 copies are bl memcpy, the last a tail call.
         self.internal.bl(0xF7A2, "memcpy_inflate", expect="4:d2879707")
         self.internal.bl(0xF7B2, "memcpy_inflate", expect="4:1a5e1d0f")

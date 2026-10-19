@@ -43,7 +43,7 @@ import sys
 import numpy as np
 
 from .firmware import HeaderMetaData
-from .layout import Region
+from .layout import Region, backfill
 from .mario import MarioGnW
 from .utils import round_up_page, round_up_word
 from .zelda import ZeldaGnW
@@ -289,6 +289,7 @@ def patch(layout, zelda, mario):
     layout.patch_device(mario)
     if mario.args.sd_bootloader:
         check_sd_holes((zelda, mario))
+    backfill((zelda, mario))
     check_patcher_data((zelda, mario))
 
 
@@ -350,9 +351,12 @@ def merge_internal(region, devices):
     written = np.zeros(region.size, dtype=bool)
     for i, d in enumerate(devices):
         if d.relocates_in_amalgam:
-            # Its relocation copied this range out after any data put there.
+            # Its relocation copied this range out after any data put there,
+            # unless the data came after it (backfill).
             end = d.AMALGAM_RELOCATE_END - base
             mine = (owner[:end] == i) & ~shared[:end]
+            for start, size in d.backfilled:
+                mine[start : start + size] = False
             if mine.any():
                 raise AmalgamError(
                     f"{d.name} placed data over its own relocated stock code: "

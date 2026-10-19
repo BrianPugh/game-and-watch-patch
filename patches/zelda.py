@@ -360,7 +360,8 @@ class ZeldaGnW(Device, name="zelda"):
                 self.args.game_select_dual_boot_icon, 96, 32, ZELDA_GAME_SELECT_PALETTE
             )
         # After the stock data moves, in whatever room they leave.
-        if not self.place_int(ICON_SYMBOL, icon, "game-select DUAL BOOT icon"):
+        icon = lzma_compress(icon)
+        if not self.place_int(ICON_SYMBOL, icon, "game-select DUAL BOOT icon (LZMA)"):
             self.dual_boot_icon_ext = icon
 
     def _flash_roms(self):
@@ -702,7 +703,9 @@ class ZeldaGnW(Device, name="zelda"):
         if self.dual_boot_icon_ext:
             printi("Put the game-select DUAL BOOT icon in external flash.")
             icon = self.dual_boot_icon_ext
-            self.place_ext(ICON_SYMBOL, data_end, icon, "game-select DUAL BOOT icon")
+            self.place_ext(
+                ICON_SYMBOL, data_end, icon, "game-select DUAL BOOT icon (LZMA)"
+            )
             data_end += round_up_word(len(icon))
         # The first 4 copies are bl memcpy, the last a tail call.
         self.internal.bl(0xF7A2, "memcpy_inflate", expect="4:d2879707")

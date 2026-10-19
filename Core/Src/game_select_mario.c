@@ -37,24 +37,40 @@
 #define GAME_SELECT_ID_DUAL_BOOT 0x0100
 
 /**
- * Linear 4bpp (high nibble first) icon, wherever the patcher put it: internal
- * flash if it fits, else external flash. volatile, so reads aren't folded to
- * the NULL initializer.
+ * LZMA'd linear 4bpp (high nibble first) icon, wherever the patcher put it:
+ * internal flash if it fits, else external flash. volatile, so reads aren't
+ * folded to the NULL initializer.
  */
 const uint8_t * const volatile MARIO_GAME_SELECT_DUAL_BOOT_ICON = NULL;
+
+static uint8_t dual_boot_icon[ICON_W * ICON_H / 2];
+static bool dual_boot_icon_ready;
+
+/**
+ * The inflated icon; inflated on the first draw (the menu only draws while
+ * external flash is mapped). The stream ends with an end marker, so the
+ * input bound only has to be large enough.
+ */
+static const uint8_t *dual_boot_icon_pixels(void){
+    if(!dual_boot_icon_ready){
+        memcpy_inflate(dual_boot_icon, MARIO_GAME_SELECT_DUAL_BOOT_ICON, 2 * sizeof(dual_boot_icon));
+        dual_boot_icon_ready = true;
+    }
+    return dual_boot_icon;
+}
 
 typedef struct {
     uint16_t id;
     uint8_t tile;          // Stock iconset tile index, used if `icon` is NULL.
-    // Pointer to a linear 4bpp ICON_W x ICON_H image the patcher places.
-    const uint8_t * const volatile *icon;
+    // Returns a linear 4bpp ICON_W x ICON_H image.
+    const uint8_t *(*icon)(void);
 } game_select_entry_t;
 
 static const game_select_entry_t entries[] = {
     { GAME_SELECT_ID_SMB1, 0x41, NULL },
     { GAME_SELECT_ID_SMB2, 0x47, NULL },
     { GAME_SELECT_ID_BALL, 0x71, NULL },
-    { GAME_SELECT_ID_DUAL_BOOT, 0, &MARIO_GAME_SELECT_DUAL_BOOT_ICON },
+    { GAME_SELECT_ID_DUAL_BOOT, 0, dual_boot_icon_pixels },
 };
 
 #define N_STOCK_ENTRIES 3
@@ -110,7 +126,7 @@ void mario_game_select_draw(uint8_t *fb, ui_rect_t *rects, uint8_t color){
         const game_select_entry_t *entry = &entries[top + slot];
         uint8_t *dst = fb + (ICON_Y + slot * ICON_PITCH) * FB_WIDTH + ICON_X;
         if(entry->icon){
-            game_select_blit_icon(dst, *entry->icon, ICON_W, ICON_H, UI_PALETTE);
+            game_select_blit_icon(dst, entry->icon(), ICON_W, ICON_H, UI_PALETTE);
         }
         else{
             stock_mario_ui_blit_4bpp(dst, stock_mario_ui_tile_ptr(entry->tile), ICON_W, ICON_H, UI_PALETTE >> 4);

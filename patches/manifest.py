@@ -206,7 +206,7 @@ class DeviceImages:
                     INT_BASE + fs,
                     e - s,
                     INT_BASE + s,
-                    "freed stock code: udf, or data (layout.txt)",
+                    "freed stock code: udf, our code or data (layout.txt)",
                 )
             )
         return views, summaries
@@ -308,8 +308,8 @@ class DeviceImages:
                         return new
             if off >= d.internal.STOCK_ROM_END or d.is_freed_int(off):
                 return None
-            if d.relocation and d.relocation.moves(addr):
-                return addr + d.relocation.delta
+            if d.relocation:
+                return d.relocation.final(addr)
             return addr
         if EXT_BASE <= addr < EXT_BASE + len(d.external_stock):
             off = addr - EXT_BASE

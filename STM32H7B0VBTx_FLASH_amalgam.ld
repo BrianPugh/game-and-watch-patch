@@ -15,18 +15,22 @@
 
 ENTRY(Reset_Handler)
 
-INCLUDE build/device.ld
+/* Both from the -L path (build/, or build/pass1/ for the first of the 2
+ * --sd-bootloader links; scripts/device_from_patch_params.py). device.ld
+ * defines FLASH: all of bank 1, or with --sd-bootloader up to the SD
+ * bootloader, where our code ends (scripts/amalgam_sd.py). */
+INCLUDE device.ld
 
 MEMORY
 {
   MARIO_RAM (xrw) : ORIGIN = __MARIO_RAM_ORIGIN__, LENGTH = __MARIO_RAM_LENGTH__
   ZELDA_RAM (xrw) : ORIGIN = __ZELDA_RAM_ORIGIN__, LENGTH = __ZELDA_RAM_LENGTH__
-  FLASH     (xr ) : ORIGIN = 0x8000000,  LENGTH = 256K
 }
 
 SECTIONS
 {
-  INCLUDE STM32H7B0VBTx_FLASH_text.ld
+  /* STM32H7B0VBTx_FLASH_text.ld; with --sd-bootloader, where our code starts too */
+  INCLUDE amalgam_text.ld
 
   .shared_ram (NOLOAD) :
   {

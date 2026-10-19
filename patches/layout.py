@@ -31,9 +31,12 @@ class Allocation:
 class Region:
     """``size`` bytes at ``base``; new data goes at ``pos`` or in a hole.
 
-    ``pending`` holds callables returning the size of data that will be written
-    at ``pos`` later (the compressed rwdata and SRAM3 images), and ``slack`` is
-    held back on top of that; ``free_space`` leaves room for both.
+    ``pending`` holds callables returning the sizes of data that will be
+    written later (the compressed rwdata and SRAM3 images: an int, or a list
+    of separate blobs), and ``slack`` is held back on top of that. They're
+    written at ``pos``, so ``free_space`` leaves room for them, unless
+    ``pending_in_holes``: then they can go in holes too, and an allocation is
+    refused if the pending blobs would no longer fit (``pending_fits``).
     """
 
     def __init__(self, name, base, size, pos=0):
@@ -46,6 +49,7 @@ class Region:
         self.allocations = []
         self.pending = []
         self.slack = 0
+        self.pending_in_holes = False
 
     def __repr__(self):
         return f"Region({self.name!r}, 0x{self.base:08X}, 0x{self.size:X})"
@@ -58,10 +62,41 @@ class Region:
         ]
         return min(ahead, default=self.size)
 
+    def _pending_sizes(self, grow=None, extra=0):
+        """Every pending blob's size; the one ``grow`` returns ``extra`` larger."""
+        out = []
+        for p in self.pending:
+            n = p()
+            if p == grow:
+                n += extra
+            out += n if isinstance(n, list) else [n]
+        return [n for n in out if n]
+
     @property
     def free_space(self):
         """Bytes left at the cursor (holes not included)."""
-        return self.limit - self.pos - sum(p() for p in self.pending) - self.slack
+        if self.pending_in_holes:
+            return self.limit - self.pos
+        return self.limit - self.pos - sum(self._pending_sizes()) - self.slack
+
+    def pending_fits(self, grow=None, extra=0, holes=None, cursor=None):
+        """Whether the pending blobs still fit with the one ``grow`` (a pending
+        callable) ``extra`` bytes larger; in ``holes`` and ``cursor`` bytes at
+        the cursor (default: as they are now)."""
+        if not self.pending_in_holes:
+            return extra <= self.free_space
+        sizes = sorted(round_up_word(n) for n in self._pending_sizes(grow, extra))
+        if sizes:
+            # The fix-ups after packing can grow the largest.
+            sizes[-1] += self.slack
+        room = [e - s for s, e in (self.holes if holes is None else holes)]
+        room.append(self.limit - self.pos if cursor is None else cursor)
+        for n in reversed(sizes):
+            fits = [i for i, r in enumerate(room) if r >= n]
+            if not fits:
+                return False
+            room[min(fits, key=lambda i: room[i])] -= n
+        return True
 
     @property
     def used(self):
@@ -88,6 +123,10 @@ class Region:
 
     def alloc(self, size, owner, label=""):
         """Offset of ``size`` new bytes (word aligned)."""
+        if self.pending_in_holes:
+            offset = self._alloc_leaving_pending(round_up_word(size))
+            self.allocations.append(Allocation(offset, size, owner, label))
+            return offset
         offset = self._take_hole(round_up_word(size))
         if offset is None:
             if self.free_space < size:
@@ -98,6 +137,28 @@ class Region:
             self.pos += round_up_word(size)
         self.allocations.append(Allocation(offset, size, owner, label))
         return offset
+
+    def _alloc_leaving_pending(self, size):
+        """The smallest hole (or else the cursor) that takes ``size`` bytes and
+        leaves room for the pending blobs."""
+        holes = sorted(
+            (h for h in self.holes if h[1] - h[0] >= size), key=lambda h: h[1] - h[0]
+        )
+        for hole in holes:
+            rest = [h if h is not hole else (h[0] + size, h[1]) for h in self.holes]
+            if self.pending_fits(holes=rest):
+                offset = hole[0]
+                hole[0] += size
+                return offset
+        cursor = self.limit - self.pos - size
+        if cursor >= 0 and self.pending_fits(cursor=cursor):
+            offset = self.pos
+            self.pos += size
+            return offset
+        raise NotEnoughSpaceError(
+            f"{size} bytes don't fit in {self.name} beside the pending "
+            f"compressed images ({self.hole_space + self.limit - self.pos} free)"
+        )
 
     def append(self, size, owner, label=""):
         """Offset of ``size`` bytes already written at the cursor (unaligned)."""
@@ -130,17 +191,16 @@ class Region:
         other owner's allocation covers (the amalgam: Zelda's factory test
         lies under Mario's code)."""
         pieces = [[start, end]]
-        if owner is not None:
-            for a in self.allocations:
-                if a.owner == owner:
-                    continue
-                lo, hi = a.offset, a.offset + a.size
-                cut = []
-                for s, e in pieces:
-                    cut += [
-                        p for p in ([s, min(e, lo)], [max(s, hi), e]) if p[0] < p[1]
-                    ]
-                pieces = cut
+        taken = [
+            (a.offset, a.offset + a.size)
+            for a in self.allocations
+            if owner is not None and a.owner != owner
+        ]
+        for lo, hi in taken:
+            cut = []
+            for s, e in pieces:
+                cut += [p for p in ([s, min(e, lo)], [max(s, hi), e]) if p[0] < p[1]]
+            pieces = cut
         self.holes += pieces
 
     def map_lines(self):
@@ -276,6 +336,7 @@ class Layout:
         """Patch every device."""
         for device in self.devices:
             self.patch_device(device)
+        backfill(self.devices)
 
     def patch_device(self, device):
         device()
@@ -295,3 +356,12 @@ class Layout:
             )
             out += r.map_lines()
         return out
+
+
+def backfill(devices):
+    """Move data ``place_ext`` put in external flash into the internal flash
+    left once every device is placed (holes a later device freed, room held
+    for compressed images that came out smaller), largest first."""
+    items = [(d, item) for d in devices for item in d.ext_placed]
+    for d, item in sorted(items, key=lambda x: -len(x[1][1])):
+        d.backfill(item)

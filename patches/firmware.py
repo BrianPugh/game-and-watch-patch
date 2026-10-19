@@ -317,26 +317,36 @@ class RWData:
         assert len(self.datas) == len(self.dsts)
 
     @property
-    def compressed_len(self):
-        compressed_len = 0
+    def compressed_lens(self):
+        """Each block's compressed length."""
+        out = []
         for data in self.datas:
             data = bytes(data)
             if data not in self.__compressed_len_memo:
                 compressed_data = lzma_compress(bytes(data))
                 self.__compressed_len_memo[data] = len(compressed_data)
-            compressed_len += self.__compressed_len_memo[data]
-        return compressed_len
+            out.append(self.__compressed_len_memo[data])
+        return out
 
-    def write_table_and_data(self, end_of_table_reference, data_offset=None):
+    def write_table_and_data(
+        self, end_of_table_reference, data_offset=None, alloc=None
+    ):
         with writelog.step("rwdata table: rwdata_inflate's compressed RAM images"):
-            return self._write_table_and_data(end_of_table_reference, data_offset)
+            return self._write_table_and_data(
+                end_of_table_reference, data_offset, alloc
+            )
 
-    def _write_table_and_data(self, end_of_table_reference, data_offset=None):
+    def _write_table_and_data(
+        self, end_of_table_reference, data_offset=None, alloc=None
+    ):
         """
         Parameters
         ----------
         data_offset : int
             Where to write the compressed data
+        alloc : callable
+            Instead of ``data_offset``: returns where each block goes, given
+            its compressed length.
         """
 
         # Write Compressed Data
@@ -349,6 +359,8 @@ class RWData:
         total_len = 0
         for data in self.datas:
             compressed_data = lzma_compress(bytes(data))
+            if alloc is not None:
+                index = alloc(len(compressed_data))
             print(
                 f"    compressed {len(data)}->{len(compressed_data)} bytes "
                 f"(saves {len(data)-len(compressed_data)}). "
@@ -571,6 +583,13 @@ class Device:
         # Internal offsets of words the patcher filled with internal addresses
         # (no ELF relocation covers them).
         self.int_pointers = []
+        # [symbol, data, label, ext offset] of data place_ext() put in
+        # external flash; backfill() retries internal flash once every
+        # device is placed.
+        self.ext_placed = []
+        # (internal offset, size) of what backfill() moved inside, after the
+        # stock code relocation.
+        self.backfilled = []
         # patches.relocate.Relocation when stock code is moved; bank2 (the
         # Layout's) holds it.
         self.relocation = None
@@ -648,10 +667,12 @@ class Device:
 
         base = self.internal.FLASH_BASE
         refs = {r["src"]: r for r in ext_refs(self.stock_map)}
+        # Our code's pointers are kept apart from the stock references.
+        ours = {}
         for off, value, lo, hi in self.expected_refs:
             src = base + off
             if off >= self.internal.STOCK_ROM_END:
-                refs[src] = {"kind": "our pointer", "src": src, "target": value}
+                ours[src] = {"kind": "our pointer", "src": src, "target": value}
                 continue
             r = refs.get(src)
             if (
@@ -666,11 +687,13 @@ class Device:
 
         with writelog.step("Repoint references into moved external data"):
             counts = self._fix_ext_refs(refs)
+            for kind, n in self._fix_ext_refs(ours, ours=True).items():
+                counts[kind] = counts.get(kind, 0) + n
         self.ext_refs_fixed = True
         printd(f"Fixed references into moved external data: {counts}")
         return counts
 
-    def _fix_ext_refs(self, refs):
+    def _fix_ext_refs(self, refs, ours=False):
         counts = {}
         for src, r in sorted(refs.items()):
             kind, target = r["kind"], r["target"]
@@ -682,7 +705,10 @@ class Device:
                     f"{kind} at 0x{src:08X} points into moved data (0x{target:08X}); "
                     f"classify it in patches/xrefs.py LAYOUT"
                 )
-            buf, off = self._ref_site(src)
+            if ours:
+                buf, off = self.internal, src - self.internal.FLASH_BASE
+            else:
+                buf, off = self._ref_site(src)
             if buf is None:
                 continue
             cur = int.from_bytes(buf[off : off + 4], "little")
@@ -789,7 +815,7 @@ class Device:
         # The compressed images are written at the cursor last.
         self.pending = [self.compressed_memory_compressed_len]
         if self.internal.rwdata is not None:
-            self.pending.append(lambda: self.internal.rwdata.compressed_len)
+            self.pending.append(lambda: self.internal.rwdata.compressed_lens)
         int_space.pending += self.pending
         int_space.slack = self.COMPRESSED_FIXUP_SLACK
         self.sram3_space = Region(
@@ -852,18 +878,51 @@ class Device:
         """
         start, end = round_up_word(start), round_down_word(end)
         self.freed_int.append((start, end))
+        udf = b"\xfe\xde" * ((end - start) // 2)
+        r = self.relocation
+        base = self.internal.FLASH_BASE
+        if r and r.compacts(base + start):
+            # The compaction closes the gap; the room shows up past the moved
+            # code (Relocation.finalize).
+            r.add_hole(base + start, base + end)
+            self.internal[start:end] = udf
+            printd(f"Freed internal 0x{start:X}-0x{end:X} ({end - start} bytes).")
+            return
         # Stock code moved within this image leaves its holes at the new place.
-        shift = self.relocation.int_delta(start) if self.relocation else 0
+        shift = r.int_delta(start) if r else 0
         for s in {0, shift}:
-            self.internal[start + s : end + s] = b"\xfe\xde" * ((end - start) // 2)
+            self.internal[start + s : end + s] = udf
         self.int_space.free(start + shift, end + shift, self.name)
         printd(f"Freed internal 0x{start:X}-0x{end:X} ({end - start} bytes).")
 
+    def write_rwdata(self, end_of_table_reference):
+        """Compress, insert, and reference the modified rwdata: at the cursor,
+        or each block in a hole (``Region.pending_in_holes``)."""
+        space = self.int_space
+        if not space.pending_in_holes:
+            rwdata_len = self.internal.rwdata.write_table_and_data(
+                end_of_table_reference, data_offset=space.pos
+            )
+            space.append(rwdata_len, self.name, "rwdata (LZMA)")
+            return
+        # Placed now, so no longer pending.
+        for p in self.pending:
+            space.pending.remove(p)
+        self.pending = []
+        self.internal.rwdata.write_table_and_data(
+            end_of_table_reference,
+            alloc=lambda n: space.alloc(n, self.name, "rwdata (LZMA)"),
+        )
+
     def freed_int_ranges(self):
-        """Every freed range where it is in the final image."""
+        """Every freed range where it is in the final image (a compacting
+        relocation leaves out the ones in its range)."""
         out = []
+        r = self.relocation
         for start, end in self.freed_int:
-            shift = self.relocation.int_delta(start) if self.relocation else 0
+            if r and r.compacts(self.internal.FLASH_BASE + start):
+                continue
+            shift = r.int_delta(start) if r else 0
             out.append((start + shift, end + shift))
         return out
 
@@ -917,6 +976,52 @@ class Device:
             )
             return self.move_ext_external(ext, size, reference)
 
+    def place_int(self, symbol, data, label, quiet=False):
+        """Put ``data`` in internal flash and point our pointer ``symbol`` at
+        it. False if it doesn't fit; the caller then uses ``place_ext`` once
+        external offsets are final. Allocations are at their final address,
+        so the pointer isn't one ``Relocation`` fixes (``int_pointers``)."""
+        try:
+            offset = self.int_space.alloc(len(data), self.name, label)
+        except NotEnoughSpaceError:
+            if not quiet:
+                print(
+                    f"        {Fore.RED}Not Enough Internal space. Using external flash{Style.RESET_ALL}"
+                )
+            return False
+        self.internal[offset : offset + len(data)] = data
+        self._point(symbol, self.internal.FLASH_BASE + offset)
+        return True
+
+    def place_ext(self, symbol, offset, data, label):
+        """Write ``data`` at its final external ``offset`` and point our
+        pointer ``symbol`` at it; ``backfill`` may still move it inside."""
+        self.external[offset : offset + len(data)] = data
+        self.ext_space.note(offset, len(data), self.name, label)
+        self._point(symbol, self.external.FLASH_BASE + offset)
+        self.ext_placed.append([symbol, data, label, offset])
+
+    def backfill(self, item):
+        """Move a ``place_ext`` item into internal flash if it fits now. Its
+        external copy stays (the data after it is placed), unused."""
+        symbol, data, label, offset = item
+        with writelog.step(f"Move the {label} into internal flash"):
+            if not self.place_int(symbol, data, label, quiet=True):
+                return False
+        a = self.int_space.allocations[-1]
+        self.backfilled.append((a.offset, a.size))
+        self.ext_placed.remove(item)
+        for a in self.ext_space.allocations:
+            if a.offset == offset and a.label == label:
+                a.label += " (unused: moved to internal flash)"
+        printi(f"Moved the {label} into internal flash.")
+        return True
+
+    def _point(self, symbol, addr):
+        self.internal.replace(
+            self.internal.address(symbol, sub_base=True), addr, size=4
+        )
+
     def move_to_compressed_memory(self, ext, size, reference):
         """Attempt to relocate in priority order:
         1. compressed_memory
@@ -944,7 +1049,7 @@ class Device:
             f"    {Fore.YELLOW}compression_ratio: {compression_ratio}{Style.RESET_ALL}"
         )
 
-        if diff > self.int_space.free_space:
+        if not self.int_space.pending_fits(self.compressed_memory_compressed_len, diff):
             print(
                 f"        {Fore.RED}not putting into free memory due not enough free "
                 f"internal storage for compressed data.{Style.RESET_ALL}"

@@ -13,13 +13,14 @@ import pytest
 from elftools.elf.elffile import ELFFile
 from test_golden import _copy_tree, _toolchain
 
+from patches.amalgam import SD_BOOTLOADER, ZELDA_DST
+from scripts.amalgam_sd import SLACK
 from scripts.device_from_patch_params import RAM
 
 FLAGS = "--device=amalgam --game-select-dual-boot --smb1-graphics --triple-boot"
 
 
-@pytest.fixture(scope="module")
-def elf(tmp_path_factory):
+def _build_elf(tmp_path_factory, flags):
     if _toolchain() is None:
         pytest.skip("arm-none-eabi-gcc not found")
     tree = tmp_path_factory.mktemp("amalgam") / "tree"
@@ -29,7 +30,7 @@ def elf(tmp_path_factory):
             "make",
             "-j8",
             f"PYTHON={sys.executable}",
-            f"PATCH_PARAMS={FLAGS}",
+            f"PATCH_PARAMS={flags}",
             "build/gw_patch.elf",
         ],
         cwd=tree,
@@ -43,7 +44,19 @@ def elf(tmp_path_factory):
         symtab = e.get_section_by_name(".symtab")
         syms = {s.name: s for s in symtab.iter_symbols() if s.name}
         sections = {s.name: (s["sh_addr"], s["sh_size"]) for s in e.iter_sections()}
-        yield syms, sections
+    return syms, sections
+
+
+@pytest.fixture(scope="module")
+def elf(tmp_path_factory):
+    return _build_elf(tmp_path_factory, FLAGS)
+
+
+@pytest.fixture(scope="module")
+def sd_elf(tmp_path_factory):
+    return _build_elf(
+        tmp_path_factory, "--device=amalgam --sd-bootloader --smb1-graphics"
+    )
 
 
 def _in(model, addr, size=0):
@@ -81,3 +94,15 @@ def test_stock_symbols(elf):
     assert syms["stock_mario_read_buttons"]["st_value"] == 0x0801_0D49
     assert syms["stock_zelda_read_buttons"]["st_value"] == 0x0801_6809
     assert "stock_read_buttons" not in syms
+
+
+def test_sd_bootloader_code_ends_there(sd_elf):
+    """With --sd-bootloader, our code is one block past Zelda's code that ends
+    by the SD bootloader (scripts/amalgam_sd.py sizes it from the first link)."""
+    syms, sections = sd_elf
+    start = syms["__our_code__"]["st_value"]
+    end = syms["__flash_end__"]["st_value"]
+    assert ZELDA_DST < start < end <= SD_BOOTLOADER
+    assert SD_BOOTLOADER - end < SLACK + 16
+    addr, size = sections[".fill"]
+    assert addr + size == SD_BOOTLOADER

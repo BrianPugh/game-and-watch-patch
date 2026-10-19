@@ -105,6 +105,8 @@ OVERLAY_START, OVERLAY_END = 0x30_B4A0, 0x31_7230
 # Vermin's code: its API (called from main_loop_tick and app_load), game,
 # sound and high-score save.
 VERMIN_UNIT = (0x0801_4938, 0x0801_6268)
+# Our pointer to the game-select DUAL BOOT icon (game_select_zelda.c).
+ICON_SYMBOL = "ZELDA_GAME_SELECT_DUAL_BOOT_ICON"
 # The last copy is the menu UI, linked at ITCM 0x9C7C. ITCM past its end is
 # never loaded, so veneers from ITCM to our code are appended to it.
 ITCM_MENU, ITCM_MENU_SRC, ITCM_MENU_SIZE = 0x9C7C, 0x31_56EC, 0x1B44
@@ -121,6 +123,8 @@ class ZeldaGnW(Device, name="zelda"):
     AMALGAM_RELOCATE_END = 0x0801_68D8
     AMALGAM_KEPT_START = 0x0801_8154
     xip_vermin = None
+    # The game-select DUAL BOOT icon if internal flash had no room.
+    dual_boot_icon_ext = None
 
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "ac14bcea6e4ff68c88fd2302c021025a2fb47940"
@@ -355,10 +359,10 @@ class ZeldaGnW(Device, name="zelda"):
             icon = png_to_icon_4bpp(
                 self.args.game_select_dual_boot_icon, 96, 32, ZELDA_GAME_SELECT_PALETTE
             )
-        self.internal.replace(
-            self.internal.address("ZELDA_GAME_SELECT_DUAL_BOOT_ICON", sub_base=True),
-            icon,
-        )
+        # After the stock data moves, in whatever room they leave.
+        icon = lzma_compress(icon)
+        if not self.place_int(ICON_SYMBOL, icon, "game-select DUAL BOOT icon (LZMA)"):
+            self.dual_boot_icon_ext = icon
 
     def _flash_roms(self):
         # English Zelda 1
@@ -619,7 +623,8 @@ class ZeldaGnW(Device, name="zelda"):
         timer, timer_end = 0xD_0000, 0xD_2000
         compressed_len = self.external.compress(timer, timer_end - timer)
         self.internal.asm(0xF430, b_w_memcpy_inflate_asm, expect="4:625bb93e")
-        self.move_to_int(timer, compressed_len, 0xFCF8)
+        # External flash if internal is full (the amalgam with --sd-bootloader).
+        self.move_ext(timer, compressed_len, 0xFCF8)
         self.ext_space.drop(timer, timer_end)
 
         if self.args.no_la:
@@ -695,6 +700,13 @@ class ZeldaGnW(Device, name="zelda"):
             data_end += round_up_word(len(blob))
         if self.xip_vermin:
             data_end += round_up_word(self.xip_vermin.write(data_end))
+        if self.dual_boot_icon_ext:
+            printi("Put the game-select DUAL BOOT icon in external flash.")
+            icon = self.dual_boot_icon_ext
+            self.place_ext(
+                ICON_SYMBOL, data_end, icon, "game-select DUAL BOOT icon (LZMA)"
+            )
+            data_end += round_up_word(len(icon))
         # The first 4 copies are bl memcpy, the last a tail call.
         self.internal.bl(0xF7A2, "memcpy_inflate", expect="4:d2879707")
         self.internal.bl(0xF7B2, "memcpy_inflate", expect="4:1a5e1d0f")
@@ -773,6 +785,8 @@ class ZeldaGnW(Device, name="zelda"):
                 self.AMALGAM_RELOCATE_END if self.amalgam else self.STOCK_RELOCATE_END,
                 self.args.relocate_stock,
                 keep_vector_table=not self.amalgam,
+                # The stock code freed below closes up, leaving one block.
+                compact=self.amalgam,
             )
 
         self._dump_roms()
@@ -897,6 +911,10 @@ class ZeldaGnW(Device, name="zelda"):
             printi("Run Vermin from external flash.")
             self.xip_vermin = XipUnit(self, *VERMIN_UNIT, "Vermin code (XIP)")
 
+        if self.relocation:
+            # Nothing in its range is freed past here.
+            self.relocation.finalize(self.internal.address("__our_code__"))
+
         self._compact_ext()
 
         self.fix_ext_refs()
@@ -908,8 +926,4 @@ class ZeldaGnW(Device, name="zelda"):
 
         self._finish_ext()
 
-        # Compress, insert, and reference the modified rwdata
-        rwdata_len = self.internal.rwdata.write_table_and_data(
-            0x1B070, data_offset=self.int_space.pos
-        )
-        self.int_space.append(rwdata_len, self.name, "rwdata (LZMA)")
+        self.write_rwdata(0x1B070)

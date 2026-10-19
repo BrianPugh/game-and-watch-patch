@@ -269,6 +269,9 @@ def main_amalgam(parser, args):
     internal = amalgam.merge_internal(bank1, [zelda, mario])
     external = amalgam.merge_external(zelda, mario)
     amalgam.metadata(internal, external)
+    if args.sd_bootloader:
+        # Flashing it leaves the SD bootloader alone.
+        del internal[amalgam.SD_BOOTLOADER - amalgam.BASE :]
     images = [
         manifest.DeviceImages(device, internal, None, external)
         for device in (zelda, mario)

@@ -8,6 +8,7 @@
   {
     . = __STOCK_ROM_END__;
     . = ALIGN(4);
+    __our_code__ = .;  /* start of our code (the amalgam compacts Zelda's code up to it) */
     *(.text)           /* .text sections (code) */
     *(.text*)          /* .text* sections (code) */
     *(.glue_7)         /* glue arm to thumb code */

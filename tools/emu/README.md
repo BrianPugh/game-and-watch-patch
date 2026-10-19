@@ -177,7 +177,7 @@ build/gwprov-venv/bin/python tools/emu/shift_test.py --gwemu-bin /path/to/gwemu 
 ```
 
 `zelda_menu_test.py --amalgam` boots Mario, picks its ZELDA entry, runs the
-Zelda checks on the firmware it resets into (Zelda's code below its factory test at `+0x1B400`), and
+Zelda checks on the firmware it resets into (Zelda's code below its factory test moves up and closes its freed gaps, so the harness finds its poll address in `build/patched.elf`), and
 ends with Zelda's MARIO row resetting back into Mario. The selection lives in
 TAMP backup register 31, which GWemu clears on reset; the harness checks the
 value written before the reset and writes it back when the bootloader starts.

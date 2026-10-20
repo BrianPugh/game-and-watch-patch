@@ -10,7 +10,7 @@ This repo contains custom code as well as a patching utility to add additional f
 # Features
 * Works correctly with [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) in internal flash bank 2.
 * Press button combination (`LEFT` + `GAME`) to launch retro-go from internal flash bank 2.
-* Run `make help` to see all configuration options.
+* See [Configuration](#configuration) for every option and the recommended setups.
 
 ### Mario (`PATCH_PARAMS="--device=mario"`)
 * Ability to store the entire firmware in internal flash! No external flash required!
@@ -33,6 +33,9 @@ This repo contains custom code as well as a patching utility to add additional f
 * External flash savings to come in the future.
 * See [the zelda document for more information](docs/zelda.md).
 
+### Mario + Zelda (`PATCH_PARAMS="--device=amalgam"`)
+* Both stock firmwares in one internal bank, on either unit (with enough external flash). Each GAME menu has an entry that switches to the other firmware, and the choice survives power-off.
+
 # Usage
 This repo uses the [gnwmanager cli tool](https://github.com/BrianPugh/gnwmanager/blob/main/tutorials/installation.md). See it's instructions on how to install.
 
@@ -50,7 +53,7 @@ directory of this project.
 
 See the appropriate section below for your device model.
 
-For additional configuration options, run `make help`.
+For every option and the recommended setups, see [Configuration](#configuration).
 
 
 ### Retro Go (Mario)
@@ -82,6 +85,81 @@ make clean
 # so retro-go can start anywhere after that; 4MB is a round number that leaves room.
 make -j8 EXTFLASH_SIZE_MB=60 EXTFLASH_OFFSET=4194304 INTFLASH_BANK=2 flash
 ```
+
+## Configuration
+Options go in `PATCH_PARAMS`, e.g. `make PATCH_PARAMS="--device=zelda --no-factory-test" flash`.
+
+### Recommended configurations
+
+| Setup | `PATCH_PARAMS` | Notes |
+|---|---|---|
+| Mario + retro-go in bank 2 | `--device=mario --internal-only` | Uses no external flash, so retro-go gets all of it. Drops the mario song, sleep images, factory test and saves. |
+| Mario + retro-go-sd | `--device=mario --internal-only --sd-bootloader` | Same, plus LEFT+GAME boots Sylverb's SD bootloader, which `make flash` also writes. Also drops SMB2 to make room. |
+| Zelda + retro-go in bank 2 | `--device=zelda --no-factory-test` | Uses about 2.9 MB of external flash. With the stock 4 MB chip, see [docs/zelda.md](docs/zelda.md). |
+| Zelda + retro-go-sd | `--device=zelda --no-factory-test --sd-bootloader` | |
+| Mario and Zelda on one unit | `--device=amalgam` | Both firmwares in internal bank 1; switch between them from either GAME menu. Uses about 3.7 MB of external flash. |
+| Mario and Zelda + retro-go-sd | `--device=amalgam --sd-bootloader` | |
+
+`--no-factory-test` also skips the 2 s button-combo wait at power-on, so the screen comes on right away. `--internal-only` and `--device=amalgam` include it.
+
+### Options for every device
+
+| Option | Effect |
+|---|---|
+| `--device={mario,zelda,amalgam}` | Which firmware to patch. `amalgam` puts both in one 256 KB image. |
+| `--extended` | Build a 256 KB internal image instead of 128 KB (uses the undocumented upper half of bank 1). |
+| `--sd-bootloader` | LEFT+GAME boots `0x08032000` (Sylverb's SD bootloader) instead of bank 2. `make flash` also writes that bootloader. |
+| `--triple-boot` | RIGHT+GAME boots `0x08020000`. |
+| `--encrypt` | Encrypt the external image with OTFDEC, like stock. |
+| `--compression-ratio=N` | Data only goes to compressed SRAM3 if it compresses better than N (default 1.4); otherwise internal flash, then external. |
+| `--show` | Show a picture of the patched external image. |
+| `--debug` | Install fault handlers that help debugging. |
+
+### Mario options
+
+| Option | Effect |
+|---|---|
+| `--internal-only` | Use no external flash. Implies `--slim --extended --no-save` (and `--no-smb2` with `--sd-bootloader`). |
+| `--slim` | `--no-mario-song --no-sleep-images --no-factory-test`. |
+| `--clock-only` | `--slim` and `--no-smb2`, and GAME alone launches the dual-boot target. |
+| `--no-mario-song` | Remove the mario song easter egg (~540 KB of external data). |
+| `--no-sleep-images` | Remove the 5 sleep images. |
+| `--no-factory-test` | Remove the factory CHARGE AND KEY TEST screen and the 2 s wait at power-on. |
+| `--no-smb2` | Remove the SMB2 ROM. |
+| `--no-save` | Don't keep saves in external flash (8 KB). High scores and brightness/volume won't survive launching homebrew. |
+| `--xip-minigame` | Run BALL's code from external flash (frees ~4.5 KB of internal flash). |
+| `--sleep-time=S` | Sleep after S seconds idle (1 to 1092). |
+| `--disable-sleep` | Never sleep. |
+| `--sleep-on-usb` | Allow sleeping on USB power (stock never does). |
+| `--hard-reset-time=S` | Hold the power button S seconds for a hard reset. |
+| `--mario-song-time=S` | Hold A S seconds on the clock to start the mario song. |
+| `--smb1=FILE` | Replace the SMB1 ROM (e.g. a ROM hack). |
+| `--smb1-graphics FILE...` | Up to 8 IPS ROM hacks whose graphics the clock can use (DOWN on the clock cycles them). |
+| `--smb1-graphics-glob` | Use every IPS file in `ips/` for `--smb1-graphics`. |
+| `--clock-tileset=PNG` | Replace the clock tileset (256x256). |
+| `--clock-tileset-index=PNG` | Accepted, but currently has no effect. |
+| `--game-select-dual-boot` | Add a GAME menu entry that boots the dual-boot target (shown only if one is flashed). |
+| `--game-select-dual-boot-icon=PNG` | 96x48 icon for that entry (default: a retro-go logo). |
+| `--game-select-dual-boot-label=TEXT` | Draw TEXT on the entry instead of an icon. |
+| `--relocate-stock=ADDR` | Run the stock code from ADDR. For testing stock-code relocation; see `tools/emu/README.md`. |
+
+### Zelda options
+
+| Option | Effect |
+|---|---|
+| `--no-factory-test` | Remove the factory CHARGE AND KEY TEST screens and the 2 s wait at power-on. |
+| `--no-la` | Remove Link's Awakening (all languages) and its GAME menu row. |
+| `--no-sleep-images` | Remove the 11 backdrop images (sleep and first-boot screens). |
+| `--no-hour-tune` | Remove the hour tune in TIME/CLOCK. |
+| `--xip-minigame` | Run Vermin's code from external flash (frees ~6 KB of internal flash). |
+| `--loz1=FILE`, `--loz1j=FILE`, `--loz2=FILE` | Replace the LoZ1, Japanese LoZ1 (FDS) or LoZ2 ROM. |
+| `--game-select-dual-boot` | Add a GAME menu row that boots the dual-boot target (shown only if one is flashed). |
+| `--game-select-dual-boot-icon=PNG` | 96x32 icon for that row (default: a retro-go logo). |
+| `--game-select-dual-boot-label=TEXT` | Draw TEXT on the row instead of an icon. |
+| `--relocate-stock=ADDR` | Run the stock code from ADDR. For testing stock-code relocation; see `tools/emu/README.md`. |
+
+### Amalgam (`--device=amalgam`)
+Takes both devices' options; one both understand (e.g. `--no-sleep-images`) applies to both. It always uses `--extended`, `--no-factory-test` and `--game-select-dual-boot` (an entry labeled with the other firmware that switches to it; holding GAME at boot returns to Mario), and `--sd-bootloader` adds `--xip-minigame`. It rejects `--encrypt`, `--triple-boot`, `--relocate-stock` and `--internal-only`. LEFT+GAME still boots the dual-boot target.
 ## Build and flash using Docker
 
 <details>

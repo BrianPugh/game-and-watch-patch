@@ -378,11 +378,13 @@ flash_stock_notify: flash_stock notify
 .PHONY: flash_stock_notify
 
 help:
-	@$(PYTHON) patch.py --help
+	@$(PYTHON) patch.py $(PATCH_PARAMS) --help
 	@echo ""
 	@echo "Commandline arguments:"
 	@echo "    PATCH_PARAMS - Options to pass to the python patching utility."
 	@echo "                   Most options go here and will start with two dashes."
+	@echo "                   The options above are --device's (default mario):"
+	@echo "                   make PATCH_PARAMS=\"--device=zelda\" help"
 	@echo ""
 	@echo "Example:"
 	@echo "    make PATCH_PARAMS=\"--sleep-time=120 --slim\" flash_patched_ext"

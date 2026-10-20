@@ -40,7 +40,6 @@ The compressed RAM images go into holes, a block each
 """
 
 import copy
-import sys
 
 import numpy as np
 
@@ -77,11 +76,6 @@ def configure(zelda, mario, parser):
     defaults (the 2 share some option names, e.g. --game-select-dual-boot-icon
     with different default icons). An option either device knows is fine.
     Returns the global options."""
-    if {"-h", "--help"} & set(sys.argv[1:]):
-        parser.conflict_handler = "resolve"
-        zelda.add_arguments(parser)
-        mario.add_arguments(parser)
-        parser.parse_args()  # Prints the help and exits.
     unknown = None
     for device in (zelda, mario):
         p = copy.deepcopy(parser)

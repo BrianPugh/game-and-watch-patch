@@ -34,7 +34,7 @@ Key environment variables:
 - `GCC_PATH` - Override arm-none-eabi-gcc toolchain path
 - `PYTHON` - Override Python binary (default: `python3`)
 
-Notable `PATCH_PARAMS` flags: `--device`, `--extended`, `--internal-only`, `--encrypt`, `--triple-boot`, `--sd-bootloader`, `--clock-only`, `--smb1-graphics`, `--debug`, `--show`. `patch.py --help` (and `make help`) lists only the shared options, since each device adds its own after parsing; README's Configuration section has every device's.
+Notable `PATCH_PARAMS` flags: `--device`, `--extended`, `--internal-only`, `--encrypt`, `--triple-boot`, `--sd-bootloader`, `--clock-only`, `--smb1-graphics`, `--debug`, `--show`. `patch.py --device=X --help` (and `make PATCH_PARAMS=--device=X help`) lists that device's options too (both models' for the amalgam; `Device.add_arguments` is a classmethod, so help needs no backups); README's Configuration section has every device's.
 
 ## Linting and Testing
 

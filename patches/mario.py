@@ -82,7 +82,8 @@ class MarioGnW(Device, name="mario"):
         FLASH_BASE = 0x240F2124
         FLASH_LEN = 0x24100000 - FLASH_BASE
 
-    def add_arguments(self, parser):
+    @classmethod
+    def add_arguments(cls, parser):
         group = parser.add_argument_group("Timeout patches")
 
         mgroup = group.add_mutually_exclusive_group()
@@ -159,15 +160,8 @@ class MarioGnW(Device, name="mario"):
             help='Add all IPS files from the "ips/" folder',
         )
 
-        mgroup = group.add_mutually_exclusive_group()
-        mgroup.add_argument(
+        group.add_argument(
             "--clock-tileset",
-            type=Path,
-            default=None,
-            help="Override the clock tileset",
-        )
-        mgroup.add_argument(
-            "--clock-tileset-index",
             type=Path,
             default=None,
             help="Override the clock tileset",

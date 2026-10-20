@@ -143,7 +143,8 @@ class ZeldaGnW(Device, name="zelda"):
         FLASH_BASE = 0x240F2124
         FLASH_LEN = 0  # 0x24100000 - FLASH_BASE
 
-    def add_arguments(self, parser):
+    @classmethod
+    def add_arguments(cls, parser):
         group = parser.add_argument_group("Low level flash savings flags")
         group.add_argument(
             "--no-la",

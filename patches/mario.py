@@ -2,9 +2,7 @@ from pathlib import Path
 
 from PIL import Image
 
-import patches
-
-from . import writelog
+from . import ips, writelog
 from .compression import lzma_compress
 from .exception import BadImageError, InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
@@ -29,7 +27,6 @@ from .xip import XipUnit
 # BALL's code: its API (called from main_loop_tick), game, sound and save.
 # Its static constructor (zeroes 3 halfwords of ball_ctx) stays internal.
 BALL_UNIT = (0x0800_3350, 0x0800_45D2)
-build_dir = Path("build")  # TODO: expose this properly or put in better location
 
 
 def _is_immediate(value):
@@ -143,7 +140,6 @@ class MarioGnW(Device, name="mario"):
         group.add_argument(
             "--smb1",
             type=Path,
-            default="build/smb1.nes",
             help="Override SMB1 ROM with your own file.",
         )
         mgroup = group.add_mutually_exclusive_group()
@@ -477,9 +473,9 @@ class MarioGnW(Device, name="mario"):
         palette = self.external[palette_addr : palette_addr + 320]
         tileset_bytes = self.external[tileset_addr : tileset_addr + tileset_size]
         tileset = bytes_to_tilemap(tileset_bytes, palette=palette)
-        tileset.save(build_dir / "tileset.png")
+        tileset.save(self.args.dump_dir / "tileset.png")
         tileset_index = bytes_to_tilemap(tileset_bytes)
-        tileset_index.save(build_dir / "tileset_index.png")
+        tileset_index.save(self.args.dump_dir / "tileset_index.png")
 
         # Override tileset
         if self.args.clock_tileset:
@@ -506,7 +502,7 @@ class MarioGnW(Device, name="mario"):
             palette=palette,
             bpp=4,
         )
-        iconset.save(build_dir / "iconset.png")
+        iconset.save(self.args.dump_dir / "iconset.png")
 
         # Override iconset
         # with Image.open(self.args.iconset) as iconset:
@@ -528,7 +524,7 @@ class MarioGnW(Device, name="mario"):
         #    width=128,
         #    bpp=2,
         # )
-        # ball_logo.save(build_dir / "ball_logo.png")
+        # ball_logo.save(self.args.dump_dir / "ball_logo.png")
 
         if self.args.smb1_graphics:
             printi("Intercept prepare_clock_rom")
@@ -551,7 +547,7 @@ class MarioGnW(Device, name="mario"):
                     loc += self.internal.FLASH_BASE
                 elif file_path.suffix.lower() == ".ips":
                     patch = file_path.read_bytes()
-                    patch = patches.ips.strip_header(patch)
+                    patch = ips.strip_header(patch)
                     loc = self.move_to_int(patch, len(patch), None)
                     loc += self.internal.FLASH_BASE
                 else:
@@ -590,11 +586,15 @@ class MarioGnW(Device, name="mario"):
         printi("Compressing and moving SMB1 ROM to compressed_memory.")
         smb1_addr, smb1_size = 0x1E60, 40960
         # Adding the header for patching convenience.
-        (build_dir / "smb1.nes").write_bytes(
+        (self.args.dump_dir / "smb1.nes").write_bytes(
             b"NES\x1a\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00"
             + self.external[smb1_addr : smb1_addr + smb1_size]
         )
-        smb1 = self.args.smb1.read_bytes()
+        smb1 = (
+            self.args.smb1.read_bytes()
+            if self.args.smb1
+            else bytes(self.external[smb1_addr : smb1_addr + smb1_size])
+        )
         if len(smb1) == 40976:
             # Remove the NES header
             smb1 = smb1[16:]
@@ -748,7 +748,7 @@ class MarioGnW(Device, name="mario"):
         smb2_end = smb2_addr + smb2_size
         smb2 = self.external[smb2_addr:smb2_end].copy()
         smb2 = fds_remove_crc_gaps(smb2)
-        (build_dir / "smb2.fds").write_bytes(smb2)
+        (self.args.dump_dir / "smb2.fds").write_bytes(smb2)
 
         if self.args.no_smb2:
             printe("Erasing SMB2 ROM")
@@ -864,7 +864,7 @@ class MarioGnW(Device, name="mario"):
             ("minions_sleeping", 0xE_C318),
         ]:
             img, _ = decode_backdrop(self.external[index:])
-            img.save(build_dir / f"backdrop_{name}.png")
+            img.save(self.args.dump_dir / f"backdrop_{name}.png")
 
         # The stock GIF decoder's only caller is the tail call at 0x10938, which
         # is either hooked below or unreachable once the images are deleted.

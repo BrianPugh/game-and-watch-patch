@@ -46,7 +46,7 @@ pre-commit run --all-files
 .venv/bin/python -m pytest tests/
 ```
 
-`tests/test_golden.py` builds 9 flag sets (C + patch) in copies of the working tree and compares output SHA1s with `tests/golden.json` (~30 s; each build runs the stock xrefs analysis). The hashes are tied to the gcc version (other versions skip), and the test skips without the stock backups. When output is meant to change, re-record with `UPDATE_GOLDEN=1 .venv/bin/python -m pytest tests/test_golden.py` and commit the new hashes; diffing the old and new image of one config (`cmp -l`) shows the change is where you expect. To show a refactor is output-neutral beyond those 9 configs, build other flag sets (e.g. `--no-smb2`, `--extended`, `--compression-ratio=0`/`1000` for the fallback paths) in 2 `git worktree`s (main and the branch, with the backups symlinked in) and compare image hashes.
+`tests/test_golden.py` builds 17 flag sets (C + patch) in copies of the working tree and compares output SHA1s with `tests/golden.json` (~2.5 min; each build runs the stock xrefs analysis). Each config without `--debug` is also patched with its prebuilt ELF (`--prebuilt`, from another directory with `--backup-dir`) and must give the same images. The hashes are tied to the gcc version (other versions skip), and the test skips without the stock backups. When output is meant to change, re-record with `UPDATE_GOLDEN=1 .venv/bin/python -m pytest tests/test_golden.py` and commit the new hashes; diffing the old and new image of one config (`cmp -l`) shows the change is where you expect. To show a refactor is output-neutral beyond those 9 configs, build other flag sets (e.g. `--no-smb2`, `--extended`, `--compression-ratio=0`/`1000` for the fallback paths) in 2 `git worktree`s (main and the branch, with the backups symlinked in) and compare image hashes.
 
 Build gotchas:
 - `make clean` deletes all of `build/`, including `build/re/` and `build/emu/`. To force a C rebuild, delete only `build/*.o build/*.d build/gw_patch.*`.
@@ -63,7 +63,9 @@ Configuration: `.flake8` (max-line-length=120, extend-ignore=E203/W503), `.pre-c
 
 ### Two-Stage Build Process
 1. ARM C code in `Core/` compiled to `build/gw_patch.elf` via arm-none-eabi-gcc
-2. Python patching (`patch.py`) merges compiled binary with stock firmware backups
+2. Python patching (`patch.py`, a shim for `patches/cli.py`'s `main(argv)`) merges compiled binary with stock firmware backups
+
+Patching without a compiler (gnwmanager): the C build depends only on the options in `patches/prebuilt.py` (the Makefile's `findstring`/`filter` tests of `PATCH_PARAMS`, mirrored there), so `python -m scripts.build_elf_matrix <dir>` builds one ELF per combination (88, ~40 s, no backups) and `patch.py --prebuilt <dir>` picks the one its options need (`--debug` has none) and makes the `.bin` from it (`prebuilt.elf_to_bin`, equal to objcopy's). Every path the patcher touches is an option (`--backup-dir`, `--dump-dir` for the debug files, `--int-output`/`--ext-output`), except `tools/re/*.syms`, found beside `patches/` (a missing one is an error). A new C-affecting Makefile flag must go in `prebuilt.FLAGS` too. Don't name an option so that a Makefile flag is a substring of it (`--debug-dir` would build with `--debug`).
 
 The Makefile auto-detects the device from `PATCH_PARAMS` and generates `build/device.ld` with device-specific linker variables (via `scripts/device_from_patch_params.py`). The main linker script `STM32H7B0VBTx_FLASH.ld` includes this generated file.
 

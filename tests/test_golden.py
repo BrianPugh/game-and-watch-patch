@@ -2,7 +2,10 @@
 
 Each config builds a copy of the working tree (C code and patch) and checks the
 SHA1 of every output image against ``tests/golden.json``, and that the patch
-manifest and patched ELF (``patches/manifest.py``) are complete. The C build makes the
+manifest and patched ELF (``patches/manifest.py``) are complete. Each config
+the prebuilt ELFs cover (``patches/prebuilt.py``; not ``--debug``) is patched
+again from another directory with ``--prebuilt`` and ``--backup-dir``, as
+gnwmanager does, and must give the same images. The C build makes the
 hashes depend on the toolchain, so they're recorded with the gcc version and
 the test skips under a different one. Skips without the stock backups.
 
@@ -23,7 +26,9 @@ from pathlib import Path
 import pytest
 from elftools.elf.elffile import ELFFile
 
-from patches import syms
+from patches import prebuilt, syms
+from scripts.build_elf_matrix import build as build_prebuilt
+from scripts.build_elf_matrix import copy_tree
 
 REPO = Path(__file__).resolve().parents[1]
 GOLDEN = Path(__file__).with_name("golden.json")
@@ -75,23 +80,6 @@ def _toolchain():
     return out.stdout.splitlines()[0]
 
 
-def _copy_tree(dst):
-    files = subprocess.run(
-        ["git", "ls-files", "-co", "--exclude-standard", "-z"],
-        cwd=REPO,
-        capture_output=True,
-        check=True,
-    ).stdout.split(b"\0")
-    for rel in files:
-        rel = rel.decode()
-        if not rel or rel.startswith(("build/", ".claude/")):
-            continue
-        if not (REPO / rel).is_file():
-            continue
-        (dst / rel).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(REPO / rel, dst / rel)
-
-
 def _models(params):
     device = params.split()[0].split("=")[1]
     return ["mario", "zelda"] if device == "amalgam" else [device]
@@ -107,7 +95,7 @@ def _backups(params):
 
 def _build(tmp_path, params):
     tree = tmp_path / "tree"
-    _copy_tree(tree)
+    copy_tree(tree)
     for name in _backups(params):
         (tree / name).symlink_to(REPO / name)
     ips = tmp_path / "empty.ips"
@@ -126,7 +114,36 @@ def _build(tmp_path, params):
         if path.exists():
             hashes[name] = hashlib.sha1(path.read_bytes()).hexdigest()
     _check_debug_outputs(tree, params)
+    _check_prebuilt(tmp_path, tree, params, hashes)
     return hashes
+
+
+def _check_prebuilt(tmp_path, tree, params, hashes):
+    """Patching with the prebuilt ELF, from outside the tree, gives the same images."""
+    argv = params.split()
+    try:
+        name = prebuilt.name(argv)
+    except prebuilt.PrebuiltError:
+        return
+    elfs = tmp_path / "prebuilt"
+    elfs.mkdir()
+    log = build_prebuilt(name, prebuilt.combos()[name], elfs)
+    assert log is None, log
+    out = tmp_path / "out"
+    out.mkdir()
+    proc = subprocess.run(
+        [sys.executable, tree / "patch.py", *argv, f"--prebuilt={elfs}"]
+        + [f"--backup-dir={tree}", f"--dump-dir={out / 'dump'}"]
+        + [f"--int-output={out / OUTPUTS[0]}", f"--ext-output={out / OUTPUTS[2]}"],
+        cwd=out,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout[-4000:] + proc.stderr[-4000:]
+    for name in OUTPUTS:
+        path = out / name
+        got = hashlib.sha1(path.read_bytes()).hexdigest() if path.exists() else None
+        assert got == hashes.get(name), name
 
 
 def _check_debug_outputs(tree, params):

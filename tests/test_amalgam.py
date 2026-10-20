@@ -11,10 +11,11 @@ import sys
 
 import pytest
 from elftools.elf.elffile import ELFFile
-from test_golden import _copy_tree, _toolchain
+from test_golden import _toolchain
 
 from patches.amalgam import SD_BOOTLOADER, ZELDA_DST
 from scripts.amalgam_sd import SLACK
+from scripts.build_elf_matrix import copy_tree
 from scripts.device_from_patch_params import RAM
 
 FLAGS = "--device=amalgam --game-select-dual-boot --smb1-graphics --triple-boot"
@@ -24,7 +25,7 @@ def _build_elf(tmp_path_factory, flags):
     if _toolchain() is None:
         pytest.skip("arm-none-eabi-gcc not found")
     tree = tmp_path_factory.mktemp("amalgam") / "tree"
-    _copy_tree(tree)
+    copy_tree(tree)
     proc = subprocess.run(
         [
             "make",

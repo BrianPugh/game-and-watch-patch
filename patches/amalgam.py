@@ -71,7 +71,7 @@ class AmalgamError(Exception):
     pass
 
 
-def configure(zelda, mario, parser):
+def configure(zelda, mario, parser, argv=None):
     """Parse the command line for each device with its own options and
     defaults (the 2 share some option names, e.g. --game-select-dual-boot-icon
     with different default icons). An option either device knows is fine.
@@ -80,7 +80,7 @@ def configure(zelda, mario, parser):
     for device in (zelda, mario):
         p = copy.deepcopy(parser)
         device.add_arguments(p)
-        args, rest = p.parse_known_args()
+        args, rest = p.parse_known_args(argv)
         unknown = set(rest) if unknown is None else unknown & set(rest)
         for flag in ("encrypt", "triple_boot", "relocate_stock"):
             if getattr(args, flag, None):

@@ -65,14 +65,15 @@ def bytes_to_tilemap(data, palette=None, bpp=8, width=256):
         i_sprite += 1
 
     if palette is None:
-        return Image.fromarray(canvas, "L")
+        return Image.fromarray(canvas)
 
     # Apply palette to index-image
     p = np.frombuffer(palette, dtype=np.uint8).reshape((80, 4))
     p = p[:, :3]
     p = np.fliplr(p)  # BGR->RGB
 
-    im = Image.fromarray(canvas, "P")
+    # Image.fromarray's mode argument is deprecated (Pillow 13).
+    im = Image.frombytes("P", canvas.shape[::-1], canvas.tobytes())
     im.putpalette(p)
 
     return im

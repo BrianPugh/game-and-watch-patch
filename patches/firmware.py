@@ -637,12 +637,15 @@ class Device:
 
     @property
     def stock_map(self):
-        """``patches.xrefs.Analysis`` of the stock firmware (from the backups)."""
+        """``patches.xrefs.Analysis`` of the stock firmware (after ``crypt()``)."""
         if self._stock_map is None:
             from . import xrefs
 
+            assert self.external_stock is not None, "call crypt() first"
             with contextlib.redirect_stdout(io.StringIO()):
-                self._stock_map = xrefs.analyze(self.name)
+                self._stock_map = xrefs.analyze(
+                    self.name, self.internal_stock, self.external_stock
+                )
         return self._stock_map
 
     def locate(self, addr):

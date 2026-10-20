@@ -66,8 +66,6 @@ from .tileset import ZELDA_GAME_SELECT_PALETTE, ZELDA_ICON_ROLES, decode_backdro
 from .utils import fds_remove_crc_gaps, printd, printi, round_up_page, round_up_word
 from .xip import XipUnit
 
-build_dir = Path("build")  # TODO: expose this properly or put in better location
-
 # Stock external offsets of the 11 backdrop images (backdrop_images in DTCM),
 # and the end of the last one's zero padding.
 BACKDROP_STARTS = [
@@ -386,7 +384,7 @@ class ZeldaGnW(Device, name="zelda"):
         # English Zelda 1
         rom_addr = 0x3_0000
         rom_size = 0x2_0000
-        (build_dir / "Legend of Zelda, The (USA).nes").write_bytes(
+        (self.args.dump_dir / "Legend of Zelda, The (USA).nes").write_bytes(
             b"NES\x1a\x08\x00\x12\x00\x00\x00\x00\x00\x00\x00\x00\x00"
             + self.external[rom_addr : rom_addr + rom_size]
         )
@@ -401,14 +399,14 @@ class ZeldaGnW(Device, name="zelda"):
         rom_addr = 0x6_0000
         rom_size = 0x1_0000
         rom2 = fds_remove_crc_gaps(self.external[rom_addr : rom_addr + rom_size])
-        (build_dir / "Zelda no Densetsu: The Hyrule Fantasy (J).fds").write_bytes(
-            rom1 + rom2
-        )
+        (
+            self.args.dump_dir / "Zelda no Densetsu: The Hyrule Fantasy (J).fds"
+        ).write_bytes(rom1 + rom2)
 
         # English Zelda 2
         rom_addr = 0x7_0000
         rom_size = 0x4_0000
-        (build_dir / "Zelda II - Adventure of Link (USA).nes").write_bytes(
+        (self.args.dump_dir / "Zelda II - Adventure of Link (USA).nes").write_bytes(
             b"NES\x1a\x08\x10\x12\x00\x00\x00\x00\x00\x00\x00\x00\x00"
             + self.external[rom_addr : rom_addr + rom_size]
         )
@@ -423,9 +421,9 @@ class ZeldaGnW(Device, name="zelda"):
         rom_addr = 0xC_0000
         rom_size = 0x1_0000
         rom2 = fds_remove_crc_gaps(self.external[rom_addr : rom_addr + rom_size])
-        (build_dir / "Link no Bouken - The Legend of Zelda 2 (J).fds").write_bytes(
-            rom1 + rom2
-        )
+        (
+            self.args.dump_dir / "Link no Bouken - The Legend of Zelda 2 (J).fds"
+        ).write_bytes(rom1 + rom2)
 
         # I Believe 0xD_0000 ~ 0xD_2000 are LoZ2-JP tweaks... or maybe just the timer?
 
@@ -433,9 +431,9 @@ class ZeldaGnW(Device, name="zelda"):
         # This rom doesn't work :(
         rom_addr = 0xD_2000
         rom_size = 0x8_0000
-        (build_dir / "Legend of Zelda, The - Link's Awakening (en).gb").write_bytes(
-            self.external[rom_addr : rom_addr + rom_size]
-        )
+        (
+            self.args.dump_dir / "Legend of Zelda, The - Link's Awakening (en).gb"
+        ).write_bytes(self.external[rom_addr : rom_addr + rom_size])
 
     def _erase_roms(self):
         """Temporary for debugging, just seeing which roms impact the clock."""
@@ -496,7 +494,7 @@ class ZeldaGnW(Device, name="zelda"):
         """
         for name, start in enumerate(BACKDROP_STARTS):
             img, consumed = decode_backdrop(self.external[start:])
-            img.save(build_dir / f"backdrop_{name}.png")
+            img.save(self.args.dump_dir / f"backdrop_{name}.png")
             # print(hex(start + consumed))
 
     def _disable_save_encryption(self):

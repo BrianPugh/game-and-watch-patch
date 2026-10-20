@@ -14,6 +14,8 @@ source lines (``--debug``), also load ``build/gw_patch.elf`` (our code doesn't
 move).
 """
 
+from __future__ import annotations
+
 from bisect import bisect_right
 from dataclasses import dataclass, field
 from pathlib import Path

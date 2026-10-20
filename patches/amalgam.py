@@ -71,18 +71,21 @@ class AmalgamError(Exception):
     pass
 
 
-def configure(zelda, mario, parser):
-    """Parse the command line for each device with its own options and
+def parse(parser, argv):
+    """Parse the command line for each model with its own options and
     defaults (the 2 share some option names, e.g. --game-select-dual-boot-icon
-    with different default icons). An option either device knows is fine.
-    Returns the global options."""
+    with different default icons). An option either model knows is fine.
+    Returns ``{model: options}``."""
     unknown = None
-    for device in (zelda, mario):
+    out = {}
+    for cls in (ZeldaGnW, MarioGnW):
         p = copy.deepcopy(parser)
-        device.add_arguments(p)
-        args, rest = p.parse_known_args()
+        cls.add_arguments(p)
+        args, rest = p.parse_known_args(argv)
         unknown = set(rest) if unknown is None else unknown & set(rest)
-        for flag in ("encrypt", "triple_boot", "relocate_stock"):
+        # --clock-only makes GAME alone dual-boot (read_buttons), in both
+        # firmwares, which takes GAME from Zelda and from the switch entry.
+        for flag in ("encrypt", "triple_boot", "relocate_stock", "clock_only"):
             if getattr(args, flag, None):
                 parser.error(
                     f"--{flag.replace('_', '-')} isn't supported with --device=amalgam"
@@ -98,13 +101,19 @@ def configure(zelda, mario, parser):
         # A game-select entry, labeled with the other firmware, switches to
         # it (main.c), and it's the only way to; --game-select-dual-boot adds
         # the dual-boot target's entry after it.
-        args.game_select_switch_label = OTHER_LABEL[device.name]
-        device.amalgam = True
-        device.set_args(args, p)
+        args.game_select_switch_label = OTHER_LABEL[cls.name]
+        out[cls.name] = cls.check_args(args, p)
     if unknown:
         parser.error(f"unrecognized arguments: {' '.join(sorted(unknown))}")
-    zelda.args.relocate_stock = ZELDA_DST
-    return mario.args
+    out["zelda"].relocate_stock = ZELDA_DST
+    return out
+
+
+def configure(zelda, mario, models):
+    """Give each device its options (``parse()``'s)."""
+    for device in (zelda, mario):
+        device.amalgam = True
+        device.args = models[device.name]
 
 
 def load(devices, patch):

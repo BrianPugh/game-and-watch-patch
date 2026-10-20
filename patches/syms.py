@@ -8,6 +8,7 @@ symbol ``stock_<device>_<name>`` in ``build/stock_symbols.s``) and patch code
 
 from pathlib import Path
 
+# The patcher needs tools/re/ beside patches/ (a package copy must keep both).
 REPO = Path(__file__).resolve().parents[1]
 
 
@@ -18,8 +19,6 @@ def syms_path(device: str) -> Path:
 def parse_syms(path):
     """``(funcs, datas)``, each ``{addr: name}``; function addresses without the Thumb bit."""
     funcs, datas = {}, {}
-    if not path.exists():
-        return funcs, datas
     for line in path.read_text().splitlines():
         fields = line.split("#", 1)[0].split()
         if not fields:

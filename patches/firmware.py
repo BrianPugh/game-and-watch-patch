@@ -554,9 +554,11 @@ class Device:
     def add_arguments(cls, parser):
         """Add this device's options to ``parser``."""
 
-    def set_args(self, args, parser):
-        """Check the parsed options (``parser.error`` on a bad one) and keep them."""
-        self.args = args
+    @classmethod
+    def check_args(cls, args, parser):
+        """Check the parsed options (``parser.error`` on a bad one) and fill in
+        the ones they imply; returns them. Needs no backups."""
+        return args
 
     def __init__(self, internal_bin, internal_elf, external_bin):
         self.internal = self.Int(internal_bin, internal_elf)
@@ -637,12 +639,15 @@ class Device:
 
     @property
     def stock_map(self):
-        """``patches.xrefs.Analysis`` of the stock firmware (from the backups)."""
+        """``patches.xrefs.Analysis`` of the stock firmware (after ``crypt()``)."""
         if self._stock_map is None:
             from . import xrefs
 
+            assert self.external_stock is not None, "call crypt() first"
             with contextlib.redirect_stdout(io.StringIO()):
-                self._stock_map = xrefs.analyze(self.name)
+                self._stock_map = xrefs.analyze(
+                    self.name, self.internal_stock, self.external_stock
+                )
         return self._stock_map
 
     def locate(self, addr):

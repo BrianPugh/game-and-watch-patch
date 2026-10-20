@@ -12,6 +12,8 @@ Copies of data that's already there (moves, compaction, relocation) run
 clearing dropped data) leave no author (-1).
 """
 
+from __future__ import annotations
+
 import contextlib
 import sys
 from dataclasses import dataclass

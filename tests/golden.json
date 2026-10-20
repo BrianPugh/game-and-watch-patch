@@ -1,16 +1,16 @@
 {
   "configs": {
     "amalgam": {
-      "external_flash_patched.bin": "8620c5a15cb7e0608fa5ade509b381a97159fc0b",
-      "internal_flash_patched.bin": "42c4dba42c00c2e7ad126a1a5824d19a1d5835d3"
+      "external_flash_patched.bin": "dda1ceaad0da0d30543674e5d415905c6b6a21a1",
+      "internal_flash_patched.bin": "eb738b3146ac8f1733a11ddaa1153061a40a1ab0"
     },
     "amalgam_sd": {
-      "external_flash_patched.bin": "247e0c5cabde5b08ac6aee48f456c262ac6ac39b",
-      "internal_flash_patched.bin": "fd75036743398d5143ae0f40089b0e33cbda80ea"
+      "external_flash_patched.bin": "81e6d6b204f54fc19de06482f3c775d0f0feabb0",
+      "internal_flash_patched.bin": "021423fa1101322e9dc833e7cd535e16015dc42d"
     },
     "amalgam_xip": {
-      "external_flash_patched.bin": "0a3e1bcfdf27d275f83769d11d0b1a49318f9457",
-      "internal_flash_patched.bin": "119a0bc88cee57e583c096fb3da5d75f857b748a"
+      "external_flash_patched.bin": "9f3fb9512509e440b12f5d661def680321137b89",
+      "internal_flash_patched.bin": "53951b93907fcc132c2f949885b9c3fd0d277d35"
     },
     "mario": {
       "external_flash_patched.bin": "bf0cf36ebdbe9493bd0b7c4072d5bfab43b7928c",

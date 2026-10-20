@@ -159,7 +159,7 @@ Options go in `PATCH_PARAMS`, e.g. `make PATCH_PARAMS="--device=zelda --no-facto
 | `--relocate-stock=ADDR` | Run the stock code from ADDR. For testing stock-code relocation; see `tools/emu/README.md`. |
 
 ### Amalgam (`--device=amalgam`)
-Takes both devices' options; one both understand (e.g. `--no-sleep-images`) applies to both. It always uses `--extended`, `--no-factory-test` and `--game-select-dual-boot` (an entry labeled with the other firmware that switches to it; holding GAME at boot returns to Mario), and `--sd-bootloader` adds `--xip-minigame`. It rejects `--encrypt`, `--triple-boot`, `--relocate-stock` and `--internal-only`. LEFT+GAME still boots the dual-boot target.
+Accepts both Mario's and Zelda's options. An option that both devices have (e.g. `--no-sleep-images`) applies to both firmwares. It always uses `--extended`, `--no-factory-test` and `--game-select-dual-boot` (an entry labeled with the other firmware that switches to it; holding GAME at boot returns to Mario), and `--sd-bootloader` adds `--xip-minigame`. It rejects `--encrypt`, `--triple-boot`, `--relocate-stock` and `--internal-only`. LEFT+GAME still boots the dual-boot target.
 
 Suggested command, with retro-go-sd (`make flash` also writes Sylverb's SD bootloader to `0x08032000`; leave out `--sd-bootloader` to boot bank 2 instead):
 

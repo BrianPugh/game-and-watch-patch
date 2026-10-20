@@ -62,13 +62,7 @@ from .compression import lzma_compress
 from .exception import InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
 from .thumb_asm import assemble as thumb_assemble
-from .tileset import (
-    ZELDA_GAME_SELECT_PALETTE,
-    ZELDA_ICON_ROLES,
-    decode_backdrop,
-    png_to_icon_4bpp,
-    render_label_icon,
-)
+from .tileset import ZELDA_GAME_SELECT_PALETTE, ZELDA_ICON_ROLES, decode_backdrop
 from .utils import fds_remove_crc_gaps, printd, printi, round_up_page, round_up_word
 from .xip import XipUnit
 
@@ -105,8 +99,6 @@ OVERLAY_START, OVERLAY_END = 0x30_B4A0, 0x31_7230
 # Vermin's code: its API (called from main_loop_tick and app_load), game,
 # sound and high-score save.
 VERMIN_UNIT = (0x0801_4938, 0x0801_6268)
-# Our pointer to the game-select DUAL BOOT icon (game_select_zelda.c).
-ICON_SYMBOL = "ZELDA_GAME_SELECT_DUAL_BOOT_ICON"
 # The last copy is the menu UI, linked at ITCM 0x9C7C. ITCM past its end is
 # never loaded, so veneers from ITCM to our code are appended to it.
 ITCM_MENU, ITCM_MENU_SRC, ITCM_MENU_SIZE = 0x9C7C, 0x31_56EC, 0x1B44
@@ -123,8 +115,9 @@ class ZeldaGnW(Device, name="zelda"):
     AMALGAM_RELOCATE_END = 0x0801_68D8
     AMALGAM_KEPT_START = 0x0801_8154
     xip_vermin = None
-    # The game-select DUAL BOOT icon if internal flash had no room.
-    dual_boot_icon_ext = None
+    # The game-select menu's custom entries' icons that internal flash had
+    # no room for, as (symbol, data, label).
+    game_select_icons_ext = []
 
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "ac14bcea6e4ff68c88fd2302c021025a2fb47940"
@@ -303,8 +296,8 @@ class ZeldaGnW(Device, name="zelda"):
         """Remove LA's game-select row; VERMIN and TIMER move up into its place.
 
         The 5th row is left empty (a count of 0, which game_select_draw skips),
-        and the UP/DOWN cursor wraps over 4 rows. With --game-select-dual-boot,
-        DUAL BOOT takes the empty row (game_select_zelda.c counts the rows).
+        and the UP/DOWN cursor wraps over 4 rows. Custom rows (the amalgam's switch,
+        --game-select-dual-boot) follow (game_select_zelda.c counts the rows).
         """
         printi("Remove the LA row from the game-select menu.")
         # menu_rows: 5 rows x 11 bytes, [count, variant ids...]; LA's are 4-7.
@@ -325,13 +318,14 @@ class ZeldaGnW(Device, name="zelda"):
         # replaces the call and counts the rows itself).
         self._itcm_menu_patch(0xA572, "movs r1, #4", expect="2:70c7f6e4")
 
-    def _game_select_dual_boot(self):
-        """DUAL BOOT after the stock game-select rows, in a scrolling 5-row window.
+    def _game_select_menu(self, icons):
+        """Custom rows (the amalgam's switch, DUAL BOOT) after the stock
+        game-select rows, in a scrolling 5-row window.
 
         See game_select_zelda.c. Runs after fix_ext_refs(), so
         the menu_rows literals hold their final address.
         """
-        printi("Add dual-boot entry to the game-select menu.")
+        printi("Add custom entries to the game-select menu.")
         # game_select_handle_input's UP/DOWN step over the 5 rows.
         veneer = self._itcm_veneer("zelda_game_select_row_step")
         self._itcm_menu_patch(0xA576, f"bl #{veneer:#x}", expect="4:9be285a5")
@@ -352,18 +346,12 @@ class ZeldaGnW(Device, name="zelda"):
             literal, self.internal.address("zelda_game_select_view_rows"), size=4
         )
 
-        if self.args.game_select_dual_boot_label:
-            icon = render_label_icon(
-                self.args.game_select_dual_boot_label, 96, 32, ZELDA_ICON_ROLES
-            )
-        else:
-            icon = png_to_icon_4bpp(
-                self.args.game_select_dual_boot_icon, 96, 32, ZELDA_GAME_SELECT_PALETTE
-            )
         # After the stock data moves, in whatever room they leave.
-        icon = lzma_compress(icon)
-        if not self.place_int(ICON_SYMBOL, icon, "game-select DUAL BOOT icon (LZMA)"):
-            self.dual_boot_icon_ext = icon
+        self.game_select_icons_ext = [
+            (symbol, icon, label)
+            for symbol, icon, label in icons
+            if not self.place_int(symbol, icon, label)
+        ]
 
     def _flash_roms(self):
         # English Zelda 1
@@ -701,12 +689,9 @@ class ZeldaGnW(Device, name="zelda"):
             data_end += round_up_word(len(blob))
         if self.xip_vermin:
             data_end += round_up_word(self.xip_vermin.write(data_end))
-        if self.dual_boot_icon_ext:
-            printi("Put the game-select DUAL BOOT icon in external flash.")
-            icon = self.dual_boot_icon_ext
-            self.place_ext(
-                ICON_SYMBOL, data_end, icon, "game-select DUAL BOOT icon (LZMA)"
-            )
+        for symbol, icon, label in self.game_select_icons_ext:
+            printi(f"Put the {label} in external flash.")
+            self.place_ext(symbol, data_end, icon, label)
             data_end += round_up_word(len(icon))
         # The first 4 copies are bl memcpy, the last a tail call.
         self.internal.bl(0xF7A2, "memcpy_inflate", expect="4:d2879707")
@@ -923,8 +908,11 @@ class ZeldaGnW(Device, name="zelda"):
         self._compact_ext()
 
         self.fix_ext_refs()
-        if self.args.game_select_dual_boot:
-            self._game_select_dual_boot()
+        icons = self.build_game_select_icons(
+            96, 32, ZELDA_GAME_SELECT_PALETTE, ZELDA_ICON_ROLES
+        )
+        if icons:
+            self._game_select_menu(icons)
         if self.relocation:
             # Before _finish_ext() compresses the ITCM overlay.
             self.relocation.fix_ram_images()

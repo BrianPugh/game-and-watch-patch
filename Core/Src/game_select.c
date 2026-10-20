@@ -1,5 +1,7 @@
 /**
- * A DUAL BOOT entry in the game-select menu (press GAME).
+ * Custom entries in the game-select menu (press GAME): in the amalgam, a
+ * switch to the other firmware, and a DUAL BOOT entry
+ * (--game-select-dual-boot).
  *
  * Mario (game_select_mario.c): the stock menu shows 3 hard-coded icons (SMB1,
  * SMB2, BALL). Hooks replace its next/prev, input, and draw functions with a
@@ -7,14 +9,30 @@
  * positions.
  *
  * Zelda (game_select_zelda.c): the stock menu fills the screen with 5 rows.
- * The entry follows the stock rows (a 6th row, or the 5th with --no-la), and
- * the stock draw function shows a window of 5 rows.
+ * The entries follow the stock rows (from the 6th row, or the 5th with
+ * --no-la), and the stock draw function shows a window of 5 rows.
  *
  * This file holds the drawing and scrolling both share. Hook sites are in
  * patches/<device>.py; the reverse-engineered stock UI is mapped in
  * tools/re/<device>.syms.
  */
+#include "main.h"
 #include "game_select.h"
+
+uint8_t game_select_n_custom(uint8_t n){
+#if GAME_SELECT_DUAL_BOOT
+    if(!dual_boot_target_valid()) return n - 1;
+#endif
+    return n;
+}
+
+void game_select_inflate_icons(const game_select_custom_t *custom, uint8_t n, uint32_t size, bool *ready){
+    if(*ready) return;
+    for(uint8_t i = 0; i < n; i++){
+        memcpy_inflate(custom[i].pixels, *custom[i].icon, 2 * size);
+    }
+    *ready = true;
+}
 
 void game_select_scroll(uint8_t *top, uint8_t selected, uint8_t n, uint8_t visible){
     if(selected < *top) *top = selected;

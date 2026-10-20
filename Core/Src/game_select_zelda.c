@@ -1,11 +1,11 @@
 /**
- * Zelda's game-select DUAL BOOT row (overview in game_select.c).
+ * Zelda's game-select custom rows (overview in game_select.c).
  */
 #include "main.h"
 #include "stock_firmware.h"
 #include "game_select.h"
 
-#if GAME_SELECT_DUAL_BOOT
+#if GAME_SELECT_MENU
 
 #define FB_WIDTH GAME_SELECT_FB_WIDTH
 
@@ -27,28 +27,29 @@
 #define UI_ROW 0x2a
 #define UI_VARIANTS 0x2d  // 2 bytes per row.
 
-/**
- * LZMA'd linear 4bpp (high nibble first) icon, wherever the patcher put it:
- * internal flash if it fits, else external flash. volatile, so reads aren't
- * folded to the NULL initializer.
- */
+#define ICON_SIZE (ICON_W * ICON_H / 2)
+
+// Our pointers to the icons (volatile, so reads aren't folded to the NULL
+// initializer).
+#if GNW_AMALGAM
+const uint8_t * const volatile ZELDA_GAME_SELECT_SWITCH_ICON = NULL;
+static uint8_t switch_icon[ICON_SIZE];
+#endif
+#if GAME_SELECT_DUAL_BOOT
 const uint8_t * const volatile ZELDA_GAME_SELECT_DUAL_BOOT_ICON = NULL;
+static uint8_t dual_boot_icon[ICON_SIZE];
+#endif
 
-static uint8_t dual_boot_icon[ICON_W * ICON_H / 2];
-static bool dual_boot_icon_ready;
+static const game_select_custom_t custom[] = {
+#if GNW_AMALGAM
+    { &ZELDA_GAME_SELECT_SWITCH_ICON, switch_icon, game_select_switch },
+#endif
+#if GAME_SELECT_DUAL_BOOT
+    { &ZELDA_GAME_SELECT_DUAL_BOOT_ICON, dual_boot_icon, launch_dual_boot },
+#endif
+};
 
-/**
- * The inflated icon; inflated on the first draw (the menu only draws while
- * external flash is mapped). The stream ends with an end marker, so the
- * input bound only has to be large enough.
- */
-static const uint8_t *dual_boot_icon_pixels(void){
-    if(!dual_boot_icon_ready){
-        memcpy_inflate(dual_boot_icon, ZELDA_GAME_SELECT_DUAL_BOOT_ICON, 2 * sizeof(dual_boot_icon));
-        dual_boot_icon_ready = true;
-    }
-    return dual_boot_icon;
-}
+#define N_CUSTOM (sizeof(custom) / sizeof(custom[0]))
 
 /**
  * menu_rows as the stock draw function sees it (the patcher points its
@@ -59,7 +60,8 @@ uint8_t zelda_game_select_view_rows[VISIBLE_ROWS * MENU_ROW_SIZE];
 
 /**
  * The stock rows in use: the patcher may drop some (--no-la) and moves the
- * rest up, leaving a count of 0 in the unused rows. DUAL BOOT follows them.
+ * rest up, leaving a count of 0 in the unused rows. The custom rows follow
+ * them.
  */
 static uint8_t n_stock_rows(){
     const uint8_t *menu_rows = *stock_menu_rows_literal;
@@ -69,8 +71,7 @@ static uint8_t n_stock_rows(){
 }
 
 static uint8_t n_rows(){
-    // Only offer the dual-boot entry if there's something to boot.
-    return game_select_target_valid() ? n_stock_rows() + 1 : n_stock_rows();
+    return n_stock_rows() + game_select_n_custom(N_CUSTOM);
 }
 
 /**
@@ -82,15 +83,16 @@ uint32_t zelda_game_select_row_step(volatile uint8_t *row, uint32_t n, gamepad_t
 }
 
 /**
- * The DUAL BOOT row has no variants and no app: A boots the target, and
- * the stock handler only sees UP/DOWN/B there (its LEFT/RIGHT and A paths
- * would act on an empty stock row, or index past menu_rows and the per-row
- * state).
+ * The custom rows have no variants and no app: A boots the target, and the
+ * stock handler only sees UP/DOWN/B there (its LEFT/RIGHT and A paths would
+ * act on an empty stock row, or index past menu_rows and the per-row state).
  */
 uint32_t zelda_game_select_handle_input(gamepad_t held, gamepad_t pressed){
-    if(stock_ui_state[UI_ROW] == n_stock_rows()){
+    uint8_t n_stock = n_stock_rows();
+    uint8_t row = stock_ui_state[UI_ROW];
+    if(row >= n_stock){
         if(pressed == GAMEPAD_A && held == pressed){
-            game_select_launch();
+            custom[row - n_stock].launch();
         }
         held &= ~(GAMEPAD_A | GAMEPAD_LEFT | GAMEPAD_RIGHT);
         pressed &= ~(GAMEPAD_A | GAMEPAD_LEFT | GAMEPAD_RIGHT);
@@ -104,9 +106,10 @@ uint32_t zelda_game_select_handle_input(gamepad_t held, gamepad_t pressed){
  */
 void zelda_game_select_draw(uint8_t *fb, void *rects, uint32_t color){
     static uint8_t top = 0;
+    static bool icons_ready;
 
+    game_select_inflate_icons(custom, N_CUSTOM, ICON_SIZE, &icons_ready);
     uint8_t n_stock = n_stock_rows();
-    uint8_t dual_boot_row = n_stock;
     uint8_t n = n_rows();
     uint8_t selected = stock_ui_state[UI_ROW];
     game_select_scroll(&top, selected, n, VISIBLE_ROWS);
@@ -128,9 +131,9 @@ void zelda_game_select_draw(uint8_t *fb, void *rects, uint32_t color){
     stock_ui_state[UI_ROW] = selected;
     for(uint8_t i = 0; i < sizeof(saved); i++) variants[i] = saved[i];
 
-    if(dual_boot_row < n && dual_boot_row - top < VISIBLE_ROWS){
-        uint32_t y = ROW_Y + (dual_boot_row - top) * ROW_PITCH;
-        game_select_blit_icon(fb + y * FB_WIDTH + ICON_X, dual_boot_icon_pixels(), ICON_W, ICON_H, UI_PALETTE);
+    for(uint8_t row = n_stock > top ? n_stock : top; row < n && row < top + VISIBLE_ROWS; row++){
+        uint32_t y = ROW_Y + (row - top) * ROW_PITCH;
+        game_select_blit_icon(fb + y * FB_WIDTH + ICON_X, custom[row - n_stock].pixels, ICON_W, ICON_H, UI_PALETTE);
     }
 
     // Scroll hints between the panel border and the first/last icon.

@@ -93,17 +93,20 @@ def make_profile(
         gwprov("profile", profile, "edit", "add", bank, name, image, "--offset", 0)
 
 
-def make_bank2(path: Path, kind: str, base: Path = None, spin_pc: int = 0x0810_0008):
-    """Bank 2: ``base`` (or erased flash), with a tiny image or erased header at 0."""
+def make_bank2(
+    path: Path, kind: str, base: Path = None, spin_pc: int = 0x0810_0008, at: int = 0
+):
+    """Bank 2: ``base`` (or erased flash), with a tiny image or erased header at
+    ``at`` (bank 1 with ``at=0x32000`` for the SD bootloader's place)."""
     data = bytearray(b"\xff" * 0x40000)
     if base is not None:
         image = base.read_bytes()
         data[: len(image)] = image
-    data[:16] = b"\xff" * 16
+    data[at : at + 16] = b"\xff" * 16
     if kind == "spin":
         # Initial SP, reset vector -> spin_pc (Thumb), then `b .`.
-        data[0:8] = struct.pack("<II", 0x2002_0000, spin_pc | 1)
-        data[8:10] = b"\xfe\xe7"
+        data[at : at + 8] = struct.pack("<II", 0x2002_0000, spin_pc | 1)
+        data[at + 8 : at + 10] = b"\xfe\xe7"
     path.write_bytes(data)
 
 

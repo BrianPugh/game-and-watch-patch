@@ -227,47 +227,45 @@ class MarioGnW(Device, name="mario"):
             help="Configuration so no external flash is used.",
         )
 
-    def set_args(self, args, parser):
-        self.args = args
-
+    @classmethod
+    def check_args(cls, args, parser):
         ############
         # Validate #
         ############
-        if self.args.sleep_time and (
-            self.args.sleep_time < 1 or self.args.sleep_time > 1092
-        ):
+        if args.sleep_time and (args.sleep_time < 1 or args.sleep_time > 1092):
             parser.error("--sleep-time must be in range [1, 1092]")
-        if self.args.mario_song_time and (
-            self.args.mario_song_time < 1 or self.args.mario_song_time > 1092
+        if args.mario_song_time and (
+            args.mario_song_time < 1 or args.mario_song_time > 1092
         ):
             parser.error("--mario-song-time must be in range [1, 1092]")
 
-        if len(self.args.smb1_graphics) > 8:
+        if len(args.smb1_graphics) > 8:
             parser.error("A maximum of 8 SMB1 graphics mods can be specified.")
 
-        if self.args.smb1_graphics_glob:
+        if args.smb1_graphics_glob:
             ips_folder = Path("ips")
-            self.args.smb1_graphics = list(ips_folder.glob("*.ips"))
-            self.args.smb1_graphics.extend(list(ips_folder.glob("*.IPS")))
+            args.smb1_graphics = list(ips_folder.glob("*.ips"))
+            args.smb1_graphics.extend(list(ips_folder.glob("*.IPS")))
 
-        if self.args.internal_only:
-            self.args.slim = True
-            self.args.extended = True
-            self.args.no_save = True
-            if self.args.sd_bootloader:
-                self.args.no_smb2 = True
+        if args.internal_only:
+            args.slim = True
+            args.extended = True
+            args.no_save = True
+            if args.sd_bootloader:
+                args.no_smb2 = True
 
-        if self.args.internal_only and self.args.xip_minigame:
+        if args.internal_only and args.xip_minigame:
             parser.error("--xip-minigame needs external flash")
 
-        if self.args.clock_only:
-            self.args.slim = True
-            self.args.no_smb2 = True
+        if args.clock_only:
+            args.slim = True
+            args.no_smb2 = True
 
-        if self.args.slim:
-            self.args.no_mario_song = True
-            self.args.no_sleep_images = True
-            self.args.no_factory_test = True
+        if args.slim:
+            args.no_mario_song = True
+            args.no_sleep_images = True
+            args.no_factory_test = True
+        return args
 
     def _tick_setting(self):
         """TICK ON/OFF: a 4th row in the clock's PAUSE/SET overlay.

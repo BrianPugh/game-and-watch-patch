@@ -2,10 +2,10 @@
 
 Each config builds a copy of the working tree (C code and patch) and checks the
 SHA1 of every output image against ``tests/golden.json``, and that the patch
-manifest and patched ELF (``patches/manifest.py``) are complete. Each config
-the prebuilt ELFs cover (``patches/prebuilt.py``; not ``--debug``) is patched
-again from another directory with ``--prebuilt`` and ``--backup-dir``, as
-gnwmanager does, and must give the same images. The C build makes the
+manifest and patched ELF (``patches/manifest.py``) are complete, and that
+``prebuilt.elf_to_bin`` makes the build's .bin from its ELF. PREBUILT_CONFIGS
+are patched again with that ELF as a ``--prebuilt`` one, from another directory
+with ``--backup-dir``, as gnwmanager does, and must give the same images. The C build makes the
 hashes depend on the toolchain, so they're recorded with the gcc version and
 the test skips under a different one. Skips without the stock backups.
 
@@ -27,7 +27,6 @@ import pytest
 from elftools.elf.elffile import ELFFile
 
 from patches import prebuilt, syms
-from scripts.build_elf_matrix import build as build_prebuilt
 from scripts.build_elf_matrix import copy_tree
 
 REPO = Path(__file__).resolve().parents[1]
@@ -64,6 +63,9 @@ CONFIGS = {
     "amalgam_sd": "--device=amalgam --sd-bootloader --smb1-graphics {ips}",
 }
 
+# Also patched with --prebuilt (as gnwmanager does): one config per device.
+PREBUILT_CONFIGS = {"mario_options", "zelda_xip_relocate", "amalgam_sd"}
+
 OUTPUTS = [
     "internal_flash_patched.bin",
     "internal_flash_patched_bank2.bin",
@@ -93,7 +95,7 @@ def _backups(params):
     ]
 
 
-def _build(tmp_path, params):
+def _build(tmp_path, config, params):
     tree = tmp_path / "tree"
     copy_tree(tree)
     for name in _backups(params):
@@ -114,28 +116,30 @@ def _build(tmp_path, params):
         if path.exists():
             hashes[name] = hashlib.sha1(path.read_bytes()).hexdigest()
     _check_debug_outputs(tree, params)
-    _check_prebuilt(tmp_path, tree, params, hashes)
+    _check_prebuilt(tmp_path, tree, config, params, hashes)
     return hashes
 
 
-def _check_prebuilt(tmp_path, tree, params, hashes):
-    """Patching with the prebuilt ELF, from outside the tree, gives the same images."""
-    argv = params.split()
-    try:
-        name = prebuilt.name(argv)
-    except prebuilt.PrebuiltError:
+def _check_prebuilt(tmp_path, tree, config, params, hashes):
+    """The build's ELF gives its .bin (``prebuilt.elf_to_bin``); for
+    PREBUILT_CONFIGS, patching with it as a ``--prebuilt`` ELF, from outside
+    the tree, gives the same images."""
+    elf = (tree / "build" / "gw_patch.elf").read_bytes()
+    assert prebuilt.elf_to_bin(elf) == (tree / "build" / "gw_patch.bin").read_bytes()
+    if config not in PREBUILT_CONFIGS:
         return
+    argv = params.split()
+    name = prebuilt.config_for(argv).name
     elfs = tmp_path / "prebuilt"
     elfs.mkdir()
-    log = build_prebuilt(name, prebuilt.combos()[name], elfs)
-    assert log is None, log
+    (elfs / f"{name}.elf").write_bytes(elf)
+    prebuilt.write_manifest(elfs, {name: params}, root=tree)
     out = tmp_path / "out"
-    out.mkdir()
     proc = subprocess.run(
         [sys.executable, tree / "patch.py", *argv, f"--prebuilt={elfs}"]
         + [f"--backup-dir={tree}", f"--dump-dir={out / 'dump'}"]
         + [f"--int-output={out / OUTPUTS[0]}", f"--ext-output={out / OUTPUTS[2]}"],
-        cwd=out,
+        cwd=tmp_path,
         capture_output=True,
         text=True,
     )
@@ -179,7 +183,7 @@ def test_golden(config, tmp_path):
     if not UPDATE and golden.get("toolchain") != toolchain:
         pytest.skip(f"hashes recorded with {golden.get('toolchain')!r}")
 
-    hashes = _build(tmp_path, CONFIGS[config])
+    hashes = _build(tmp_path, config, CONFIGS[config])
 
     if UPDATE:
         if golden.get("toolchain") != toolchain:

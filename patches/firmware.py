@@ -554,9 +554,11 @@ class Device:
     def add_arguments(cls, parser):
         """Add this device's options to ``parser``."""
 
-    def set_args(self, args, parser):
-        """Check the parsed options (``parser.error`` on a bad one) and keep them."""
-        self.args = args
+    @classmethod
+    def check_args(cls, args, parser):
+        """Check the parsed options (``parser.error`` on a bad one) and fill in
+        the ones they imply; returns them. Needs no backups."""
+        return args
 
     def __init__(self, internal_bin, internal_elf, external_bin):
         self.internal = self.Int(internal_bin, internal_elf)

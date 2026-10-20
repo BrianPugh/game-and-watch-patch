@@ -1,9 +1,13 @@
-""" Dictates device used in Makefile and C parts of the code
+"""The C build's configuration for PATCH_PARAMS (``build/config.mk``, from
+``patches/prebuilt.py``) and the files generated from it: the device linker
+variables and the stock function symbols.
 """
-import argparse
+
+import sys
 from pathlib import Path
 
 from patches import Device
+from patches.prebuilt import config_for
 from patches.syms import stock_functions
 
 # Our .data/.bss: RAM the stock firmware never writes.
@@ -75,27 +79,23 @@ def stock_symbols(models):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--device", default="mario", choices=["mario", "zelda", AMALGAM]
-    )
-    parser.add_argument("--sd-bootloader", action="store_true")
-    args, _ = parser.parse_known_args()
-    print(args.device.upper())
+    # Exits with the parser's message on a bad option.
+    config = config_for(sys.argv[1:])
+    device = config.device
+    sd_bootloader = "SD_BOOTLOADER" in config.defines
+    _write_if_changed(Path("build/config.mk"), config.makefile())
 
-    models = list(RAM) if args.device == AMALGAM else [args.device]
-    _write_if_changed(
-        Path("build/device.ld"), device_ld(args.device, args.sd_bootloader)
-    )
-    if args.device == AMALGAM:
+    models = list(RAM) if device == AMALGAM else [device]
+    _write_if_changed(Path("build/device.ld"), device_ld(device, sd_bootloader))
+    if device == AMALGAM:
         # The amalgam's linker script INCLUDEs amalgam_text.ld from the -L
         # path. With --sd-bootloader, the Makefile first links the plain
         # amalgam layout (build/pass1/), and scripts/amalgam_sd.py writes
         # build/amalgam_text.ld from that link's size of our code.
         text_ld = "INCLUDE STM32H7B0VBTx_FLASH_text.ld\n"
         pass1 = Path("build/pass1")
-        if args.sd_bootloader:
-            _write_if_changed(pass1 / "device.ld", device_ld(args.device))
+        if sd_bootloader:
+            _write_if_changed(pass1 / "device.ld", device_ld(device))
             _write_if_changed(pass1 / "amalgam_text.ld", text_ld)
         else:
             _write_if_changed(Path("build/amalgam_text.ld"), text_ld)

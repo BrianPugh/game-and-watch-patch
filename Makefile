@@ -86,7 +86,13 @@ endif
 
 PATCH_PARAMS ?=
 
-GNW_DEVICE := $(shell $(PYTHON) -m scripts.device_from_patch_params $(PATCH_PARAMS))
+# The C build's configuration for PATCH_PARAMS (patches/prebuilt.py):
+# GNW_DEVICE, CONFIG_DEFS, DEBUG, SD_BOOTLOADER and SLEEP_LDFLAGS.
+CONFIG_STATUS := $(shell $(PYTHON) -m scripts.device_from_patch_params $(PATCH_PARAMS) && echo ok)
+ifneq ($(CONFIG_STATUS),ok)
+$(error Bad PATCH_PARAMS "$(PATCH_PARAMS)" (see above))
+endif
+include $(BUILD_DIR)/config.mk
 GNW_DEVICE_LOWER := $(shell echo "$(GNW_DEVICE)" | tr 'A-Z' 'a-z')
 
 MARIO_SOURCES = Core/Src/game_select_mario.c Core/Src/mario.c
@@ -102,7 +108,7 @@ AMALGAM_LDFLAGS = -L$(BUILD_DIR)
 # --sd-bootloader: our code ends at the SD bootloader. A first link
 # (build/pass1/, the plain layout) gives its size to scripts/amalgam_sd.py,
 # which places it for the second.
-ifneq (,$(findstring --sd-bootloader, $(PATCH_PARAMS)))
+ifeq ($(SD_BOOTLOADER),1)
 LDSCRIPT_DEPS = $(BUILD_DIR)/pass1/device.ld $(BUILD_DIR)/pass1/amalgam_text.ld \
 	scripts/amalgam_sd.py patches/amalgam.py
 LINK_PASS1 = $(CC) $(OBJECTS) -L$(BUILD_DIR)/pass1 $(LDFLAGS) -o $(BUILD_DIR)/pass1/$(TARGET).elf && \
@@ -119,30 +125,7 @@ endif
 # Smaller (~1.8KB), slower LZMA decoder; internal flash matters more than speed.
 C_DEFS += -D_LZMA_SIZE_OPT
 
-ifneq (,$(findstring --clock-only, $(PATCH_PARAMS)))
-	C_DEFS += -DCLOCK_ONLY
-endif
-
-ifneq (,$(findstring --smb1-graphics, $(PATCH_PARAMS)))
-	C_DEFS += -DENABLE_SMB1_GRAPHIC_MODS
-endif
-
-ifneq (,$(findstring --debug, $(PATCH_PARAMS)))
-	DEBUG = 1
-	C_DEFS += -DDEBUG
-endif
-
-ifneq (,$(findstring --triple-boot, $(PATCH_PARAMS)))
-	C_DEFS += -DTRIPLE_BOOT
-endif
-
-ifneq (,$(findstring --game-select-dual-boot, $(PATCH_PARAMS)))
-	C_DEFS += -DGAME_SELECT_DUAL_BOOT
-endif
-
-ifneq (,$(findstring --sd-bootloader, $(PATCH_PARAMS)))
-	C_DEFS += -DSD_BOOTLOADER
-endif
+C_DEFS += $(CONFIG_DEFS)
 
 
 #######################################
@@ -234,11 +217,8 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=rwdata_inflate \
 		  $(AMALGAM_LDFLAGS) \
 
-# These flags all imply --no-sleep-images, leaving sleep_image_inflate unused.
-ifeq (,$(filter --no-sleep-images --slim --internal-only --clock-only,$(PATCH_PARAMS)))
-LDFLAGS += -Wl,--undefined=sleep_image_inflate
-LDFLAGS += -Wl,--undefined=backdrop_inflate
-endif
+# Empty when no model keeps its sleep images.
+LDFLAGS += $(SLEEP_LDFLAGS)
 
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/internal_flash_patched.bin
@@ -334,7 +314,7 @@ flash_stock: internal_flash_backup_$(GNW_DEVICE_LOWER).bin flash_backup_$(GNW_DE
 # bootloader goes there (downloaded, pinned in scripts/fetch_sd_bootloader.py;
 # point SD_BOOTLOADER_BIN at your own copy to override).
 SD_BOOTLOADER_BIN ?= $(BUILD_DIR)/gnw_bootloader_0x08032000.bin
-ifneq (,$(findstring --sd-bootloader, $(PATCH_PARAMS)))
+ifeq ($(SD_BOOTLOADER),1)
 FLASH_SD_BOOTLOADER = -- flash 0x08032000 $(SD_BOOTLOADER_BIN)
 SD_BOOTLOADER_DEP = $(SD_BOOTLOADER_BIN)
 endif

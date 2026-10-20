@@ -3,8 +3,9 @@ depends on (``patches/prebuilt.py``), for patching without a compiler.
 
     python -m scripts.build_elf_matrix build/prebuilt [--only NAME ...]
 
-Each ELF is built by the Makefile in its own copy of the working tree and
-written to ``<out>/<name>.elf``; ``patch.py --prebuilt <out>`` picks one. No
+Each ELF is built by the Makefile in its own copy of the files the C build
+reads (``BUILD_FILES``) and written to ``<out>/<name>.elf``, with ``<out>/manifest.json``
+(``prebuilt.write_manifest``); ``patch.py --prebuilt <out>`` picks one. No
 stock backups are needed.
 """
 
@@ -22,10 +23,15 @@ from patches import prebuilt
 REPO = Path(__file__).resolve().parents[1]
 
 
-def copy_tree(dst):
-    """The working tree's tracked and untracked (not ignored) files, minus build/."""
+# What `make build/gw_patch.elf` reads (pathspecs).
+BUILD_FILES = ["Core", "Drivers", "Makefile*", "*.ld", "scripts", "patches", "tools/re"]
+
+
+def copy_tree(dst, pathspecs=()):
+    """The working tree's tracked and untracked (not ignored) files, minus
+    build/; only those matching ``pathspecs``, if given."""
     files = subprocess.run(
-        ["git", "ls-files", "-co", "--exclude-standard", "-z"],
+        ["git", "ls-files", "-co", "--exclude-standard", "-z", "--", *pathspecs],
         cwd=REPO,
         capture_output=True,
         check=True,
@@ -44,7 +50,7 @@ def build(name, params, out, python=sys.executable):
     """Build one ELF; returns the make output on failure, else None."""
     with tempfile.TemporaryDirectory() as tmp:
         tree = Path(tmp)
-        copy_tree(tree)
+        copy_tree(tree, BUILD_FILES)
         proc = subprocess.run(
             [
                 "make",
@@ -83,6 +89,8 @@ def main():
     failed = {n: f.result() for n, f in futures.items() if f.result()}
     for n, log in failed.items():
         print(f"=== {n} ({combos[n]})\n{log}", file=sys.stderr)
+    if not failed:
+        prebuilt.write_manifest(args.out, combos)
     print(f"Built {len(combos) - len(failed)} of {len(combos)} ELFs in {args.out}")
     sys.exit(1 if failed else 0)
 

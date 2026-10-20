@@ -6,14 +6,12 @@ compiled code (``--elf``/``--patch``, or ``--prebuilt``), the outputs and the
 debug files (``--dump-dir``).
 """
 
-import argparse
 import sys
-from pathlib import Path
 
 import colorama
 from colorama import Fore, Style
 
-from . import Device, manifest, prebuilt
+from . import Device, manifest, options, prebuilt
 from .exception import InvalidPatchError
 from .layout import Layout
 
@@ -25,111 +23,7 @@ def main(argv=None):
     argv = [str(a) for a in argv]
     colorama.init()
     # -h is added once the device's options are, so it lists them too.
-    parser = argparse.ArgumentParser(
-        description="Game and Watch Firmware Patcher. "
-        "--help lists the options of the --device given (default mario).",
-        add_help=False,
-    )
-
-    #########################
-    # Global configurations #
-    #########################
-    parser.add_argument(
-        "--device",
-        type=str,
-        choices=[
-            "mario",
-            "zelda",
-            "amalgam",
-        ],
-        default="mario",
-        help="Game and Watch device model; amalgam puts both in one 256KB image.",
-    )
-    parser.add_argument(
-        "--patch",
-        type=Path,
-        default="build/gw_patch.bin",
-        help="Compiled custom code to insert at the end of the internal firmware",
-    )
-    parser.add_argument(
-        "--elf",
-        type=Path,
-        default="build/gw_patch.elf",
-        help="ELF file corresponding to the bin provided by --patch",
-    )
-    parser.add_argument(
-        "--prebuilt",
-        type=Path,
-        help="Directory of prebuilt ELFs (scripts/build_elf_matrix.py); picks "
-        "the one built for these options instead of --elf/--patch.",
-    )
-    parser.add_argument(
-        "--backup-dir",
-        type=Path,
-        default=Path("."),
-        help="Directory holding the stock backups "
-        "(internal_flash_backup_<device>.bin, flash_backup_<device>.bin).",
-    )
-    parser.add_argument(
-        "--dump-dir",
-        type=Path,
-        default=Path("build"),
-        help="Directory for the debug outputs (decrypted images, manifest, "
-        "patched ELF, extracted ROMs and graphics).",
-    )
-    parser.add_argument(
-        "--int-output",
-        type=Path,
-        default="build/internal_flash_patched.bin",
-        help="Patched internal firmware.",
-    )
-    parser.add_argument(
-        "--ext-output",
-        type=Path,
-        default="build/external_flash_patched.bin",
-        help="Patched external firmware.",
-    )
-
-    parser.add_argument(
-        "--extended",
-        action="store_true",
-        default=False,
-        help="256KB internal flash image instead of 128KB.",
-    )
-    parser.add_argument(
-        "--encrypt",
-        action="store_true",
-        help="Enable OTFDEC for the main extflash binary.",
-    )
-    parser.add_argument(
-        "--triple-boot",
-        action="store_true",
-        help="Enable RIGHT+GAME to launch 0x08020000.",
-    )
-    parser.add_argument(
-        "--sd-bootloader",
-        action="store_true",
-        help="Change target dual boot to 0x08032000.",
-    )
-    parser.add_argument(
-        "--compression-ratio",
-        type=float,
-        default=1.4,
-        help="Data targeted for SRAM3 will only be put into "
-        "SRAM3 if it's compression ratio is above this value. "
-        "Otherwise, will fallback to internal flash, then external "
-        "flash.",
-    )
-
-    debugging = parser.add_argument_group("Debugging")
-    debugging.add_argument(
-        "--show",
-        action="store_true",
-        help="Show a picture representation of the external patched binary.",
-    )
-    debugging.add_argument(
-        "--debug", action="store_true", help="Install useful debugging fault handlers."
-    )
+    parser = options.build_parser()
 
     args, _ = parser.parse_known_args(argv)
     parser.add_argument(
@@ -145,52 +39,44 @@ def main(argv=None):
         for name in names:
             Device.registry[name].add_arguments(parser)
         parser.parse_args(argv)  # Prints the help and exits.
-    if args.prebuilt:
-        try:
-            name = prebuilt.name(argv)
-        except prebuilt.PrebuiltError as e:
-            parser.error(str(e))
-        args.elf = args.prebuilt / f"{name}.elf"
-        if not args.elf.exists():
-            parser.error(f"--prebuilt: no {args.elf}")
-    if args.device == "amalgam":
-        return main_amalgam(parser, args, argv)
-    args.int_firmware = args.backup_dir / f"internal_flash_backup_{args.device}.bin"
-    args.ext_firmware = args.backup_dir / f"flash_backup_{args.device}.bin"
+    device_name, models = options.parse(argv)
+    args = models["mario" if device_name == "amalgam" else device_name]
+    elf, patch = _our_code(parser, args, argv, device_name, models)
+    args.dump_dir.mkdir(parents=True, exist_ok=True)
+    for path in (args.int_output, args.ext_output):
+        path.parent.mkdir(parents=True, exist_ok=True)
+    if device_name == "amalgam":
+        return main_amalgam(args, models, elf, patch)
 
-    device = Device.registry[args.device](
-        args.int_firmware, args.elf, args.ext_firmware
+    device = Device.registry[device_name](
+        args.backup_dir / f"internal_flash_backup_{device_name}.bin",
+        elf,
+        args.backup_dir / f"flash_backup_{device_name}.bin",
     )
-    device.add_arguments(parser)
-    args = parser.parse_args(argv)
-    if args.prebuilt:
-        args.elf = args.prebuilt / f"{prebuilt.name(argv)}.elf"
-    device.set_args(args, parser)
+    device.args = args
     device.crypt()  # Decrypt the external firmware
 
-    debug_dir = args.dump_dir
-    debug_dir.mkdir(parents=True, exist_ok=True)
+    dump_dir = args.dump_dir
     # Save the decrypted external firmware for debugging/development purposes.
-    (debug_dir / "decrypt.bin").write_bytes(device.external)
+    (dump_dir / "decrypt.bin").write_bytes(device.external)
 
     # Dump ITCM and DTCM RAM data
     if (
         device.internal.RWDATA_OFFSET is not None
         and device.internal.RWDATA_ITCM_IDX is not None
     ):
-        (debug_dir / "itcm_rwdata.bin").write_bytes(
+        (dump_dir / "itcm_rwdata.bin").write_bytes(
             device.internal.rwdata.datas[device.internal.RWDATA_ITCM_IDX]
         )
     if (
         device.internal.RWDATA_OFFSET is not None
         and device.internal.RWDATA_DTCM_IDX is not None
     ):
-        (debug_dir / "dtcm_rwdata.bin").write_bytes(
+        (dump_dir / "dtcm_rwdata.bin").write_bytes(
             device.internal.rwdata.datas[device.internal.RWDATA_DTCM_IDX]
         )
 
     # Copy over novel code
-    patch = _patch_bytes(args)
     if len(device.internal) != len(patch):
         raise InvalidPatchError(
             f"Expected patch length {len(device.internal)}, got {len(patch)}"
@@ -222,7 +108,7 @@ def main(argv=None):
         device.show()
 
     # Re-encrypt the external firmware
-    (debug_dir / "decrypt_flash_patched.bin").write_bytes(device.external)
+    (dump_dir / "decrypt_flash_patched.bin").write_bytes(device.external)
     images = [
         manifest.DeviceImages(device, device.internal, device.bank2, device.external)
     ]
@@ -288,18 +174,24 @@ def write_debug_outputs(args, images, internal, bank2, external):
     return lines
 
 
-def _patch_bytes(args):
-    """Our compiled code as one image: ``--patch``, or the ``--prebuilt`` ELF's."""
-    if args.prebuilt:
-        return prebuilt.elf_to_bin(args.elf.read_bytes())
-    return args.patch.read_bytes()
+def _our_code(parser, args, argv, device, models):
+    """``(ELF path, image)`` of our compiled code: ``--elf``/``--patch``, or the
+    ``--prebuilt`` ELF built for these options."""
+    if not args.prebuilt:
+        return args.elf, args.patch.read_bytes()
+    if {a.split("=")[0] for a in argv} & {"--elf", "--patch"}:
+        parser.error("--prebuilt replaces --elf and --patch")
+    try:
+        elf = prebuilt.find(args.prebuilt, prebuilt.c_config(device, models))
+    except prebuilt.PrebuiltError as e:
+        parser.error(str(e))
+    return elf, prebuilt.elf_to_bin(elf.read_bytes())
 
 
-def main_amalgam(parser, args, argv):
+def main_amalgam(args, models, elf, patch):
     """Mario and Zelda in one image; see patches/amalgam.py."""
     from . import amalgam
 
-    elf = args.elf
     zelda, mario = (
         Device.registry[name](
             args.backup_dir / f"internal_flash_backup_{name}.bin",
@@ -308,12 +200,10 @@ def main_amalgam(parser, args, argv):
         )
         for name in ("zelda", "mario")
     )
-    args = amalgam.configure(zelda, mario, parser, argv)
-    args.elf = elf
-    args.dump_dir.mkdir(parents=True, exist_ok=True)
+    amalgam.configure(zelda, mario, models)
     for device in (zelda, mario):
         device.crypt()  # Decrypt the external firmware
-    amalgam.load((zelda, mario), _patch_bytes(args))
+    amalgam.load((zelda, mario), patch)
 
     print(Fore.BLUE)
     print("#########################")

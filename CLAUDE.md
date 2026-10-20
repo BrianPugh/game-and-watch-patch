@@ -39,7 +39,8 @@ Notable `PATCH_PARAMS` flags: `--device`, `--extended`, `--internal-only`, `--en
 ## Linting and Testing
 
 ```bash
-# Run pre-commit hooks (black, flake8, isort, trailing-whitespace, end-of-file-fixer, debug-statements)
+# Run pre-commit hooks (black, flake8, isort, trailing-whitespace, end-of-file-fixer, debug-statements).
+# --all-files skips untracked files: `git add -N` new files first, or CI's run catches them.
 pre-commit run --all-files
 
 # Run tests (use the repo venv; system python lacks colorama/pycryptodome)

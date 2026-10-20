@@ -23,7 +23,12 @@ colorama.init()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Game and Watch Firmware Patcher.")
+    # -h is added once the device's options are, so it lists them too.
+    parser = argparse.ArgumentParser(
+        description="Game and Watch Firmware Patcher. "
+        "--help lists the options of the --device given (default mario).",
+        add_help=False,
+    )
 
     #########################
     # Global configurations #
@@ -106,6 +111,19 @@ def main():
     )
 
     args, _ = parser.parse_known_args()
+    parser.add_argument(
+        "-h", "--help", action="help", help="Show this help message and exit."
+    )
+    if {"-h", "--help"} & set(sys.argv[1:]):
+        if args.device == "amalgam":
+            # The 2 devices share some option names.
+            parser.conflict_handler = "resolve"
+            names = ("zelda", "mario")
+        else:
+            names = (args.device,)
+        for name in names:
+            Device.registry[name].add_arguments(parser)
+        parser.parse_args()  # Prints the help and exits.
     if args.device == "amalgam":
         return main_amalgam(parser, args)
     args.int_firmware = Path(f"internal_flash_backup_{args.device}.bin")

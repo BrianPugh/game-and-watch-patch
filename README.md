@@ -142,7 +142,6 @@ Options go in `PATCH_PARAMS`, e.g. `make PATCH_PARAMS="--device=zelda --no-facto
 | `--smb1-graphics FILE...` | Up to 8 IPS ROM hacks whose graphics the clock can use (DOWN on the clock cycles them). |
 | `--smb1-graphics-glob` | Use every IPS file in `ips/` for `--smb1-graphics`. |
 | `--clock-tileset=PNG` | Replace the clock tileset (256x256). |
-| `--clock-tileset-index=PNG` | Accepted, but currently has no effect. |
 | `--game-select-dual-boot` | Add a GAME menu entry that boots the dual-boot target (shown only if one is flashed). |
 | `--game-select-dual-boot-icon=PNG` | 96x48 icon for that entry (default: a retro-go logo). |
 | `--game-select-dual-boot-label=TEXT` | Draw TEXT on the entry instead of an icon. |

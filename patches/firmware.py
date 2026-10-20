@@ -550,7 +550,8 @@ class Device:
         cls.name = name
         cls.registry[name] = cls
 
-    def add_arguments(self, parser):
+    @classmethod
+    def add_arguments(cls, parser):
         """Add this device's options to ``parser``."""
 
     def set_args(self, args, parser):

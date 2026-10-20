@@ -138,16 +138,16 @@ struct {
 ```
 
 #### Boot magic and backup registers
-Our bootloader (`bootloader()` in `Core/Src/main.c`) runs before the stock firmware on every reset and checks these, in this order:
+Our bootloader (`bootloader()` in `Core/Src/main.c`) runs before the stock firmware on every reset and checks these, in this order. The RTC backup registers (HAL's `RTC_BKP_DRn`) are `TAMP->BKPnR` on the STM32H7B0.
 
 | Location | Value | Set by | Effect |
 |---|---|---|---|
 | RAM `0x2001FFF8` | `0x45435246` (`"FRCE"`) | this firmware (dual-boot/triple-boot) | Boot the vector table whose address is at `0x2001FFFC`. Checked before GAME. |
 | RAM `0x2001FFF8` | `0x544F4F42` (`"BOOT"`) | other firmware (e.g. retro-go, to return to the stock firmware) | Boot the vector table whose address is at `0x2001FFFC`. |
-| `RTC_BKP_DR0` (TAMP `BKP0R`) | `0x544F4F42` (`"BOOT"`) | retro-go-sd, which clears it to stop | Boot bank 2 (`0x08032000` with `--sd-bootloader`). The bootloader doesn't clear it. |
-| TAMP `BKP31R` | `0x444C455A` (`"ZELD"`) or 0 | the `--device=amalgam` game-select menu | Boot Zelda if `"ZELD"`, else Mario. |
+| `RTC_BKP_DR0` (`TAMP->BKP0R`) | `0x544F4F42` (`"BOOT"`) | retro-go-sd, which clears it to stop | Boot bank 2 (`0x08032000` with `--sd-bootloader`). The bootloader doesn't clear it. |
+| `RTC_BKP_DR31` (`TAMP->BKP31R`) | `0x444C455A` (`"ZELD"`) or 0 | the `--device=amalgam` game-select menu | Boot Zelda if `"ZELD"`, else Mario. |
 
-Every jump checks that the target's stack pointer and reset vector look valid, and boots the stock firmware otherwise. Both RAM magics are cleared when used. Holding GAME at boot clears the `"BOOT"` RAM magic, `RTC_BKP_DR0` and `BKP31R`. The RAM words survive a reset but not power-off. The backup registers survive both (the device sleeps in standby), but a reset right after a write can drop it, so read it back before resetting. The stock firmware uses no backup registers.
+Every jump checks that the target's stack pointer and reset vector look valid, and boots the stock firmware otherwise. Both RAM magics are cleared when used. Holding GAME at boot clears the `"BOOT"` RAM magic, `RTC_BKP_DR0` and `RTC_BKP_DR31`. The RAM words survive a reset but not power-off. The backup registers survive both (the device sleeps in standby), but a reset right after a write can drop it, so read it back before resetting. The stock firmware uses no backup registers.
 
 
 # Journal

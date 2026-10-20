@@ -24,10 +24,15 @@
 #define BOOTLOADER_MAGIC_ADDRESS ((uint32_t *)0x2001FFF8)
 #define BOOTLOADER_JUMP_ADDRESS ((uint32_t **)0x2001FFFC)
 
+// The RTC backup registers (HAL's RTC_BKP_DRn) are TAMP->BKPnR on the H7B0.
+// They survive resets and power-off (standby). Stock uses none; README.md
+// (Protocols) lists who uses which.
+// BOOTLOADER_MAGIC here (retro-go-sd sets it) boots the dual-boot target.
+#define DUAL_BOOT_REG (TAMP->BKP0R)
+
 #if GNW_AMALGAM
-// The firmware the amalgam boots: Zelda if this RTC backup register holds
-// AMALGAM_BOOT_ZELDA, else Mario. It survives resets and power-off (standby).
-// Stock uses no backup registers; README.md (Protocols) lists everyone's.
+// The firmware the amalgam boots: Zelda if it holds AMALGAM_BOOT_ZELDA, else
+// Mario.
 #define AMALGAM_BOOT_REG (TAMP->BKP31R)
 #define AMALGAM_BOOT_ZELDA 0x444C455A  // "ZELD"
 
@@ -74,10 +79,6 @@ void bootloader(){
     __HAL_RCC_RTC_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
 
-    RTC_HandleTypeDef hrtc = {0};
-    hrtc.Instance = RTC;
-    // Note: Don't need to call HAL_RTC_Init() since we're just reading backup register
-
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = BTN_GAME_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -89,7 +90,7 @@ void bootloader(){
     if(HAL_GPIO_ReadPin(BTN_GAME_GPIO_Port, BTN_GAME_Pin) == GPIO_PIN_RESET) {
         // If GAME is pressed: reset all triggers that might cause us to dual-boot.
         *BOOTLOADER_MAGIC_ADDRESS = 0;
-        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0);
+        DUAL_BOOT_REG = 0;
 #if GNW_AMALGAM
         // And boot Mario, in case Zelda doesn't start.
         AMALGAM_BOOT_REG = 0;
@@ -105,7 +106,7 @@ void bootloader(){
     }
 
 
-    if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) == BOOTLOADER_MAGIC){
+    if(DUAL_BOOT_REG == BOOTLOADER_MAGIC){
 #if SD_BOOTLOADER
         uint32_t sp = *((uint32_t*)SD_BOOTLOADER_ADDRESS);
         uint32_t pc = *((uint32_t*)SD_BOOTLOADER_ADDRESS + 1);

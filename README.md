@@ -160,6 +160,14 @@ Options go in `PATCH_PARAMS`, e.g. `make PATCH_PARAMS="--device=zelda --no-facto
 
 ### Amalgam (`--device=amalgam`)
 Takes both devices' options; one both understand (e.g. `--no-sleep-images`) applies to both. It always uses `--extended`, `--no-factory-test` and `--game-select-dual-boot` (an entry labeled with the other firmware that switches to it; holding GAME at boot returns to Mario), and `--sd-bootloader` adds `--xip-minigame`. It rejects `--encrypt`, `--triple-boot`, `--relocate-stock` and `--internal-only`. LEFT+GAME still boots the dual-boot target.
+
+Suggested command, with retro-go-sd (`make flash` also writes Sylverb's SD bootloader to `0x08032000`; leave out `--sd-bootloader` to boot bank 2 instead):
+
+```
+make clean
+make PATCH_PARAMS="--device=amalgam --sd-bootloader" flash
+```
+
 ## Build and flash using Docker
 
 <details>

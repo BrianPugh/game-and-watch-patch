@@ -163,7 +163,12 @@ void game_select_launch(){
     // Reset into the other firmware.
     PWR->CR1 |= PWR_CR1_DBP;
     while(!(PWR->CR1 & PWR_CR1_DBP));
-    AMALGAM_BOOT_REG = RUNNING_MARIO() ? AMALGAM_BOOT_ZELDA : 0;
+    uint32_t boot = RUNNING_MARIO() ? AMALGAM_BOOT_ZELDA : 0;
+    AMALGAM_BOOT_REG = boot;
+    // The write is buffered on its way to the backup domain, and a reset
+    // right after it dropped it about a third of the time on hardware (the
+    // same firmware booted again). Wait until it reads back.
+    while(AMALGAM_BOOT_REG != boot);
     NVIC_SystemReset();
 }
 #endif

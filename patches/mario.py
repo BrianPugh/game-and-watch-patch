@@ -10,10 +10,10 @@ from .exception import BadImageError, InvalidStockRomError
 from .firmware import Device, ExtFirmware, Firmware, IntFirmware
 from .thumb_asm import ThumbAssemblyError, encode_modified_immediate
 from .tileset import (
+    GAME_SELECT_PALETTE,
+    MARIO_ICON_ROLES,
     bytes_to_tilemap,
     decode_backdrop,
-    png_to_icon_4bpp,
-    render_label_icon,
     tilemap_to_bytes,
 )
 from .utils import (
@@ -29,9 +29,6 @@ from .xip import XipUnit
 # BALL's code: its API (called from main_loop_tick), game, sound and save.
 # Its static constructor (zeroes 3 halfwords of ball_ctx) stays internal.
 BALL_UNIT = (0x0800_3350, 0x0800_45D2)
-# Our pointer to the game-select DUAL BOOT icon (game_select_mario.c).
-ICON_SYMBOL = "MARIO_GAME_SELECT_DUAL_BOOT_ICON"
-
 build_dir = Path("build")  # TODO: expose this properly or put in better location
 
 
@@ -51,7 +48,8 @@ class MarioGnW(Device, name="mario"):
     # included.
     STOCK_RELOCATE_END = 0x0801_807C
     xip_ball = None
-    dual_boot_icon = None
+    # The game-select menu's custom entries' icons (Device.build_game_select_icons).
+    game_select_icons = []
 
     class Int(IntFirmware):
         STOCK_ROM_SHA1_HASH = "efa04c387ad7b40549e15799b471a6e1cd234c76"
@@ -401,8 +399,12 @@ class MarioGnW(Device, name="mario"):
             # Its vsnprintf and helpers, down to memchr.
             self.free_int(0x1_73EA, 0x1_7A30)
 
-        if self.args.game_select_dual_boot:
-            printi("Add dual-boot entry to the game-select menu.")
+        # Placed after the stock data moves, in whatever room they leave.
+        self.game_select_icons = self.build_game_select_icons(
+            96, 48, GAME_SELECT_PALETTE, MARIO_ICON_ROLES
+        )
+        if self.game_select_icons:
+            printi("Add custom entries to the game-select menu.")
             # Each hooked function has exactly one call site.
             self.internal.bl(0xC894, "mario_game_select_prev", expect="4:f87db677")
             self.internal.bl(0xC89C, "mario_game_select_next", expect="4:f2501abf")
@@ -410,12 +412,6 @@ class MarioGnW(Device, name="mario"):
                 0xCB18, "mario_game_select_handle_input", expect="4:fa0dc437"
             )
             self.internal.bl(0xD236, "mario_game_select_draw", expect="4:37ecc1ee")
-            if self.args.game_select_dual_boot_label:
-                icon = render_label_icon(self.args.game_select_dual_boot_label)
-            else:
-                icon = png_to_icon_4bpp(self.args.game_select_dual_boot_icon)
-            # Placed after the stock data moves, in whatever room they leave.
-            self.dual_boot_icon = lzma_compress(icon)
 
         printi("Mute clock audio on first boot.")
         self.internal.asm(0x49E0, "mov.w r1, #0x00000", expect="4:42e9afc9")
@@ -935,21 +931,19 @@ class MarioGnW(Device, name="mario"):
         # The TIME graphic of the first-boot PRESS TIME BUTTON screen.
         self.move_to_compressed_memory(0xF4D18, 2880, 0x10960)
 
-        icon_ext = None
-        if self.dual_boot_icon is not None:
-            printi("Place the game-select DUAL BOOT icon.")
-            if not self.place_int(
-                ICON_SYMBOL, self.dual_boot_icon, "game-select DUAL BOOT icon (LZMA)"
-            ):
-                icon_ext = self.dual_boot_icon
+        icons_ext = []
+        for symbol, icon, label in self.game_select_icons:
+            printi(f"Place the {label}.")
+            if not self.place_int(symbol, icon, label):
+                icons_ext.append((symbol, icon, label))
 
         # An ITCM overlay that game_reload copies with length 0 (literal at
         # 0x08007210), so it's never used.
         self.external.replace(0xF5858, b"\x00" * 34728)
         xip_size = round_up_word(self.xip_ball.ext_size) if self.xip_ball else 0
-        icon_size = round_up_word(len(icon_ext)) if icon_ext else 0
+        icon_size = sum(round_up_word(len(icon)) for _, icon, _ in icons_ext)
         if xip_size or icon_size:
-            # Room for BALL's code and the icon; written once pointers are fixed.
+            # Room for BALL's code and the icons; written once pointers are fixed.
             self.ext_space.keep(0xF5858)
             dead_offset = 0xF5858 + self.ext_space.shift
             self.ext_space.cursor += xip_size + icon_size
@@ -958,13 +952,9 @@ class MarioGnW(Device, name="mario"):
         self.fix_ext_refs()
         if self.xip_ball:
             self.xip_ball.write(dead_offset)
-        if icon_ext:
-            self.place_ext(
-                ICON_SYMBOL,
-                dead_offset + xip_size,
-                icon_ext,
-                "game-select DUAL BOOT icon (LZMA)",
-            )
+        for symbol, icon, label in icons_ext:
+            self.place_ext(symbol, dead_offset + xip_size, icon, label)
+            xip_size += round_up_word(len(icon))
         if self.relocation:
             self.relocation.fix_ram_images()
 

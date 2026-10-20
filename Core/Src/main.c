@@ -156,11 +156,7 @@ void launch_dual_boot(){
 }
 
 #if GNW_AMALGAM
-bool game_select_target_valid(){
-    return true;
-}
-
-void game_select_launch(){
+void game_select_switch(){
     // Reset into the other firmware.
     PWR->CR1 |= PWR_CR1_DBP;
     while(!(PWR->CR1 & PWR_CR1_DBP));

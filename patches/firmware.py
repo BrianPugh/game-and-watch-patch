@@ -14,6 +14,7 @@ from .compression import lz77_decompress, lzma_compress
 from .exception import InvalidStockRomError, MissingSymbolError, NotEnoughSpaceError
 from .layout import ExtRegion, Region
 from .patch import FirmwarePatchMixin
+from .tileset import png_to_icon_4bpp, render_label_icon
 from .utils import printd, printi, round_down_word, round_up_page, round_up_word
 
 
@@ -607,6 +608,31 @@ class Device:
         # and its external data starts at ext_base (the other's comes first).
         self.amalgam = False
         self.ext_base = 0
+
+    def build_game_select_icons(self, width, height, palette, roles):
+        """The game-select menu's custom entries' icons in menu order, LZMA'd,
+        as [(symbol, data, label)]: the amalgam's switch to the other firmware,
+        then the dual-boot target (--game-select-dual-boot)."""
+        prefix = f"{self.name.upper()}_GAME_SELECT"
+        icons = []
+        if self.amalgam:
+            icon = render_label_icon(
+                self.args.game_select_switch_label, width, height, roles
+            )
+            icons.append((f"{prefix}_SWITCH_ICON", icon, "game-select switch icon"))
+        if self.args.game_select_dual_boot:
+            if self.args.game_select_dual_boot_label:
+                icon = render_label_icon(
+                    self.args.game_select_dual_boot_label, width, height, roles
+                )
+            else:
+                icon = png_to_icon_4bpp(
+                    self.args.game_select_dual_boot_icon, width, height, palette
+                )
+            icons.append(
+                (f"{prefix}_DUAL_BOOT_ICON", icon, "game-select DUAL BOOT icon")
+            )
+        return [(s, lzma_compress(i), f"{label} (LZMA)") for s, i, label in icons]
 
     @property
     def stock_map(self):

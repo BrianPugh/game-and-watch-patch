@@ -3,12 +3,44 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "model.h"
+
 /**
- * Helpers shared by both models' game-select DUAL BOOT entry
+ * Helpers shared by both models' game-select custom entries
  * (game_select_mario.c, game_select_zelda.c).
  */
 
+// The custom entries: the amalgam's switch to the other firmware (always),
+// then the dual-boot target (--game-select-dual-boot).
+#if GNW_AMALGAM || GAME_SELECT_DUAL_BOOT
+#define GAME_SELECT_MENU 1
+#endif
+
 #define GAME_SELECT_FB_WIDTH 320
+
+typedef struct {
+    // Our pointer to the LZMA'd linear 4bpp (high nibble first) icon,
+    // wherever the patcher put it: internal flash if it fits, else external.
+    const uint8_t * const volatile *icon;
+    // Where game_select_inflate_icons() inflates it.
+    uint8_t *pixels;
+    // Returns only if the target is invalid.
+    void (*launch)(void);
+} game_select_custom_t;
+
+/**
+ * How many of the `n` custom entries to show: the dual-boot target's (the
+ * last) only if there's something to boot.
+ */
+uint8_t game_select_n_custom(uint8_t n);
+
+/**
+ * Inflates the `n` entries' icons (`size` bytes each) on the first call,
+ * from the menu's first draw (it only draws while external flash is mapped).
+ * The streams end with an end marker, so the input bound only has to be
+ * large enough.
+ */
+void game_select_inflate_icons(const game_select_custom_t *custom, uint8_t n, uint32_t size, bool *ready);
 
 /**
  * Moves the first visible entry `*top` of a `visible`-entry window over `n`

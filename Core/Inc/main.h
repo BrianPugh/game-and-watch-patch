@@ -126,17 +126,11 @@ bool dual_boot_target_valid();
  */
 void launch_dual_boot();
 
-/**
- * The game-select menu's DUAL BOOT entry: the other firmware in the amalgam
- * (always there), else the dual-boot target. game_select_launch() returns
- * only if the target is invalid.
- */
 #if GNW_AMALGAM
-bool game_select_target_valid();
-void game_select_launch();
-#else
-#define game_select_target_valid dual_boot_target_valid
-#define game_select_launch launch_dual_boot
+/**
+ * Reset into the other firmware (the amalgam's game-select switch entry).
+ */
+void game_select_switch();
 #endif
 
 #ifdef __cplusplus

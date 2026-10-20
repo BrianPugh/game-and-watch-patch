@@ -64,7 +64,7 @@ OUR_CODE = ZELDA_DST + ZeldaGnW.AMALGAM_RELOCATE_END - BASE
 SD_BOOTLOADER = 0x0803_2000
 # Shared by our code and data, no device owns these bytes.
 SHARED = "both"
-# Default label of each device's game-select entry: the firmware it boots.
+# Label of each device's game-select switch entry: the firmware it boots.
 OTHER_LABEL = {"mario": "ZELDA", "zelda": "MARIO"}
 
 
@@ -101,15 +101,10 @@ def configure(zelda, mario, parser):
         if args.sd_bootloader:
             # Our code needs the room it frees in Zelda's code.
             args.xip_minigame = True
-        # The game-select DUAL BOOT entry switches to the other firmware
-        # (main.c), and it's the only way to; label it with that firmware.
-        args.game_select_dual_boot = True
-        if (
-            args.game_select_dual_boot_label is None
-            and args.game_select_dual_boot_icon
-            == p.get_default("game_select_dual_boot_icon")
-        ):
-            args.game_select_dual_boot_label = OTHER_LABEL[device.name]
+        # A game-select entry, labeled with the other firmware, switches to
+        # it (main.c), and it's the only way to; --game-select-dual-boot adds
+        # the dual-boot target's entry after it.
+        args.game_select_switch_label = OTHER_LABEL[device.name]
         device.amalgam = True
         device.set_args(args, p)
     if unknown:

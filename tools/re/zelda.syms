@@ -266,7 +266,7 @@
 0x0800ea00 func system_state_dispatch                # (state = sysstate_get()): adr jump table; states 1/2 -> main_loop_tick(g_state[4]), others power/charge handlers
 0x0800ea30 func sysstate3_wake_tick                  # system_state_dispatch[3]: on wake re-reads board variant/battery (reset if bad), arms the power-button wakeup and enters stop mode via enter_stop_mode (UNVERIFIED)
 0x0800ea8c func sysstate4_tick                       # system_state_dispatch[4]: power state 6 + PA0 high: re-init RTC/wakeup (UNVERIFIED)
-0x0800eac4 func sysstate5_boot_tick                  # system_state_dispatch[5]: waits for the boot button combo, then game_reload(0xff00) or game_reload(0xffff00ff) (factory test)
+0x0800eac4 func sysstate5_boot_tick                  # system_state_dispatch[5]: waits until boot_combo_deadline for the factory-test combo, then game_reload(0xff00) or game_reload(0xffff00ff) (factory test)
 0x0800eb26 func boot_normal                          # power_on_init; game_reload(0xff00)
 0x0800eb38 func boot_factory_test                    # power_on_init; game_reload(0xffff00ff)
 0x0800eb44 func power_off                            # stops LTDC/ADC, powers down peripherals, power state = 6
@@ -274,7 +274,8 @@
 0x0800ebc8 func pwr_take_standby_flag                # returns 1 (and clears it via CPUCR.CSSF) if PWR_CPUCR.SBF says we woke from standby
 0x0800ebfa func buttons_gpio_init                    # clocks GPIOA/C/D, HAL_GPIO_Init(A: 0x5, C: 0x3822, D: 0xca21) = the G&W button pins
 0x0800ec7a func boot_combo_check                     # D-pad/buttons released and PC1/PC13 pattern + battery ok (UNVERIFIED semantics)
-0x0800ecbc func power_on_init                        # one-time init after deciding to boot: clocks (first time), peripherals, nvram, audio, LCD; power state = 4
+0x0800ecbc func power_on_init                        # sysstate 5 and boot_combo_deadline = now + 2000 ms, then falls through to the init at 0x0800ecd6: clocks (first time), peripherals, nvram, audio, LCD; power state = 4. boot_normal calls that init directly (no 2 s wait)
+0x2001b204 data boot_combo_deadline                   # HAL tick power_on_init sets 2000 ms ahead; screen stays dark until sysstate5_boot_tick sees it pass (--no-factory-test sets it to now)
 0x0800ed6e func power_long_press_tick                # Zelda: counts 10 x 100 ms while PA0 is held, then shuts down (0x08012a18, 0x0800e6ec)
 0x0800edb6 func usb_power_check                      # buttons released, PA0 low, PC13 ... (UNVERIFIED semantics)
 0x0800edfc func usb_power_tick                       # Zelda: counts 40 x 100 ms (0x0800edb6) then sets g_state[9] (leave the main loop)

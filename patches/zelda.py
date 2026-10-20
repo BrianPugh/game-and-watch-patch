@@ -190,7 +190,8 @@ class ZeldaGnW(Device, name="zelda"):
         group.add_argument(
             "--no-factory-test",
             action="store_true",
-            help="Remove the factory CHARGE AND KEY TEST screens (~9KB of internal code).",
+            help="Remove the factory CHARGE AND KEY TEST screens (~9KB of internal code) "
+            "and their 2 s button-combo wait at power-on.",
         )
 
         group = parser.add_argument_group("Game-select menu")
@@ -892,6 +893,10 @@ class ZeldaGnW(Device, name="zelda"):
                 self.internal.nop(call, 2, expect=expect)
             # Thunks, constructor, test pages, its audio and literal pools.
             self.free_int(0x1_68D8, 0x1_8154)
+            # power_on_init gives sysstate5_boot_tick 2000 ms to see the test's
+            # button combo before it calls game_reload; the screen stays dark
+            # until then. Make the deadline now, so it boots on the first tick.
+            self.internal.asm(0xECC4, "mov.w r0, #0", expect="4:f31f2414")
             # Helpers only the test used: text drawing, printf, RTC alarm.
             self.free_int(0x0_831E, 0x0_835E)
             self.free_int(0x0_837C, 0x0_8484)

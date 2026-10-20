@@ -248,12 +248,13 @@
 0x08005d46 func power_event                          # (event from 0x080139d0): power state machine transitions (events 1..6)
 0x08005e68 func system_state_dispatch                # (state = sysstate_get()): adr jump table; states 1/2 -> main_loop_tick(g_state[4]), others power/charge handlers
 0x08005ef4 func sysstate4_tick                       # system_state_dispatch[4]: power state 6 + PA0 high: re-init RTC/wakeup (UNVERIFIED)
-0x08005f2c func sysstate5_boot_tick                  # system_state_dispatch[5]: waits for the boot button combo, then game_reload(0xff00) or game_reload(0xffff00ff) (factory test)
+0x08005f2c func sysstate5_boot_tick                  # system_state_dispatch[5]: waits until boot_combo_deadline for the factory-test combo, then game_reload(0xff00) or game_reload(0xffff00ff) (factory test)
 0x08005f9e func boot_factory_test                    # power_on_init; game_reload(0xffff00ff)
 0x08006030 func pwr_take_standby_flag                # returns 1 (and clears it via CPUCR.CSSF) if PWR_CPUCR.SBF says we woke from standby
 0x08006068 func buttons_gpio_init                    # clocks GPIOA/C/D, HAL_GPIO_Init(A: 0x5, C: 0x3822, D: 0xca21) = the G&W button pins
 0x080060e8 func boot_combo_check                     # D-pad/buttons released and PC1/PC13 pattern + battery ok (UNVERIFIED semantics)
-0x0800612a func power_on_init                        # one-time init after deciding to boot: clocks (first time), peripherals, nvram, audio, LCD; power state = 4
+0x0800612a func power_on_init                        # sysstate 5 and boot_combo_deadline = now + 2000 ms, then falls through to the init at 0x08006144: clocks (first time), peripherals, nvram, audio, LCD; power state = 4. 0x08005f8e calls that init directly (no 2 s wait)
+0x20010f14 data boot_combo_deadline                   # HAL tick power_on_init sets 2000 ms ahead; screen stays dark until sysstate5_boot_tick sees it pass (--no-factory-test sets it to now)
 0x08006224 func usb_power_check                      # buttons released, PA0 low, PC13 ... (UNVERIFIED semantics)
 0x080062e0 func power_down_peripherals               # HAL_Delay(20), LCD SPI/DAC/LTDC deinit, unused GPIOs to analog
 0x08006300 func read_pc8_with_pullup                 # momentarily enables a pull-up on PC8, returns 1 if it reads low (UNVERIFIED purpose)

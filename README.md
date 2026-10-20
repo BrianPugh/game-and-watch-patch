@@ -4,12 +4,13 @@ Custom firmware for the newer Nintendo Game and Watch consoles.
 
 
 # What is this?
-This repo contains custom code as well as a patching utility to add additional functionality to the stock Game and Watch firmware. In short, this project allows you to run the firmware your game and watch came with along side [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go).
+This repo contains custom code as well as a patching utility to add additional functionality to the stock Game and Watch firmware. In short, this project allows you to run the firmware your game and watch came with alongside [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go).
 
 
 # Features
 * Works correctly with [retro-go](https://github.com/kbeckmann/game-and-watch-retro-go) in internal flash bank 2.
 * Press button combination (`LEFT` + `GAME`) to launch retro-go from internal flash bank 2.
+* Works with [retro-go-sd](https://github.com/sylverb/game-and-watch-retro-go-sd) through Sylverb's SD bootloader (`--sd-bootloader`).
 * See [Configuration](#configuration) for every option and the recommended setups.
 
 ### Mario (`PATCH_PARAMS="--device=mario"`)
@@ -25,21 +26,25 @@ This repo contains custom code as well as a patching utility to add additional f
     * Cycle through via the down button on the clock screen.
     * Add all your ips files to `ips/` and have the patcher automatically discover them via the flag `--smb1-graphics-glob`
 * Dumps SMB1 and SMB2 ROMs that are playable by other emulators.
+* GAME menu entry that launches the dual-boot target (`--game-select-dual-boot`).
 * TICK ON/OFF row in the clock's PAUSE/SET menu to silence the clock's once-a-second tick.
 * See [the mario document for more information](docs/mario.md).
 
 ### Zelda (`PATCH_PARAMS="--device=zelda"`)
 * TICK ON/OFF row in the clock's PAUSE/SET menu to silence the clock's once-a-second beep (`--no-hour-tune` removes the hour tune).
-* External flash savings to come in the future.
+* Compressed and compacted external flash data (about 2.9 MB used of the stock 4 MB chip).
+    * Option to remove Link's Awakening (`--no-la`).
+    * Option to remove the 11 backdrop images (`--no-sleep-images`).
+* GAME menu row that launches the dual-boot target (`--game-select-dual-boot`).
 * See [the zelda document for more information](docs/zelda.md).
 
 ### Mario + Zelda (`PATCH_PARAMS="--device=amalgam"`)
 * Both stock firmwares in one internal bank, on either unit (with enough external flash). Each GAME menu has an entry that switches to the other firmware, and the choice survives power-off.
 
 # Usage
-This repo uses the [gnwmanager cli tool](https://github.com/BrianPugh/gnwmanager/blob/main/tutorials/installation.md). See it's instructions on how to install.
+This repo uses the [gnwmanager cli tool](https://github.com/BrianPugh/gnwmanager/blob/main/tutorials/installation.md). See its instructions on how to install.
 
-Install game-and-watch-patch python dependencies (>=python3.6 required) via:
+Install game-and-watch-patch python dependencies (>=python3.10 required) via:
 
 ```
 pip3 install -r requirements.txt
@@ -57,7 +62,7 @@ For every option and the recommended setups, see [Configuration](#configuration)
 
 
 ### Retro Go (Mario)
-Since most people are going to be using this with retro-go, want the minimum amount of external storage used, and don't care about the sleeping images or the mario song easter egg, here are the recommend commands. Note that this uses an undocumented 128KB of internal Bank 1 and requires a [patched version of openocd](https://github.com/kbeckmann/ubuntu-openocd-git-builder) installed.
+Since most people are going to be using this with retro-go, want the minimum amount of external storage used, and don't care about the sleeping images or the mario song easter egg, here are the recommended commands. Note that this uses an undocumented 128KB of internal Bank 1.
 
 ```
 # in this repo
@@ -76,7 +81,7 @@ This assumes you have upgraded the external flash to something larger than 4MB. 
 ```
 # in this repo
 make clean
-make PATCH_PARAMS="--device=zelda" flash
+make PATCH_PARAMS="--device=zelda --no-factory-test" flash
 
 # in the retro-go repo
 make clean
@@ -94,7 +99,7 @@ Options go in `PATCH_PARAMS`, e.g. `make PATCH_PARAMS="--device=zelda --no-facto
 | Setup | `PATCH_PARAMS` | Notes |
 |---|---|---|
 | Mario + retro-go in bank 2 | `--device=mario --internal-only` | Uses no external flash, so retro-go gets all of it. Drops the mario song, sleep images, factory test and saves. |
-| Mario + retro-go-sd | `--device=mario --internal-only --sd-bootloader` | Same, plus LEFT+GAME boots Sylverb's SD bootloader, which `make flash` also writes. Also drops SMB2 to make room. |
+| Mario + [retro-go-sd](https://github.com/sylverb/game-and-watch-retro-go-sd) | `--device=mario --internal-only --sd-bootloader` | Same, plus LEFT+GAME boots Sylverb's SD bootloader, which `make flash` also writes. Also drops SMB2 to make room. |
 | Zelda + retro-go in bank 2 | `--device=zelda --no-factory-test` | Uses about 2.9 MB of external flash. With the stock 4 MB chip, see [docs/zelda.md](docs/zelda.md). |
 | Zelda + retro-go-sd | `--device=zelda --no-factory-test --sd-bootloader` | |
 | Mario and Zelda on one unit | `--device=amalgam` | Both firmwares in internal bank 1; switch between them from either GAME menu. Uses about 3.7 MB of external flash. |
@@ -175,7 +180,7 @@ make PATCH_PARAMS="--device=amalgam --sd-bootloader" flash
     If you are familiar with Docker and prefer a solution where you don't have to manually install toolchains and so on, expand this section and read on.
   </summary>
   To reduce the number of potential pitfalls in installation of various software, a Dockerfile is provided containing everything needed to compile and flash Custom Firmware (CFW) to your Nintendo® Game & Watch™ system.
-  This Dockerfile is written tageting an x86-64 machine running Linux.
+  This Dockerfile is written targeting an x86-64 machine running Linux.
 
   Steps to flash from a docker container (running on Linux, e.g. Archlinux or Ubuntu):
 
@@ -206,7 +211,7 @@ Main stages to developing a feature:
 1. Find a place to take control in the stock rom (usually function calls).
 2. Name the stock function in `tools/re/<device>.syms` (if it isn't already) and add a prototype for `stock_<device>_<name>` to `Core/Inc/stock_firmware_<device>.h`. The build turns every `.syms` function into a linker symbol, so the patcher can follow every call when it relocates stock code. Patch code can look up any `.syms` name with `self.internal.sym(name)`.
 3. Implement your own function, in `Core/Src/<device>.c` (or `Core/Src/main.c` if both models use it). There's a good chance your custom function will call the function in (2). You will also probably have to add `-Wl,--undefined=my_custom_function` to `LDFLAGS` in the Makefile so that it doesn't get optimized out as unreachable code.
-4. Add a patch definition to `patches/patches.py`.
+4. Add a patch definition to the device's class in `patches/mario.py` or `patches/zelda.py`.
 
 ### Protocols
 We store information about how much external flash this firmware uses at internal-flash offset `0x01B8`.
@@ -216,7 +221,7 @@ At this location we store the following data:
 ```C
 struct {
   external_flash_size: 24; // This value * 4096 is the amount of external flash used by this firmware.
-  must_be_4: 4; // "magic" value that would never be valid in any real hdmi-cec firmware. 0x4 is in the hardware perhipheral space.
+  must_be_4: 4; // "magic" value that would never be valid in any real hdmi-cec firmware. 0x4 is in the hardware peripheral space.
   is_mario: 1;  // This is the mario firmware.
   is_zelda: 1;  // This is the zelda firmware.
   _unused: 2;   // Reserved for future use. All 0 for now.

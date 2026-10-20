@@ -38,7 +38,7 @@ at their final addresses (see `patches/manifest.py`).
 python tools/re/xrefs.py --device=mario [--units] [--json build/re/mario_xrefs.json]
 ```
 
-Recursive-descent disassembly (capstone) of internal flash, the ITCM code and
+Recursive-descent disassembly (`patches/thumb_disasm.py`) of internal flash, the ITCM code and
 the external-flash code, seeded from the vector table, the static-constructor
 table, `.syms` and every Thumb pointer it finds. It prints what relocating
 internal code has to handle: byte classification, the units that must move

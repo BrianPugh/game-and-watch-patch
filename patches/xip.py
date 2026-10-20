@@ -179,8 +179,8 @@ class XipUnit:
         if ctors:
             ctor_code = Code(bytes(self.buf), lo, lo, hi)
             ctor_code.descend({a | 1 for a in ctors})
-            for a, (sz, _, _) in ctor_code.insns.items():
-                kept[a - lo : a - lo + sz] = True
+            for a, ins in ctor_code.insns.items():
+                kept[a - lo : a - lo + ins.size] = True
             for lit, sz in ctor_code.literals().items():
                 kept[lit - lo : lit - lo + sz] = True
             for src, t, mn, _ in ctor_code.branches:

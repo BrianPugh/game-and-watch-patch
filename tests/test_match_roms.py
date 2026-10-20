@@ -2,8 +2,14 @@ import importlib.util
 import struct
 from pathlib import Path
 
+import pytest
+
 from patches.relocate import _encode_branch
+from patches.thumb_disasm import decode_capstone
 from patches.xrefs import Code
+
+# match_roms signs functions by capstone's instruction text.
+pytest.importorskip("capstone")
 
 _spec = importlib.util.spec_from_file_location(
     "match_roms", Path(__file__).parents[1] / "tools" / "re" / "match_roms.py"
@@ -29,7 +35,7 @@ def _code(base, layout, literals, size=0x80):
         struct.pack_into(f"<{len(halfwords)}H", mem, off, *halfwords)
     for off, value in literals.items():
         struct.pack_into("<I", mem, off, value)
-    code = Code(bytes(mem), base, base, base + size)
+    code = Code(bytes(mem), base, base, base + size, decode_capstone)
     code.descend({base + off for off in layout})
     return code
 

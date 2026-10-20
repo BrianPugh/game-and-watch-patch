@@ -1,0 +1,4 @@
+-r requirements.txt
+# Test oracles: tests/test_thumb_asm.py, tests/test_thumb_disasm.py, tools/re/match_roms.py.
+capstone
+pytest

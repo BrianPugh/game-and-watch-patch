@@ -42,7 +42,7 @@ Notable `PATCH_PARAMS` flags: `--device`, `--extended`, `--internal-only`, `--en
 # Run pre-commit hooks (black, flake8, isort, trailing-whitespace, end-of-file-fixer, debug-statements)
 pre-commit run --all-files
 
-# Run tests (use the repo venv; system python lacks colorama/pycryptodome)
+# Run tests (use the repo venv, with requirements-dev.txt; system python lacks colorama/pycryptodome)
 .venv/bin/python -m pytest tests/
 ```
 
@@ -95,6 +95,7 @@ Each device class adds its own CLI arguments via `argparse()` method.
 `patches/patch.py` provides `FirmwarePatchMixin` with patching API:
 - `replace()`, `relative()`, `lookup()` - Binary patching primitives
 - `asm()` - ARM Thumb assembly via `patches/thumb_asm.py`, a minimal in-house assembler (ported from gnwmanager) covering only the forms the patches use; add a form there (with capstone/keystone tests in `tests/test_thumb_asm.py`) before using a new instruction. keystone-engine is an optional dev-only test oracle.
+- `patches/thumb_disasm.py` decodes Thumb-2 for the recursive descent (`xrefs.Code`): no text, only the fields the descent reads (size, branch target, PC-relative load/address, the registers the pc-offset and table-branch patterns track, PC writes). capstone is dev-only (`requirements-dev.txt`): `decode_capstone()` gives the same fields from it, `tests/test_thumb_disasm.py` compares the 2 over every 16-bit encoding, random 32-bit ones and the whole stock map (identical for both models), and `tools/re/match_roms.py` uses it for instruction text. A rule in `Code._run` that needs another property of an instruction needs a field in both decoders.
   `asm()` assembles every branch except `b.w` as if at address 0, so for code with relative branches or pc-relative loads (or ITCM code stored elsewhere), call `thumb_assemble(code, run_address)` and write it with `replace(..., expect=...)`.
 - `bl()`, `b()`, `nop()` - ARM branch/nop helpers
 - `compress()` - LZMA compression for data relocation

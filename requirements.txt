@@ -3,4 +3,3 @@ colorama
 numpy
 pycryptodome
 pyelftools
-capstone

@@ -34,6 +34,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from patches.syms import parse_syms, syms_path  # noqa: E402
+from patches.thumb_disasm import decode_capstone  # noqa: E402
 from patches.xrefs import analyze  # noqa: E402
 
 DEVICES = ("mario", "zelda")
@@ -56,12 +57,17 @@ def _in_it_block(code, a):
     p = a
     for k in range(1, 5):
         prev = next(
-            (p - s for s in (2, 4) if code.insns.get(p - s, (0,))[0] == s), None
+            (
+                p - s
+                for s in (2, 4)
+                if p - s in code.insns and code.insns[p - s].size == s
+            ),
+            None,
         )
         if prev is None:
             return False
         p = prev
-        mn = code.insns[p][1]
+        mn = code.insns[p].mnemonic
         if mn.startswith("it"):
             return len(mn) - 1 >= k
     return False
@@ -80,7 +86,8 @@ def bodies(code, starts, stop):
             if a in seen or a not in code.insns or (a != e and a in stop):
                 continue
             seen.add(a)
-            size, mn, op = code.insns[a]
+            ins = code.insns[a]
+            size, mn, op = ins.size, ins.mnemonic, ins.op_str
             m = mn.split(".")[0]
             nxt = a + size
             if a in branch:
@@ -117,7 +124,7 @@ def signature(code, addrs):
     pcrel = {src: (lit, size) for src, lit, size in code.pcrel}
     toks, calls = [], []
     for a in addrs:
-        _, mn, op = code.insns[a]
+        mn, op = code.insns[a].mnemonic, code.insns[a].op_str
         if a in branch:
             t, bmn = branch[a]
             if bmn.startswith("bl"):
@@ -153,12 +160,12 @@ class Rom:
         for name, code in regions.items():
             for e, addrs in bodies(code, sorted(all_entries[name]), stop).items():
                 self.sig[e], self.calls[e] = signature(code, addrs)
-                self.size[e] = sum(code.insns[a][0] for a in addrs)
+                self.size[e] = sum(code.insns[a].size for a in addrs)
                 self.region[e] = name
 
     @classmethod
     def from_device(cls, device):
-        a = analyze(device)
+        a = analyze(device, decode=decode_capstone)
         regions = {
             "internal": a.code,
             "itcm": a.other["ITCM"],

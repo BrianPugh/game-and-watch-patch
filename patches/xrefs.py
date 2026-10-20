@@ -1,6 +1,6 @@
 """Map the stock internal-flash code and everything that references it.
 
-Recursive-descent disassembly (capstone) of internal flash, seeded from the
+Recursive-descent disassembly (``patches/thumb_disasm.py``) of internal flash, seeded from the
 vector table, the static-constructor and init tables, ``tools/re/<device>.syms``
 and any Thumb pointer found along the way (iterated until nothing new turns
 up). The ITCM code and the external-flash code are scanned the same way,
@@ -27,12 +27,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-import capstone
-from capstone import arm as A
-
 from .compression import lz77_decompress
 from .firmware import Device
 from .syms import parse_syms, syms_path
+from .thumb_disasm import CONDS, decode
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -146,54 +144,20 @@ LAYOUT = {
     },
 }
 
-CONDS = {
-    "eq",
-    "ne",
-    "cs",
-    "hs",
-    "cc",
-    "lo",
-    "mi",
-    "pl",
-    "vs",
-    "vc",
-    "hi",
-    "ls",
-    "ge",
-    "lt",
-    "gt",
-    "le",
-}
-
-_md = capstone.Cs(
-    capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB | capstone.CS_MODE_MCLASS
-)
-_md.detail = True
-
 
 def u32(mem, base, addr):
     return struct.unpack_from("<I", mem, addr - base)[0]
 
 
-def _load_size(ins):
-    m = ins.mnemonic.split(".")[0]
-    if m.startswith("ldrd"):
-        return 8
-    if m.startswith(("ldrh", "ldrsh")):
-        return 2
-    if m.startswith(("ldrb", "ldrsb")):
-        return 1
-    if m == "vldr":
-        return 8 if A.ARM_REG_D0 <= ins.operands[0].reg <= A.ARM_REG_D31 else 4
-    return 4
-
-
 class Code:
-    """Recursive-descent disassembly of one Thumb region."""
+    """Recursive-descent disassembly of one Thumb region. ``decode`` is
+    ``thumb_disasm.decode`` or another function like it (e.g.
+    ``thumb_disasm.decode_capstone``, whose instructions carry their text)."""
 
-    def __init__(self, mem, base, lo, hi):
+    def __init__(self, mem, base, lo, hi, decode=decode):
         self.mem, self.base, self.lo, self.hi = mem, base, lo, hi
-        self.insns = {}  # addr -> (size, mnemonic, op_str)
+        self.decode = decode
+        self.insns = {}  # addr -> thumb_disasm.Insn
         self.branches = []  # (src, dst, mnemonic, size)
         self.pcrel = []  # (src, addr, load size; 0 for adr / add rX, pc)
         self.tables = []  # (src, start, end) of tbb/tbh tables
@@ -220,80 +184,50 @@ class Code:
     def _run(self, a, work):
         last_cmp, it_left, pending, added = {}, 0, {}, None
         while self.contains(a) and a not in self.insns:
-            ins = next(
-                _md.disasm(self.mem[a - self.base : a - self.base + 4], a, 1), None
-            )
+            ins = self.decode(self.mem, a - self.base, a)
             if ins is None:
                 return
-            self.insns[a] = (ins.size, ins.mnemonic, ins.op_str)
-            ops, nxt = ins.operands, a + ins.size
+            self.insns[a] = ins
+            nxt = a + ins.size
             mn = ins.mnemonic.split(".")[0]
             if mn[0] == "b" and mn[1:] in CONDS:
                 mn = "bcc"
-            # Decoding one instruction at a time loses capstone's IT state; track it here.
+            # Instructions are decoded one at a time, out of any IT block; track it here.
             cond = mn == "bcc" or it_left > 0
             if it_left:
                 it_left -= 1
             if mn.startswith("it"):
                 it_left = len(mn) - 1
 
-            for op in ops:
-                if (
-                    op.type == A.ARM_OP_MEM
-                    and op.mem.base == A.ARM_REG_PC
-                    and op.mem.index == 0
-                ):
-                    self.pcrel.append(
-                        (a, ((a + 4) & ~3) + op.mem.disp, _load_size(ins))
-                    )
-            if mn == "adr" or (
-                mn in ("add", "addw", "sub", "subw")
-                and len(ops) == 3
-                and ops[1].type == A.ARM_OP_REG
-                and ops[1].reg == A.ARM_REG_PC
-                and ops[2].type == A.ARM_OP_IMM
-            ):
-                imm = -ops[-1].imm if mn.startswith("sub") else ops[-1].imm
-                self.pcrel.append((a, ((a + 4) & ~3) + imm, 0))
+            base = (a + 4) & ~3
+            if ins.pc_load is not None:
+                disp, size = ins.pc_load
+                self.pcrel.append((a, base + disp, size))
+            if ins.pc_imm is not None:
+                self.pcrel.append((a, base + ins.pc_imm, 0))
             if added is not None:
-                lit, base, reg = added
+                lit, lit_base, reg = added
                 adj = 0
-                if (
-                    mn == "adds"
-                    and len(ops) == 2
-                    and ops[0].reg == reg
-                    and ops[1].type == A.ARM_OP_IMM
-                ):
-                    adj = ops[1].imm
-                self.pc_offsets.append((lit, base, adj))
+                if ins.adds_imm is not None and ins.adds_imm[0] == reg:
+                    adj = ins.adds_imm[1]
+                self.pc_offsets.append((lit, lit_base, adj))
                 added = None
-            if (
-                mn == "ldr"
-                and len(ops) == 2
-                and ops[1].type == A.ARM_OP_MEM
-                and ops[1].mem.base == A.ARM_REG_PC
-            ):
-                pending[ops[0].reg] = ((a + 4) & ~3) + ops[1].mem.disp
-            elif (
-                mn == "add"
-                and len(ops) == 2
-                and ops[1].type == A.ARM_OP_REG
-                and ops[1].reg == A.ARM_REG_PC
-                and ops[0].reg in pending
-            ):
-                added = (pending.pop(ops[0].reg), a + 4, ops[0].reg)
-            elif ops and ops[0].type == A.ARM_OP_REG:
-                pending.pop(ops[0].reg, None)
-            if mn == "cmp" and len(ops) == 2 and ops[1].type == A.ARM_OP_IMM:
-                last_cmp[ops[0].reg] = ops[1].imm
+            if ins.ldr_pc is not None:
+                pending[ins.ldr_pc] = base + ins.pc_load[0]
+            elif ins.add_pc is not None and ins.add_pc in pending:
+                added = (pending.pop(ins.add_pc), a + 4, ins.add_pc)
+            elif ins.first_reg is not None:
+                pending.pop(ins.first_reg, None)
+            if ins.cmp_imm is not None:
+                last_cmp[ins.cmp_imm[0]] = ins.cmp_imm[1]
 
-            if mn in ("tbb", "tbh"):
-                n = last_cmp.get(ops[0].mem.index)
+            if ins.table is not None:
+                index, esz = ins.table
+                n = last_cmp.get(index)
                 start = a + 4
                 if n is None:
                     self.unbounded_tables.append(a)
                     return
-                esz = 1 if mn == "tbb" else 2
                 self.tables.append((a, start, start + esz * (n + 1)))
                 for i in range(n + 1):
                     o = start - self.base + esz * i
@@ -304,27 +238,15 @@ class Code:
                     )
                     work.append(start + 2 * off)
                 return
-            if (
-                mn in ("b", "bcc", "bl", "cbz", "cbnz")
-                and ops
-                and ops[-1].type == A.ARM_OP_IMM
-            ):
-                # capstone reports targets >= 0x80000000 (external flash) as negative.
-                t = ops[-1].imm & 0xFFFF_FFFF
+            if ins.branch is not None:
+                t = ins.branch
                 self.branches.append((a, t, ins.mnemonic, ins.size))
                 work.append(t)
                 if mn == "b" and not cond:
                     return
                 a = nxt
                 continue
-            writes_pc = (
-                ops and ops[0].type == A.ARM_OP_REG and ops[0].reg == A.ARM_REG_PC
-            )
-            writes_pc = writes_pc and (mn.startswith("ldr") or mn in ("mov", "add"))
-            writes_pc = writes_pc or (
-                mn in ("pop", "ldm", "ldmia", "ldmfd") and "pc" in ins.op_str
-            )
-            if (mn == "bx" or writes_pc or mn == "udf") and not cond:
+            if (mn == "bx" or ins.writes_pc or mn == "udf") and not cond:
                 return
             a = nxt
 
@@ -340,8 +262,8 @@ class Code:
 def classify(code):
     """bytearray over [lo, hi): 0 unknown, 1 code, 2 literal, 3 jump table."""
     cls = bytearray(code.hi - code.lo)
-    for a, (sz, _, _) in code.insns.items():
-        cls[a - code.lo : a - code.lo + sz] = b"\x01" * sz
+    for a, ins in code.insns.items():
+        cls[a - code.lo : a - code.lo + ins.size] = b"\x01" * ins.size
     for _, s, e in code.tables:
         cls[s - code.lo : e - code.lo] = b"\x03" * (e - s)
     for lit, sz in code.literals().items():
@@ -398,9 +320,10 @@ def copy_sources(layout):
     ]
 
 
-def analyze(device, internal=None, external=None, repo=REPO):
+def analyze(device, internal=None, external=None, repo=REPO, decode=decode):
     """Analyze the stock firmware. ``internal``/``external`` default to the
-    backups in ``repo``; ``external`` must be decrypted."""
+    backups in ``repo``; ``external`` must be decrypted. ``decode``: see
+    ``Code``."""
     device_cls = Device.registry[device]
     layout = LAYOUT[device]
     if internal is None:
@@ -462,8 +385,8 @@ def analyze(device, internal=None, external=None, repo=REPO):
     # Other code regions first: their pointers into internal flash are seeds too.
     ext_lo, ext_hi = layout["ext_code"]
     other = {
-        "ITCM": Code(bytes(itcm), 0, 0, len(itcm)),
-        "external": Code(external, EXT_BASE, ext_lo, ext_hi),
+        "ITCM": Code(bytes(itcm), 0, 0, len(itcm), decode),
+        "external": Code(external, EXT_BASE, ext_lo, ext_hi, decode),
     }
     int_words = [iword(INT_BASE + o) for o in range(0, code_end - INT_BASE, 4)]
     itcm_words = [u32(itcm, 0, o) for o in range(0, len(itcm) - 3, 2)]
@@ -492,8 +415,8 @@ def analyze(device, internal=None, external=None, repo=REPO):
     # Remaining external data (e.g. the NES emulator's handler table at 0x900a9ce4).
     covered = set()
     for c in other.values():
-        for a, (sz, _, _) in c.insns.items():
-            covered.update(range(a, a + sz))
+        for a, ins in c.insns.items():
+            covered.update(range(a, a + ins.size))
         for lit, sz in c.literals().items():
             covered.update(range(lit, lit + sz))
     skip = layout["ext_skip"] + [layout["ext_code"]] + copy_sources(layout)
@@ -539,7 +462,7 @@ def analyze(device, internal=None, external=None, repo=REPO):
                 refs.append({"kind": "DTCM .data", "src": dst + o, "target": v})
 
     # Internal flash, iterated: Thumb pointers in literals or unknown bytes become seeds.
-    code = Code(internal, INT_BASE, INT_BASE + VECTOR_TABLE_END, code_end)
+    code = Code(internal, INT_BASE, INT_BASE + VECTOR_TABLE_END, code_end, decode)
     while True:
         code.descend(seeds)
         cls = classify(code)
@@ -647,12 +570,12 @@ def units(code):
     for src, t, _, size in code.branches:
         if size == 2 and code.contains(t) and block(src) != block(t):
             union(block(src), block(t))
-    for a, (sz, mn, op_str) in code.insns.items():
-        nxt, m = a + sz, mn.split(".")[0]
+    for a, ins in code.insns.items():
+        nxt, m = a + ins.size, ins.mnemonic.split(".")[0]
         if (
             nxt in start_set
             and block(a) != nxt
-            and not (m in ("b", "bx", "udf") or "pc" in op_str)
+            and not (m in ("b", "bx", "udf") or ins.mentions_pc)
         ):
             union(block(a), nxt)
     for src, s, e in code.tables:
@@ -743,8 +666,8 @@ def ext_refs(a):
         covered.update(range(lit, lit + sz))
         if sz == 4:
             add("external literal", lit, u32(a.external, EXT_BASE, lit))
-    for x, (sz, _, _) in ext.insns.items():
-        covered.update(range(x, x + sz))
+    for x, ins in ext.insns.items():
+        covered.update(range(x, x + ins.size))
     skip = layout["ext_skip"] + copy_sources(layout)
     for x in range(EXT_BASE, ext_end - 3, 4):
         if x in covered or inside(x, skip):

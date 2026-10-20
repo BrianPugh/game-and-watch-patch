@@ -1,6 +1,5 @@
 import struct
 
-import capstone
 import pytest
 
 from patches.relocate import (
@@ -10,11 +9,7 @@ from patches.relocate import (
     compact_runs,
     final_address,
 )
-
-_md = capstone.Cs(
-    capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB | capstone.CS_MODE_MCLASS
-)
-_md.detail = True
+from patches.thumb_disasm import decode
 
 # (encoding with offset 0, mnemonic) of each 32-bit branch kind.
 BRANCHES = [
@@ -25,8 +20,8 @@ BRANCHES = [
 
 
 def _target(hw1, hw2, pc):
-    ins = next(_md.disasm(struct.pack("<HH", hw1, hw2), pc))
-    return ins.mnemonic, ins.operands[-1].imm
+    ins = decode(struct.pack("<HH", hw1, hw2), 0, pc)
+    return ins.mnemonic, ins.branch
 
 
 @pytest.mark.parametrize("encoding, kind", BRANCHES)
@@ -69,19 +64,10 @@ def test_compact_runs_close_the_holes():
 
 
 def _pcrel_disp(code, addr=0x0800_0000):
-    """Offset from Align(PC, 4) that capstone decodes from a PC-relative load
-    or adr/addw/subw rX, pc."""
-    md = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB)
-    md.detail = True
-    ins = next(md.disasm(bytes(code), addr))
-    for op in ins.operands:
-        if (
-            op.type == capstone.arm.ARM_OP_MEM
-            and op.mem.base == capstone.arm.ARM_REG_PC
-        ):
-            return op.mem.disp
-    imm = ins.operands[-1].imm
-    return -imm if ins.mnemonic.startswith("sub") else imm
+    """Offset from Align(PC, 4) that a PC-relative load or adr/addw/subw rX, pc
+    decodes to."""
+    ins = decode(bytes(code), 0, addr)
+    return ins.pc_load[0] if ins.pc_load is not None else ins.pc_imm
 
 
 @pytest.mark.parametrize(

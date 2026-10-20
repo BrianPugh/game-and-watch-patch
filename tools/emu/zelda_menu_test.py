@@ -227,7 +227,7 @@ def final_address(addr: int) -> int:
     stock_zelda_* symbol in build/patched.elf, plus the offset into it."""
     import importlib.util
 
-    # patches/syms.py alone: the patches package needs capstone.
+    # patches/syms.py alone, without the patches package's dependencies.
     spec = importlib.util.spec_from_file_location("syms", REPO / "patches/syms.py")
     syms = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(syms)

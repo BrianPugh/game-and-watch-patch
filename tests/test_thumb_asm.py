@@ -1,11 +1,10 @@
 """Tests for the minimal Thumb-2 assembler in ``patches.thumb_asm``.
 
-capstone (a runtime dependency) disassembles every form over its operand range,
-so these always run. keystone-engine, when installed, is the byte-for-byte
-reference: those tests skip without it.
+capstone (``requirements-dev.txt``) disassembles every form over its operand
+range. keystone-engine, when installed, is the byte-for-byte reference: those
+tests skip without it.
 """
 
-import capstone
 import pytest
 
 from patches.thumb_asm import (
@@ -14,6 +13,8 @@ from patches.thumb_asm import (
     encode_modified_immediate,
     iter_modified_immediates,
 )
+
+capstone = pytest.importorskip("capstone")
 
 _md = capstone.Cs(
     capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB | capstone.CS_MODE_MCLASS

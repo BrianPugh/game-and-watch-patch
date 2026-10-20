@@ -27,7 +27,7 @@
 #if GNW_AMALGAM
 // The firmware the amalgam boots: Zelda if this RTC backup register holds
 // AMALGAM_BOOT_ZELDA, else Mario. It survives resets and power-off (standby).
-// Stock uses no backup registers; retro-go uses DR0 and DR1.
+// Stock uses no backup registers; README.md (Protocols) lists everyone's.
 #define AMALGAM_BOOT_REG (TAMP->BKP31R)
 #define AMALGAM_BOOT_ZELDA 0x444C455A  // "ZELD"
 

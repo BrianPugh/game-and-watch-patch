@@ -117,7 +117,7 @@ Debug outputs (`patches/manifest.py`, written by every `patch.py` run):
 - Firmware metadata at internal vector table offset `0x01B8`: 4-byte structure encoding external flash size and device type (magic value `0x4` distinguishes from executable code)
 
 ### Bootloader
-- Multi-boot system with magic values in backup registers
+- Multi-boot system with magic values in RAM (`0x2001FFF8`) and backup registers; README.md's Protocols section has the table
 - `BOOTLOADER_MAGIC_FORCE` (`0x45435246`) for internal forced boots
 - Sanity checks on PC/SP before launching other firmware (prevents crashes from corrupt data)
 - Press GAME button on boot to abort dual-boot

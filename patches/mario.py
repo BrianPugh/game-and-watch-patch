@@ -202,7 +202,8 @@ class MarioGnW(Device, name="mario"):
         group.add_argument(
             "--no-factory-test",
             action="store_true",
-            help="Remove the factory CHARGE AND KEY TEST screen (~5KB of internal code).",
+            help="Remove the factory CHARGE AND KEY TEST screen (~5KB of internal code) "
+            "and its 2 s button-combo wait at power-on.",
         )
 
         group = parser.add_argument_group("Experimental")
@@ -355,6 +356,10 @@ class MarioGnW(Device, name="mario"):
                 self.internal.nop(call, 2, expect=expect)
             # Thunks, constructor, body and literal pools.
             self.free_int(0x1_1A94, 0x1_2EE4)
+            # power_on_init gives sysstate5_boot_tick 2000 ms to see the test's
+            # button combo before it calls game_reload; the screen stays dark
+            # until then. Make the deadline now, so it boots on the first tick.
+            self.internal.asm(0x6132, "mov.w r0, #0", expect="4:f31f2414")
 
         if self.args.no_mario_song:
             printi("Remove the mario song code (g_gnw_mode 0x04).")

@@ -127,7 +127,7 @@ Debug outputs (`patches/manifest.py`, written by every `patch.py` run):
 - Sanity checks on PC/SP before launching other firmware (prevents crashes from corrupt data)
 - Press GAME button on boot to abort dual-boot
 - `--triple-boot`: RIGHT+GAME launches firmware at `0x08020000`
-- `--sd-bootloader`: Changes dual-boot target to `0x08032000`; `make flash`/`flash_patched_int` also flash Sylverb's bootloader there (release pinned by SHA256 in `scripts/fetch_sd_bootloader.py`, downloaded into `build/`; `SD_BOOTLOADER_BIN=<file>` overrides; `make flash_sd_bootloader` flashes it alone)
+- `--sd-bootloader`: Changes dual-boot target to `0x08032000`; `make flash`/`flash_patched_int` also flash Sylverb's bootloader there (release pinned by SHA256 in `patches/sd_bootloader.py`, which gnwmanager also imports; downloaded into `build/`; `SD_BOOTLOADER_BIN=<file>` overrides; `make flash_sd_bootloader` flashes it alone)
 
 ### Reverse Engineering & Emulator Testing
 - `tools/re/build_elf.py --device=mario|zelda` builds an annotated ELF (gitignored `build/re/`) from the backups; names live in `tools/re/<device>.syms`. Commit only `.syms` (addresses/names/notes), never derived ELFs or listings. See `tools/re/README.md`.

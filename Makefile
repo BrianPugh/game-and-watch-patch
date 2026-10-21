@@ -311,7 +311,7 @@ flash_stock: internal_flash_backup_$(GNW_DEVICE_LOWER).bin flash_backup_$(GNW_DE
 # PATCH FLASHING #
 ##################
 # --sd-bootloader: our bank-1 image ends at 0x08032000, and Sylverb's SD
-# bootloader goes there (downloaded, pinned in scripts/fetch_sd_bootloader.py;
+# bootloader goes there (downloaded, pinned in patches/sd_bootloader.py;
 # point SD_BOOTLOADER_BIN at your own copy to override).
 SD_BOOTLOADER_BIN ?= $(BUILD_DIR)/gnw_bootloader_0x08032000.bin
 ifeq ($(SD_BOOTLOADER),1)
@@ -319,7 +319,7 @@ FLASH_SD_BOOTLOADER = -- flash 0x08032000 $(SD_BOOTLOADER_BIN)
 SD_BOOTLOADER_DEP = $(SD_BOOTLOADER_BIN)
 endif
 
-$(BUILD_DIR)/gnw_bootloader_0x08032000.bin: scripts/fetch_sd_bootloader.py
+$(BUILD_DIR)/gnw_bootloader_0x08032000.bin: scripts/fetch_sd_bootloader.py patches/sd_bootloader.py
 	$(PYTHON) -m scripts.fetch_sd_bootloader $@
 
 flash_sd_bootloader: $(SD_BOOTLOADER_BIN)

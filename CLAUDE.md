@@ -154,6 +154,7 @@ Debug outputs (`patches/manifest.py`, written by every `patch.py` run):
 1. Find hook point in stock ROM (function calls)
 2. Stock functions: name it in `tools/re/<device>.syms` and add a plain prototype for `stock_<device>_<name>` (a `.syms` name starting `stock_` drops it: `stock_mario_Reset_Handler`) to the device header in `Core/Inc/`. The build generates `build/stock_symbols.s` (an absolute `FUNC` symbol per `.syms` function, via `patches/syms.py`) and links with `--emit-relocs`, so every call is a relocation `patches/relocate.py` can fix. Stock RAM addresses stay `static` constants in the header. Symbols the patcher looks up by name (e.g. `SMB1_ROM`) must be defined in a `.c` file. Patch code gets a stock symbol's image offset with `self.internal.sym(name)`; give every code patch an `expect="<len>:<crc32>"` of the stock bytes (a hash, so no stock bytes are committed; pass `"4:0"` and copy the value from the error), and re-record `tests/golden.json` (`UPDATE_GOLDEN=1`) when output is meant to change
 3. Implement custom function in `Core/Src/<device>.c` (`main.c` if both models share it)
+   Before hooking a tail call (or any instruction past a function's pop), grep the disassembly for branches into it from other functions: stock gcc shares tails, e.g. Mario's `settings_game_draw` jumps into `settings_clock_draw`'s last `b.w` (0x0800cffc), so the clock-only TICK row drew on the in-game pause (#127).
 4. Add `-Wl,--undefined=my_function` to LDFLAGS in Makefile if needed
 5. Add patch definition in the device's Python class
 

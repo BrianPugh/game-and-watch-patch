@@ -148,10 +148,14 @@ void __attribute__((naked)) mario_settings_row_input(void){
  * Replaces settings_clock_draw's last tail call (0x0800cea2, after its pop),
  * which draws the SET TIME text, or the time on the SET TIME page. Draws that
  * and then the 4th row.
+ *
+ * settings_game_draw branches into the same tail (0x0800cffc) to draw RESET
+ * GAME, so the row is only drawn on the clock's overlay: the gnw_mode test
+ * ui_render_overlay picks settings_clock_draw with.
  */
 void tick_draw(uint8_t *dst, const uint8_t *tiles, uint32_t n){
     stock_mario_ui_draw_tile_string(dst, tiles, n);
-    if(*ui_settings_editing_time){
+    if((*gnw_mode_addr & 0xc2) != 0x02 || *ui_settings_editing_time){
         return;
     }
     uint8_t *row = dst - 16 + SETTINGS_ROW_STEP;  // The text starts 16 px in.

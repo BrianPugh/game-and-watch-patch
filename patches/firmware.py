@@ -1050,9 +1050,13 @@ class Device:
         return True
 
     def _point(self, symbol, addr):
-        self.internal.replace(
-            self.internal.address(symbol, sub_base=True), addr, size=4
-        )
+        offset = self.internal.address(symbol, sub_base=True)
+        if not 0 <= offset < len(self.internal):
+            raise ValueError(
+                f"{symbol} is at 0x{offset + self.internal.FLASH_BASE:08X}, outside "
+                "internal flash; it must be const data (.rodata) for the patcher to set it"
+            )
+        self.internal.replace(offset, addr, size=4)
 
     def move_to_compressed_memory(self, ext, size, reference):
         """Attempt to relocate in priority order:

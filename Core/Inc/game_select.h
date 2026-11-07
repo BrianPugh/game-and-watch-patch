@@ -18,6 +18,13 @@
 
 #define GAME_SELECT_FB_WIDTH 320
 
+// Defines our pointer to a custom entry's icon, which the patcher fills in
+// (volatile, so reads aren't folded to the NULL initializer). The section
+// keeps it in flash: gcc 8 (Debian bullseye's) puts a const volatile object
+// in .data, in RAM, where the patcher can't write it.
+#define GAME_SELECT_ICON_POINTER(name) \
+    __attribute__((section(".rodata." #name))) const uint8_t * const volatile name = NULL
+
 typedef struct {
     // Our pointer to the LZMA'd linear 4bpp (high nibble first) icon,
     // wherever the patcher put it: internal flash if it fits, else external.

@@ -29,14 +29,12 @@
 
 #define ICON_SIZE (ICON_W * ICON_H / 2)
 
-// Our pointers to the icons (volatile, so reads aren't folded to the NULL
-// initializer).
 #if GNW_AMALGAM
-const uint8_t * const volatile ZELDA_GAME_SELECT_SWITCH_ICON = NULL;
+GAME_SELECT_ICON_POINTER(ZELDA_GAME_SELECT_SWITCH_ICON);
 static uint8_t switch_icon[ICON_SIZE];
 #endif
 #if GAME_SELECT_DUAL_BOOT
-const uint8_t * const volatile ZELDA_GAME_SELECT_DUAL_BOOT_ICON = NULL;
+GAME_SELECT_ICON_POINTER(ZELDA_GAME_SELECT_DUAL_BOOT_ICON);
 static uint8_t dual_boot_icon[ICON_SIZE];
 #endif
 

@@ -16,6 +16,7 @@ move).
 
 from __future__ import annotations
 
+import subprocess
 from bisect import bisect_right
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -486,5 +487,10 @@ def write_elf(path, images, internal, bank2, external, elf, work):
     funcs = sorted({(a, n) for a, n in funcs if mapped(a) or in_ram(a)})
     datas = sorted({(a, n) for a, n in datas if mapped(a) or in_ram(a)})
     entry = int.from_bytes(bytes(internal[4:8]), "little") & ~1
-    link(path, regions, funcs, datas, mapping, entry, work, prefix)
+    # Only a debugging aid: a broken toolchain mustn't stop the patching.
+    try:
+        link(path, regions, funcs, datas, mapping, entry, work, prefix)
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"Couldn't link the patched ELF ({e}); skipping it.")
+        return False
     return True

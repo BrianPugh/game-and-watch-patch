@@ -10,6 +10,7 @@ firmware, ``patches/manifest.py``).
 import os
 import shutil
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 # RAM regions with no initialized data get NOLOAD sections so that
@@ -28,6 +29,14 @@ def toolchain_prefix():
     if os.environ.get("GCC_PATH"):
         prefix = str(Path(os.environ["GCC_PATH"]) / prefix)
     return prefix if shutil.which(prefix + "objcopy") else None
+
+
+@lru_cache(maxsize=None)
+def _ld_has_option(ld, option):
+    """Whether ``ld --help`` lists ``option`` (binutils < 2.39 lacks
+    ``--no-warn-rwx-segments``)."""
+    result = subprocess.run([ld, "--help"], capture_output=True, text=True)
+    return option in result.stdout
 
 
 def in_ram(addr):
@@ -98,11 +107,16 @@ def link(out, regions, funcs, datas, mapping, entry, work, prefix="arm-none-eabi
         + "\n  /DISCARD/ : { *(.ARM.attributes) }\n}\n"
     )
     linked = work / "linked.elf"
+    ld = f"{prefix}ld"
+    quiet = (
+        ["--no-warn-rwx-segments"]
+        if _ld_has_option(ld, "--no-warn-rwx-segments")
+        else []
+    )
     subprocess.run(
-        [
-            f"{prefix}ld",
-            "-nostdlib",
-            "--no-warn-rwx-segments",
+        [ld, "-nostdlib"]
+        + quiet
+        + [
             "-e",
             f"0x{entry:08x}",
             "-T",

@@ -436,6 +436,8 @@ def _ram_regions(images):
 
 def write_elf(path, images, internal, bank2, external, elf, work):
     """The patched ELF (``images``: ``DeviceImages`` of each device)."""
+    # A skipped ELF mustn't leave an earlier build's in its place.
+    Path(path).unlink(missing_ok=True)
     prefix = toolchain_prefix()
     if prefix is None:
         print("No arm-none-eabi binutils; skipping the patched ELF.")

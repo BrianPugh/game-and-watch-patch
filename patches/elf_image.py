@@ -35,8 +35,8 @@ def toolchain_prefix():
 def _ld_has_option(ld, option):
     """Whether ``ld --help`` lists ``option`` (binutils < 2.39 lacks
     ``--no-warn-rwx-segments``)."""
-    result = subprocess.run([ld, "--help"], capture_output=True, text=True)
-    return option in result.stdout
+    result = subprocess.run([ld, "--help"], capture_output=True)
+    return option.encode() in result.stdout
 
 
 def in_ram(addr):

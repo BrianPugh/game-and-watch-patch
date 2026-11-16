@@ -214,6 +214,8 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 		  -Wl,--undefined=memcpy_inflate \
 		  -Wl,--undefined=prepare_clock_rom \
 		  -Wl,--undefined=read_buttons \
+		  -Wl,--undefined=mario_reset_boot \
+		  -Wl,--undefined=zelda_reset_boot \
 		  -Wl,--undefined=rwdata_inflate \
 		  $(AMALGAM_LDFLAGS) \
 

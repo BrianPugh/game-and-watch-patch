@@ -8,6 +8,23 @@
 uint8_t zelda_lzma_heap[LZMA_BUF_SIZE];
 
 /**
+ * Replaces main's test of the reset cause after a reset that isn't a
+ * power-button wake from standby, where stock enters the off state. Boot
+ * instead, like that wake does, behind the same battery check: stock powers
+ * off on an empty battery by resetting, so booting unchecked would loop
+ * (boot, low battery screen, reset) until the battery is flat.
+ */
+void zelda_reset_boot(void){
+    *stock_zelda_board_variant = stock_zelda_read_pc8_with_pullup();
+    if(stock_zelda_battery_critical_check() == 1){
+        stock_zelda_power_off_enter();
+    }
+    else{
+        stock_zelda_power_on_init();
+    }
+}
+
+/**
  * Replaces backdrop_tick's tail call to the stock decode-by-index helper
  * (0x08019f36), which ignores an index past the last backdrop.
  */

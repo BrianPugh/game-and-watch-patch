@@ -812,11 +812,10 @@ class ZeldaGnW(Device, name="zelda"):
 
         # After a reset (anything but a power-button wake from standby), main
         # powers down and waits for the power button. Boot like that wake
-        # does: power_on_init, then the main loop.
+        # does (zelda_reset_boot: the battery check, then power_on_init or
+        # the off state), then the main loop.
         printi("Boot after a reset instead of waiting for the power button.")
-        self.internal.bl(
-            0x1063C, self.internal.sym("power_on_init"), expect="4:094801b7"
-        )
+        self.internal.bl(0x1063C, "zelda_reset_boot", expect="4:094801b7")
         self.internal.b(0x10640, 0x105EE, expect="2:3de528a1")
 
         printi("Mute audio on first boot.")

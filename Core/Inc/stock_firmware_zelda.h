@@ -10,6 +10,14 @@ void stock_zelda_Reset_Handler(void);
 
 gamepad_t stock_zelda_read_buttons(void);
 
+// main's boot path (see zelda_reset_boot).
+void stock_zelda_power_on_init(void);
+void stock_zelda_power_off_enter(void);
+uint32_t stock_zelda_read_pc8_with_pullup(void);
+uint32_t stock_zelda_battery_critical_check(void);
+// g_state+2: picks the pins battery_critical_check and the button scan read.
+static volatile uint8_t * const stock_zelda_board_variant = (volatile uint8_t *)0x2000ab92;
+
 #define ZELDA_BACKDROP_COUNT 11
 // DTCM .data: pointers to the backdrop images in external flash.
 static const uint8_t * const * const stock_backdrop_images = (const uint8_t * const *)0x2000a944;

@@ -272,6 +272,7 @@
 0x0800eb44 func power_off                            # stops LTDC/ADC, powers down peripherals, power state = 6
 0x0800eb90 func sysstate_request                     # (s): if s < 6 and s != sysstate_get(): calls the transition handler from the table at 0x0800ebb8
 0x0800ebc8 func pwr_take_standby_flag                # returns 1 (and clears it via CPUCR.CSSF) if PWR_CPUCR.SBF says we woke from standby
+0x0800ebe2 func power_off_enter                      # main's off state (after a software/watchdog reset, or a wake the battery check fails): wwdg refresh, RTC wakeup off, clears the wakeup flags, sysstate 4; sysstate4_tick then enters standby
 0x0800ebfa func buttons_gpio_init                    # clocks GPIOA/C/D, HAL_GPIO_Init(A: 0x5, C: 0x3822, D: 0xca21) = the G&W button pins
 0x0800ec7a func boot_combo_check                     # D-pad/buttons released and PC1/PC13 pattern + battery ok (UNVERIFIED semantics)
 0x0800ecbc func power_on_init                        # sysstate 5 and boot_combo_deadline = now + 2000 ms, then falls through to the init at 0x0800ecd6: clocks (first time), peripherals, nvram, audio, LCD; power state = 4. boot_normal calls that init directly (no 2 s wait)
@@ -279,6 +280,7 @@
 0x0800ed6e func power_long_press_tick                # Zelda: counts 10 x 100 ms while PA0 is held, then shuts down (0x08012a18, 0x0800e6ec)
 0x0800edb6 func usb_power_check                      # buttons released, PA0 low, PC13 ... (UNVERIFIED semantics)
 0x0800edfc func usb_power_tick                       # Zelda: counts 40 x 100 ms (0x0800edb6) then sets g_state[9] (leave the main loop)
+0x0800ee42 func battery_critical_check               # 0 if pin_pc5_or_pa2_low() (reads g_board_variant), else one blocking ADC2 reading: 1 if the battery level is 0. main runs it on a standby wake (1: back off), sysstate3_wake_tick before stop mode (1: NVIC_SystemReset, so main powers off)
 0x0800ee6e func power_down_peripherals               # HAL_Delay(20), LCD SPI/DAC/LTDC deinit, unused GPIOs to analog
 0x0800ee8e func read_pc8_with_pullup                 # momentarily enables a pull-up on PC8, returns 1 if it reads low (UNVERIFIED purpose)
 0x0800eef4 func resume_peripherals                   # MX_GPIO_Init, LCD SPI init/reset, MX_LTDC_Init, MX_OCTOSPI1_Init, 0x08013628

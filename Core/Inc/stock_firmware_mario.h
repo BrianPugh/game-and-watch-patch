@@ -10,6 +10,14 @@ void stock_mario_Reset_Handler(void);
 
 gamepad_t stock_mario_read_buttons(void);
 
+// main's boot path (see mario_reset_boot).
+void stock_mario_power_on_init(void);
+void stock_mario_power_off_enter(void);
+uint32_t stock_mario_read_pc8_with_pullup(void);
+uint32_t stock_mario_battery_critical_check(void);
+// g_state+2: picks the pins battery_critical_check and the button scan read.
+static volatile uint8_t * const stock_mario_board_variant = (volatile uint8_t *)0x20001036;
+
 
 /**
  * Returns `true` if USB power is connected, `false` otherwise.

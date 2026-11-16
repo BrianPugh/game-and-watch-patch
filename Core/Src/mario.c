@@ -14,6 +14,23 @@ const uint8_t * const SMB1_ROM = (const uint8_t *)0x90001e60;
 
 uint8_t mario_lzma_heap[LZMA_BUF_SIZE];
 
+/**
+ * Replaces main's test of the reset cause after a reset that isn't a
+ * power-button wake from standby, where stock enters the off state. Boot
+ * instead, like that wake does, behind the same battery check: stock powers
+ * off on an empty battery by resetting, so booting unchecked would loop
+ * (boot, low battery screen, reset) until the battery is flat.
+ */
+void mario_reset_boot(void){
+    *stock_mario_board_variant = stock_mario_read_pc8_with_pullup();
+    if(stock_mario_battery_critical_check() == 1){
+        stock_mario_power_off_enter();
+    }
+    else{
+        stock_mario_power_on_init();
+    }
+}
+
 #if ENABLE_SMB1_GRAPHIC_MODS
 #define SMB1_GRAPHIC_MODS_MAX 8
 const uint8_t * const SMB1_GRAPHIC_MODS[SMB1_GRAPHIC_MODS_MAX] = { 0 };

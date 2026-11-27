@@ -267,6 +267,34 @@ class MarioGnW(Device, name="mario"):
             args.no_factory_test = True
         return args
 
+    # The Mario song's lyric lines: a DTCM table of 74 pointers (read by the
+    # song's tick at 0x08011916), 11 lines a language, Japanese's 8 last.
+    # The song's language (its title screen's arrows, the banners at
+    # 0x08011A00) goes English, French, Spanish, German, Italian, Dutch,
+    # Japanese, but the table English, German, French, Italian, Spanish,
+    # Dutch: French showed German lyrics, Spanish French, German Italian and
+    # Italian Spanish (Nintendo's notice of November 2020). For each title
+    # language, its group in the table.
+    SONG_LYRIC_TABLE = 0x2000_0EAC
+    SONG_LYRIC_POINTERS = 74
+    SONG_LYRIC_LINES = 11
+    SONG_LYRIC_GROUPS = (0, 2, 4, 1, 3, 5)
+
+    def _song_lyric_order(self):
+        """Puts the song's lyric groups in its languages' order."""
+        printi("Show the Mario song's lyrics in the language chosen for it.")
+        rw = self.internal.rwdata
+        n = 4 * self.SONG_LYRIC_LINES
+        for data, dst in zip(rw.datas, rw.dsts):
+            at = self.SONG_LYRIC_TABLE - dst
+            if 0 <= at and at + 4 * self.SONG_LYRIC_POINTERS <= len(data):
+                break
+        else:
+            raise InvalidStockRomError("No rwdata block holds the Mario song's lyric table.")
+        groups = [bytes(data[at + n * g : at + n * (g + 1)]) for g in range(len(self.SONG_LYRIC_GROUPS))]
+        for lang, group in enumerate(self.SONG_LYRIC_GROUPS):
+            data[at + n * lang : at + n * (lang + 1)] = groups[group]
+
     def _tick_setting(self):
         """TICK ON/OFF: a 4th row in the clock's PAUSE/SET overlay.
 
@@ -956,6 +984,9 @@ class MarioGnW(Device, name="mario"):
                 self.compressed_memory.FLASH_BASE,
             )
 
+        if not self.args.no_mario_song:
+            # After every pointer fix (they check the table's stock order).
+            self._song_lyric_order()
         self.write_rwdata(0x17DB4)
 
         # Shorten the external firmware. The NVRAM banks go at the end, after

@@ -9,6 +9,7 @@
 void stock_mario_Reset_Handler(void);
 
 gamepad_t stock_mario_read_buttons(void);
+void stock_mario_clock_scene_load(uint32_t scene);
 
 // main's boot path (see mario_reset_boot).
 void stock_mario_power_on_init(void);

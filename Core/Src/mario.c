@@ -14,6 +14,52 @@ const uint8_t * const SMB1_ROM = (const uint8_t *)0x90001e60;
 
 uint8_t mario_lzma_heap[LZMA_BUF_SIZE];
 
+/*
+ * The patcher's compressed memory (patches/mario.py FreeMemory, 0x240F2124
+ * on: clock scene tiles, BALL and menu graphics...) is stock's malloc heap,
+ * which the Mario song takes for its two picture frames (the first 24 KB).
+ * Leaving the song (TIME) then drew the clock from those frames: a scene
+ * header of 0xaa.. and a fault past DTCM. So once the song (or the sleep or
+ * first-boot screen, which draw pictures the same way) has run, the image is
+ * inflated again from its rwdata entry: before the next clock scene and on
+ * the first input poll after.
+ */
+#define SRAM3_IMAGE 0x240F2124u
+#define MODE_PICTURES(m) (((m) & 0xc6) == 0x04 || ((m) & 0xc0))
+int32_t *rwdata_inflate(int32_t *table);
+static bool heap_dirty;
+static int32_t *sram3_entry;   // its rwdata table entry, past the function
+
+static int32_t *find_sram3_entry(void){
+    // Entries: (rwdata_inflate relative to here, data relative to the next
+    // word, length, destination), in internal flash.
+    for(int32_t *e = (int32_t *)0x08000000; e < (int32_t *)0x08040000 - 4; e++){
+        if((uint32_t)e[3] != SRAM3_IMAGE) continue;
+        uint32_t fn = (uint32_t)e + (uint32_t)e[0];
+        if((fn | 1) == ((uint32_t)rwdata_inflate | 1)) return e + 1;
+    }
+    return NULL;
+}
+
+static void heap_refill(void){
+    if(!heap_dirty) return;
+    heap_dirty = false;
+    if(!sram3_entry) sram3_entry = find_sram3_entry();
+    if(sram3_entry) rwdata_inflate(sram3_entry);
+}
+
+/** From read_buttons, every poll. */
+void mario_heap_watch(void){
+    if(MODE_PICTURES(*gnw_mode_addr)) heap_dirty = true;
+    else heap_refill();
+}
+
+/** In place of clock_scene_load's calls. */
+void mario_clock_scene_load(uint32_t scene){
+    if(!MODE_PICTURES(*gnw_mode_addr)) heap_refill();
+    stock_mario_clock_scene_load(scene);
+}
+
 /**
  * Replaces main's test of the reset cause after a reset that isn't a
  * power-button wake from standby, where stock enters the off state. Boot

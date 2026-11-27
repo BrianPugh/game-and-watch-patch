@@ -193,6 +193,11 @@ gamepad_t read_buttons() {
         smb1_graphics_buttons(gamepad);
     }
 #endif
+#if GNW_DEVICE_MARIO
+    if(RUNNING_MARIO()){
+        mario_heap_watch();
+    }
+#endif
 
     return gamepad;
 }

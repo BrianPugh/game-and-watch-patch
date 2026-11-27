@@ -605,6 +605,12 @@ class MarioGnW(Device, name="mario"):
 
         # Clock scene tile layers; only the scene table (below) points here.
         self.move_to_compressed_memory(0xBE60, 11620, None)
+        # Compressed memory is stock's heap, which the Mario song's picture
+        # frames take: the clock's scene load inflates it again after the
+        # song (mario_clock_scene_load, Core/Src/mario.c).
+        printi("Refill compressed memory after the Mario song.")
+        self.internal.bl(0xE072, "mario_clock_scene_load", expect="4:d1c72fd9")
+        self.internal.bl(0xF23A, "mario_clock_scene_load", expect="4:6d8f01d5")
 
         # Starting here are BALL references
         self.move_to_compressed_memory(0xEBC4, 528, 0x4154)

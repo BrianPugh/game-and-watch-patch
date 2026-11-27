@@ -106,6 +106,7 @@ void *memcpy_inflate(uint8_t *dst, const uint8_t *src, size_t n);
 // (mario.c, zelda.c), in its RAM.
 #define LZMA_BUF_SIZE            ((1984 + (0x300 << 0)) * 2)
 extern uint8_t mario_lzma_heap[LZMA_BUF_SIZE];
+void mario_heap_watch(void);
 extern uint8_t zelda_lzma_heap[LZMA_BUF_SIZE];
 
 uint8_t sleep_image_inflate(const uint8_t *src, uint16_t *dst);
